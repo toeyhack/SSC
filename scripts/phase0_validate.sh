@@ -26,13 +26,18 @@ CRITICAL_FAIL=0
 run_critical() {
   label="$1"
   shift
-  cmd="$*"
   rprint "=== CHECK: $label ==="
-  rprint "Command: $cmd"
-  # Run and capture output
-  out=$(sh -c "$cmd" 2>&1) || rc=$?
-  rc=${rc:-0}
-  printf "%s\n" "$out" >>"$REPORT_FILE"
+  rprint "Command: $*"
+
+  tmpf=$(mktemp)
+  if "$@" > "$tmpf" 2>&1; then
+    rc=0
+  else
+    rc=$?
+  fi
+  cat "$tmpf" >>"$REPORT_FILE"
+  rm -f "$tmpf"
+
   if [ "$rc" -ne 0 ]; then
     rprint "RESULT: FAIL"
     rprint "ExitCode: $rc"
@@ -47,12 +52,18 @@ run_critical() {
 run_noncritical() {
   label="$1"
   shift
-  cmd="$*"
   rprint "=== DIAG: $label ==="
-  rprint "Command: $cmd"
-  out=$(sh -c "$cmd" 2>&1) || rc=$?
-  rc=${rc:-0}
-  printf "%s\n" "$out" >>"$REPORT_FILE"
+  rprint "Command: $*"
+
+  tmpf=$(mktemp)
+  if "$@" > "$tmpf" 2>&1; then
+    rc=0
+  else
+    rc=$?
+  fi
+  cat "$tmpf" >>"$REPORT_FILE"
+  rm -f "$tmpf"
+
   if [ "$rc" -ne 0 ]; then
     rprint "DIAG RESULT: ERROR (non-critical)"
     rprint "ExitCode: $rc"
@@ -108,7 +119,7 @@ fi
 
 # 4) Inspect backend working dir and find alembic.ini
 run_noncritical "Backend ls -la /app" docker compose exec -T backend ls -la /app
-run_noncritical "Backend find alembic locations" docker compose exec -T backend sh -c 'find /app -maxdepth 3 -type f -name alembic.ini -o -name env.py'
+run_noncritical "Backend find alembic locations" docker compose exec -T backend sh -c 'find /app -maxdepth 3 -type f \( -name "alembic.ini" -o -name "env.py" \)'
 
 # Detect alembic path inside container
 MIG_PATH=""
@@ -132,14 +143,14 @@ if [ -z "$MIG_PATH" ]; then
 else
   rprint "Detected alembic config at: $MIG_PATH"
   # Before running alembic, check alembic exists
-  run_noncritical "alembic --version inside backend" docker compose exec -T backend sh -c 'alembic --version'
+  run_noncritical "alembic --version inside backend" docker compose exec -T backend alembic --version
   # Run alembic upgrade head (with retries waiting for DB readiness)
   attempt=1
   MIG_SUCCESS=1
   rprint "Running alembic upgrade head using $MIG_PATH (with retries for DB readiness)"
   while [ $attempt -le $MAX_RETRIES ]; do
     rprint "alembic attempt $attempt"
-    if docker compose exec -T backend sh -c "alembic -c $MIG_PATH upgrade head" > /tmp/alembic_out 2>&1; then
+    if docker compose exec -T backend alembic -c "$MIG_PATH" upgrade head > /tmp/alembic_out 2>&1; then
       cat /tmp/alembic_out >>"$REPORT_FILE"
       MIG_SUCCESS=0
       rprint "Alembic upgrade succeeded on attempt $attempt"
@@ -159,7 +170,7 @@ else
 fi
 
 # 5) Run backend pytest
-run_critical "Backend pytest" docker compose exec -T backend sh -c "pytest -q"
+run_critical "Backend pytest" docker compose exec -T backend pytest -q
 
 # 6) Health endpoint checks (retrying)
 check_http_endpoint() {
@@ -209,7 +220,7 @@ if [ -f frontend/package.json ]; then
   fi
 fi
 if [ $HAS_BUILD_SCRIPT -eq 1 ]; then
-  run_critical "Frontend production build (npm run build)" docker compose exec -T frontend sh -c "npm run build"
+  run_critical "Frontend production build (npm run build)" docker compose exec -T frontend npm run build
 else
   rprint "No frontend build script detected in frontend/package.json; skipping production build step"
 fi
