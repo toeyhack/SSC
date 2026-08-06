@@ -169,8 +169,8 @@ else
   fi
 fi
 
-# 5) Run backend pytest
-run_critical "Backend pytest" docker compose exec -T backend pytest -q
+# 5) Run backend pytest (invoke via python -m pytest to ensure package import resolution)
+run_critical "Backend pytest" docker compose exec -T backend python -m pytest -q
 
 # 6) Health endpoint checks (retrying)
 check_http_endpoint() {
@@ -182,9 +182,13 @@ check_http_endpoint() {
   rprint "Checking HTTP endpoint $label -> $url"
   for i in $(seq 1 $attempts); do
     rprint "HTTP attempt $i"
-    out=$(curl -sS -m 10 "$url" 2>&1) || rc=$?
-    rc=${rc:-0}
+
+    # Reset rc on each attempt and use -f so HTTP 4xx/5xx are treated as failures
+    rc=0
+    out=$(curl -fsS -m 10 "$url" 2>&1) || rc=$?
+
     printf "%s\n" "$out" >>"$REPORT_FILE"
+
     if [ "$rc" -eq 0 ]; then
       rprint "$label HTTP OK"
       ok=0
