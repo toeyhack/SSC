@@ -1,0 +1,11 @@
+
+# Python artifacts
+__pycache__/
+*.py[cod]
+
+# Frontend build output
+frontend/dist/
+
+# Validation reports and temporary run artifacts
+reports/
+scripts/reports/
