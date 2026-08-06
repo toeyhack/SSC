@@ -6,3 +6,4 @@ redis
 python-dotenv
 pytest
 httpx
+alembic>=1.10,<2

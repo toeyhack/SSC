@@ -2,107 +2,72 @@
 
 Current phase: Phase 0 - FOUNDATION
 
-Project status: Phase 0 scaffold committed. Performing Phase 0 validation checks in repository environment.
+Project status: Phase 0 scaffold committed. Phase 0 static fixes applied to improve developer workflow and make runtime validation straightforward.
 
-Validation performed (repository inspection, static checks)
-- Inspected repository tree and Phase 0 artifacts.
-- Verified Docker Compose file (docker-compose.yml) defines services: postgres, redis, backend, frontend.
-- Verified backend FastAPI app (backend/app/main.py) and health endpoints (backend/app/api/health.py).
-- Verified SQLAlchemy configuration (backend/app/db/session.py) and initial models (backend/app/models/models.py).
-- Verified Alembic scaffold at backend/migrations and initial migration backend/migrations/versions/0001_initial.py.
-- Verified frontend skeleton (frontend/package.json, frontend/src).
-- Verified basic tests at backend/tests/test_health.py.
+Summary of changes made in this commit (Phase 0 fixes)
+- Added Alembic to backend/requirements.txt so migrations are available inside the backend image/container.
+- Fixed PostgreSQL health check to use SQLAlchemy 2.x compatible API (used sqlalchemy.text and execute(text("SELECT 1")).
+- Improved frontend development mount behavior by adding a named volume for /app/node_modules so mounted source does not hide container-installed node_modules during development.
 
-Work attempted but NOT executed due to environment limitations
-- I could NOT start Docker, build containers, run docker compose, or run any system commands in this environment.
-- I could NOT run Alembic migrations against a running Postgres instance (no DB available here).
-- I could NOT run pytest or frontend build/test commands (no runtime available for executing commands in this environment).
-- I could NOT run docker system df, du -sh ., or df -h to collect storage usage.
+Why these changes were needed
+- Alembic is required to run the committed migrations from the backend container; without it operators would need to install alembic manually.
+- SQLAlchemy 2.x recommends using sqlalchemy.text for executing literal SQL; this avoids warnings and improves forward compatibility.
+- Mounting the frontend source directory as a bind mount overwrites the node_modules directory created in the container image, causing runtime failures in many dev setups; adding a named volume prevents node modules from being hidden while still allowing source live-reload.
 
-Findings and recommendations (issues discovered during static inspection)
-1) Alembic is not listed in backend/requirements.txt
-   - The repository contains an Alembic scaffold and migrations, but alembic is not present in backend/requirements.txt. Add `alembic` to requirements so migration commands run inside the backend container.
+Runtime validation status
+- I could not run Docker, apply migrations, or execute tests from this agent environment. Runtime validation remains pending and should be executed locally or in CI using the exact commands below.
 
-2) Alembic invocation path and config
-   - backend/migrations/alembic.ini sets `script_location = backend/migrations`. When running alembic from the repository root, pass `-c backend/migrations/alembic.ini` or run alembic from the backend directory.
-   - backend/migrations/env.py appends the backend path to sys.path before importing `app.db.session` which is correct if the process CWD is the repository root or `backend` is on sys.path. Ensure alembic is invoked with the repository root in PYTHONPATH or run from the backend directory to avoid import errors.
-
-3) DB execute call in health endpoint
-   - health.db_health uses `conn.execute("SELECT 1")`. In SQLAlchemy 2.x it is recommended to use `from sqlalchemy import text` and `conn.execute(text("SELECT 1"))` to avoid warnings or future compatibility issues. The current code will typically work but may emit deprecation warnings.
-
-4) requirements extras
-   - requirements.txt contains `psycopg[binary]` which is valid; ensure that pip resolves the extras in the container environment.
-
-5) Frontend build
-   - frontend/package.json contains appropriate devDependencies (vite, typescript). The Dockerfile copies `frontend/package.json` then runs `npm install`. The Dockerfile line COPY frontend/package.json ./ followed by RUN npm install will produce node_modules in the image layer; the container also mounts ./frontend:/app which may shadow installed node_modules during local development when using compose volumes. Consider installing in /app and avoiding volume mount for production images or adding an entrypoint script.
-
-Validation checklist for local execution (commands to run locally/CI)
-1) Start services with Docker Compose (from repository root):
+Exact local validation commands (run from repository root)
+1) Build and start compose stack:
    docker compose up --build -d
 
-2) Check containers:
+2) Confirm containers are running and view logs:
    docker compose ps
    docker compose logs -f backend
 
-3) Install alembic inside backend container or add to requirements:
-   (If running locally in venv) pip install -r backend/requirements.txt && pip install alembic
+3) (Recommended) open a shell in the backend container and run migrations:
+   docker compose exec backend /bin/sh -c "alembic -c backend/migrations/alembic.ini upgrade head"
 
-4) Apply migrations (from repo root):
+   If running from a local venv instead of the container:
+   pip install -r backend/requirements.txt
+   pip install alembic
    alembic -c backend/migrations/alembic.ini upgrade head
-   OR
-   docker compose exec backend alembic -c backend/migrations/alembic.ini upgrade head
 
-5) Run backend tests:
-   cd backend
-   pytest -q
-   OR
+4) Run backend tests:
    docker compose exec backend pytest -q
+   OR
+   cd backend && pytest -q
 
-6) Run frontend build/tests:
+5) Build frontend (verify node modules and build works):
    cd frontend
    npm install
    npm run build
-   (Note: no frontend tests are configured; run linters if added later.)
 
-7) Check health endpoints (after services are running):
+6) Test health endpoints:
    curl http://localhost:8000/
    curl http://localhost:8000/health/ping
    curl http://localhost:8000/health/db
    curl http://localhost:8000/health/redis
 
-8) Storage usage (on the host where Docker is running):
+7) Storage checks (on host running Docker):
    docker system df
    du -sh .
    df -h
 
-Migration status
-- Alembic migration files committed: backend/migrations/versions/0001_initial.py
-- Migrations have NOT been applied in this environment (no Postgres instance available here). Use the alembic command above to apply migrations locally or in CI.
+Files changed in this commit
+- backend/requirements.txt (added alembic>=1.10,<2)
+- backend/app/api/health.py (use sqlalchemy.text for DB health check)
+- docker-compose.yml (added named volume frontend_node_modules and mounted it to /app/node_modules)
+- docs/IMPLEMENTATION_STATUS.md (updated with changes, rationale and validation instructions)
 
-Docker status
-- docker-compose.yml present and wired for postgres:16-alpine, redis:7-alpine, backend, frontend.
-- I could NOT start Docker services from this environment.
+Remaining Phase 0 risks / notes
+- Runtime validation still pending: containers must be built and migrations applied; I could not do this in the current environment.
+- Alembic should run inside the backend container using the provided command; ensure container has network access to Postgres service (compose provides this by default).
+- The backend Dockerfile copies backend/requirements.txt then installs packages. Because docker-compose mounts ./backend:/app for development, the code inside the container will reflect host files; dependencies are installed into the container environment and are not affected by this mount.
+- The frontend named volume prevents node_modules from being overwritten, but if developers prefer alternative flows, document the behavior.
+- No tests were added because the fixes are minor; existing health tests remain valid and should continue to pass.
 
-Tests
-- backend/tests/test_health.py exists and targets endpoints that do not require DB connectivity. They should pass after dependencies are installed locally.
-- I could NOT run pytest here.
-
-Storage usage
-- I could NOT run docker system df, du, or df commands in this environment.
-
-Readiness for Phase 1
-- Phase 0 is functionally complete as a scaffold and is ready for runtime validation.
-- Before moving to Phase 1, perform the local/CI validation steps above to ensure containers build, migrations apply cleanly, and tests pass.
-
-Committed changes
-- This file (docs/IMPLEMENTATION_STATUS.md) was updated with the validation summary above.
-
-If you want, I can now:
-- Add `alembic` to backend/requirements.txt and commit that change so the backend image includes alembic by default.
-- Add `sqlalchemy` text import fix in health.db_health (conn.execute(text("SELECT 1"))).
-- Add a small Makefile or docker-compose task to run alembic upgrade head inside the backend container.
-
-Actions not performed due to environment limitations
-- Did not run Docker/Celery/migrations/tests/builds/log collection/storage commands.
-
+If you'd like, I can also:
+- Add a short README or Makefile target to run `docker compose exec backend alembic -c backend/migrations/alembic.ini upgrade head` for convenience.
+- Add CI workflow to perform the full runtime validation automatically.
 

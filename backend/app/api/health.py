@@ -2,6 +2,7 @@ from fastapi import APIRouter
 from starlette.responses import JSONResponse
 import os
 import asyncio
+from sqlalchemy import text
 
 router = APIRouter()
 
@@ -18,7 +19,7 @@ async def db_health():
     from app.db.session import engine
     try:
         with engine.connect() as conn:
-            conn.execute("SELECT 1")
+            conn.execute(text("SELECT 1"))
         return {"status": "ok", "db": "reachable"}
     except Exception as e:
         return JSONResponse(status_code=503, content={"status": "error", "detail": str(e)})
