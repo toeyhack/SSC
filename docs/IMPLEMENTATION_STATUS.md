@@ -4,34 +4,28 @@ Current phase: Phase 0 - FOUNDATION
 
 Project status: Phase 0 scaffold committed. Static fixes were applied to improve developer workflow and enable in-container migrations.
 
-New: Phase 0 validation helper
-- A script has been added at scripts/phase0_validate.sh to perform an automated Phase 0 runtime validation.
-- The script produces a timestamped report under reports/ (for example: reports/phase0-validation-20260806-153000.txt).
-- The script intentionally runs a comprehensive set of critical checks (Docker Compose, container readiness, Alembic migrations, backend tests, application health endpoints, frontend availability and optional production build) and non-critical diagnostics (storage usage, logs).
+Recent runtime-fix commit
+- Fixed Dockerfile build-context issues encountered during frontend image build. The frontend Dockerfile previously attempted to copy `frontend/package.json` and `frontend` into the image while the build context for the frontend service is `./frontend`. This caused the build to fail with: ERROR: "/frontend": not found
+- Adjusted both frontend and backend Dockerfiles so paths are relative to their configured build contexts (COPY package.json ./ and COPY . /app for frontend; COPY requirements.txt ./ and COPY . /app for backend).
+- Removed the obsolete top-level `version:` field in docker-compose.yml to align with modern Compose usage and avoid confusion.
 
-Important: Runtime validation is still PENDING because this agent cannot execute Docker commands in the current environment. Please run the script locally or in CI to complete Phase 0 validation.
+Why these changes were needed
+- Docker COPY paths are always relative to the build context. When compose `build` is set to `./frontend`, the Dockerfile must copy files relative to that directory. The previous Dockerfiles used paths as if the build context were the repository root, which fails when the context is the subdirectory.
+- The backend Dockerfile used the same incorrect pattern and was updated for consistency and to avoid the same class of failure.
 
-How to run the validation script (from repository root):
+Files changed
+- backend/Dockerfile (use COPY relative to backend build context)
+- frontend/Dockerfile (use COPY relative to frontend build context)
+- docker-compose.yml (removed top-level `version:` and kept existing build contexts and named volumes)
 
-1) Ensure Docker and Docker Compose are installed and available.
-2) Make the script executable:
-   chmod +x scripts/phase0_validate.sh
-3) Run the script:
-   ./scripts/phase0_validate.sh
+Runtime validation status
+- The changes are static fixes committed to the repository. I cannot run Docker build/migrations/tests from this agent. Please run the Phase 0 validation script locally:
 
-The script will:
-- Start docker compose (docker compose up --build -d)
-- Detect Alembic configuration location inside the backend container
-- Run alembic upgrade head from inside the backend container
-- Run backend pytest inside the backend container
-- Test HTTP health endpoints
-- Inspect frontend logs and perform an HTTP HEAD to the frontend dev server
-- Optionally run frontend production build inside the frontend container if package.json defines a build script
-- Collect storage diagnostics and container logs
-- Produce a timestamped report in reports/
+  chmod +x scripts/phase0_validate.sh
+  ./scripts/phase0_validate.sh
 
-The script exits with code 0 only if all critical checks pass. If any critical check fails the script exits non-zero and the report will indicate which checks failed.
+The script will rebuild images, run alembic migrations, run backend tests, check health endpoints, and produce a timestamped report under `reports/`.
 
-Next steps:
-- Run the script locally and attach the generated report and any failing logs here. I will analyze any failures and propose fixes.
+Next steps
+- Run the validation script above on your machine/CI and attach the generated report (reports/phase0-validation-YYYYMMDD-HHMMSS.txt). If any critical checks fail, paste the relevant sections of the report and I will fix them.
 
