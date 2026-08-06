@@ -1,6 +1,6 @@
 # README
 
-Internal Security Rating Platform (SSC App) - Phase 0
+Internal Security Rating Platform (SSC App)
 
 This repository contains the initial foundation for the Internal Security Rating Platform.
 
@@ -14,5 +14,7 @@ Phase 0 implements:
 - SQLAlchemy models and Alembic scaffold
 - React + Vite frontend skeleton
 - basic tests
+
+Phase 1A implements the versioned issue catalog data model, catalog API, backend tests, validation script, and minimal Issue Catalog frontend view.
 
 Follow docs/IMPLEMENTATION_STATUS.md for progress and next steps.

@@ -1,46 +1,75 @@
 # Implementation Status
 
-Current phase: Phase 0 - FOUNDATION
+Current phase: Phase 1A - Issue Catalog Data Model + Catalog API
 
-Project status: Phase 0 scaffold committed. Static fixes were applied to improve developer workflow and enable in-container migrations.
+## Phase Status
 
-Recent runtime-fix commit
-- Fixed Dockerfile build-context issues encountered during frontend image build. The frontend Dockerfile previously attempted to copy `frontend/package.json` and `frontend` into the image while the[...]
-- Adjusted both frontend and backend Dockerfiles so paths are relative to their configured build contexts (COPY package.json ./ and COPY . /app for frontend; COPY requirements.txt ./ and COPY . /ap[...]
-- Removed the obsolete top-level `version:` field in docker-compose.yml to align with modern Compose usage and avoid confusion.
+Phase 0 - Foundation: COMPLETE / PASS
 
-Alembic configuration fix
-- Updated backend/migrations/alembic.ini to set `script_location = %(here)s` so Alembic resolves env.py and versions/ relative to the alembic.ini file at runtime.
-  - Reason: The backend directory is mounted as `/app` inside the container. Previously the alembic.ini used `backend/migrations` which caused Alembic (when invoked from /app) to look for `/app/ba[...]
-  - This change ensures migrations run correctly regardless of container working directory or mount path.
+Phase 1A - Issue Catalog Data Model + Catalog API: COMPLETE / PASS
 
-Validation script improvements
-- scripts/phase0_validate.sh was updated to use direct `docker compose exec -T` invocations (no nested `sh -c` quoting) for alembic and other container commands. The script now detects the alembic[...]
+Phase 1B - Golden Baseline Importer: NOT STARTED
 
-Runtime validation status
-- Phase 0 runtime validation: COMPLETE / PASS
+Phase 1C - Catalog Administration / Review UI: NOT STARTED
 
-Phase 0 validation (runtime) — COMPLETE / PASS
+Phase 2 - Asset Inventory: NOT STARTED
 
-Status: COMPLETE / PASS
+Phase 3 - Rule Engine: NOT STARTED
 
-Summary of runtime checks:
-- Docker Compose build/start: PASS
-- Backend container: PASS
-- Alembic migration: PASS
-- Backend pytest: PASS
-- Backend HTTP/root health: PASS
-- PostgreSQL health: PASS
-- Redis health: PASS
-- Frontend HTTP: PASS
-- Frontend production build: PASS
+Phase 4 - Scan Engine: NOT STARTED
+
+Phase 5 - Scoring Engine: NOT STARTED
+
+Phase 6 - Dashboard / Usable Internal Platform: NOT STARTED
+
+Phase 7 - SSC Public Reference Sync: NOT STARTED
+
+Phase 8 - Optional SSC API Integration: NOT STARTED
+
+Phase 9 - SSC Comparison / Calibration: NOT STARTED
+
+Phase 10 - Production Hardening: NOT STARTED
+
+## Phase 0 Validation
+
+Phase 0 runtime validation: COMPLETE / PASS
+
+Last locally verified report:
+
+```text
+reports/phase0-validation-20260806-172053.txt
+```
+
+Validated Phase 0 checks included Docker Compose build/start, Alembic migration, backend tests, root and health endpoints, PostgreSQL health, Redis health, frontend HTTP, and frontend production build.
+
+## Phase 1A Implemented Scope
+
+Phase 1A adds:
+
+- `catalog_factors`
+- `catalog_issue_types`
+- `catalog_issue_type_versions`
+- `catalog_snapshots`
+- `catalog_snapshot_items`
+- Alembic revision `0002_phase1a_catalog`
+- `/api/v1/catalog` backend API
+- Pydantic v2 catalog schemas
+- backend tests for catalog creation, duplicates, immutable versions, current-version behavior, informational and positive breach risks, snapshots, and duplicate snapshot items
+- minimal frontend Issue Catalog page
+- `scripts/phase1a_validate.sh`
+
+Immutable history rule:
+
+Issue definition changes create new `catalog_issue_type_versions` rows. Historical version rows and snapshot references are not overwritten.
+
+## Phase 1A Validation
+
+Phase 1A runtime validation: COMPLETE / PASS
 
 Validation report:
-reports/phase0-validation-20260806-172053.txt
 
-Notes:
-- The report file path above is the runtime-generated report produced locally by the validation script; the reports/ directory may be .gitignored in this repository. The report is not automatically committed here.
-- No Phase 1 actions were performed as part of Phase 0 closeout.
+```text
+reports/phase1a-validation-20260806-183254.txt
+```
 
-Next steps
-- Run the validation script locally and attach the generated report (reports/phase0-validation-YYYYMMDD-HHMMSS.txt) if you need help repeating the checks.
+Validated Phase 1A checks included Docker Compose build/start, backend container exec, Alembic version detection, Alembic upgrade to head, backend pytest, root and health endpoints, OpenAPI docs, catalog list endpoints, frontend HTTP, frontend production build, storage diagnostics, and container logs.

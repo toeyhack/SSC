@@ -6,7 +6,7 @@ client = TestClient(app)
 def test_root():
     resp = client.get("/")
     assert resp.status_code == 200
-    assert resp.json()["message"] == "SSC Backend - Phase 0"
+    assert resp.json()["message"] == "SSC Backend"
 
 def test_health_ping():
     resp = client.get("/health/ping")
