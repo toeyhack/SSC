@@ -7,3 +7,5 @@ python-dotenv
 pytest
 httpx
 alembic>=1.10,<2
+pydantic>=2,<3
+pydantic-settings>=2,<3
