@@ -70,7 +70,42 @@ type ImportResult = {
   warnings: string[]
 }
 
-type Tab = 'issues' | 'factors' | 'snapshots' | 'baseline'
+type Organization = {
+  id: string
+  name: string
+  description: string | null
+  active: boolean
+}
+
+type DomainAsset = {
+  id: string
+  organization_id: string
+  name: string
+  description: string | null
+  active: boolean
+  organization: Organization | null
+}
+
+type HostAsset = {
+  id: string
+  domain_id: string
+  hostname: string
+  ip: string | null
+  description: string | null
+  active: boolean
+  domain: DomainAsset | null
+}
+
+type HostGroup = {
+  id: string
+  organization_id: string
+  name: string
+  description: string | null
+  active: boolean
+  organization: Organization | null
+}
+
+type Tab = 'issues' | 'factors' | 'snapshots' | 'baseline' | 'inventory'
 
 const API_BASE = 'http://localhost:8000'
 const riskOptions = ['HIGH', 'MEDIUM', 'LOW', 'INFORMATIONAL', 'POSITIVE', 'UNKNOWN']
@@ -101,11 +136,48 @@ const emptyVersion = {
   make_current: true,
 }
 
+const emptyOrganization = {
+  name: '',
+  description: '',
+  active: true,
+}
+
+const emptyDomain = {
+  organization_id: '',
+  name: '',
+  description: '',
+  active: true,
+}
+
+const emptyHost = {
+  domain_id: '',
+  hostname: '',
+  ip: '',
+  description: '',
+  active: true,
+}
+
+const emptyHostGroup = {
+  organization_id: '',
+  name: '',
+  description: '',
+  active: true,
+}
+
+const emptyMembership = {
+  host_group_id: '',
+  host_id: '',
+}
+
 export default function App() {
   const [tab, setTab] = useState<Tab>('issues')
   const [factors, setFactors] = useState<Factor[]>([])
   const [issues, setIssues] = useState<IssueType[]>([])
   const [snapshots, setSnapshots] = useState<Snapshot[]>([])
+  const [organizations, setOrganizations] = useState<Organization[]>([])
+  const [domains, setDomains] = useState<DomainAsset[]>([])
+  const [hosts, setHosts] = useState<HostAsset[]>([])
+  const [hostGroups, setHostGroups] = useState<HostGroup[]>([])
   const [versions, setVersions] = useState<IssueVersion[]>([])
   const [selectedIssueId, setSelectedIssueId] = useState<string | null>(null)
   const [query, setQuery] = useState('')
@@ -119,6 +191,11 @@ export default function App() {
   const [versionForm, setVersionForm] = useState(emptyVersion)
   const [baselineJson, setBaselineJson] = useState('')
   const [importResult, setImportResult] = useState<ImportResult | null>(null)
+  const [organizationForm, setOrganizationForm] = useState(emptyOrganization)
+  const [domainForm, setDomainForm] = useState(emptyDomain)
+  const [hostForm, setHostForm] = useState(emptyHost)
+  const [hostGroupForm, setHostGroupForm] = useState(emptyHostGroup)
+  const [membershipForm, setMembershipForm] = useState(emptyMembership)
 
   const selectedIssue = useMemo(
     () => issues.find((issue) => issue.id === selectedIssueId) ?? null,
@@ -156,17 +233,33 @@ export default function App() {
   async function refreshAll() {
     setLoading(true)
     try {
-      const [factorData, issueData, snapshotData] = await Promise.all([
+      const [factorData, issueData, snapshotData, organizationData, domainData, hostData, hostGroupData] = await Promise.all([
         api<Factor[]>('/api/v1/catalog/factors'),
         api<IssueType[]>('/api/v1/catalog/issues'),
         api<Snapshot[]>('/api/v1/catalog/snapshots'),
+        api<Organization[]>('/api/v1/inventory/organizations'),
+        api<DomainAsset[]>('/api/v1/inventory/domains'),
+        api<HostAsset[]>('/api/v1/inventory/hosts'),
+        api<HostGroup[]>('/api/v1/inventory/host-groups'),
       ])
       setFactors(factorData)
       setIssues(issueData)
       setSnapshots(snapshotData)
+      setOrganizations(organizationData)
+      setDomains(domainData)
+      setHosts(hostData)
+      setHostGroups(hostGroupData)
       setIssueForm((current) => ({
         ...current,
         factor_id: current.factor_id || factorData[0]?.id || '',
+      }))
+      setDomainForm((current) => ({ ...current, organization_id: current.organization_id || organizationData[0]?.id || '' }))
+      setHostGroupForm((current) => ({ ...current, organization_id: current.organization_id || organizationData[0]?.id || '' }))
+      setHostForm((current) => ({ ...current, domain_id: current.domain_id || domainData[0]?.id || '' }))
+      setMembershipForm((current) => ({
+        ...current,
+        host_group_id: current.host_group_id || hostGroupData[0]?.id || '',
+        host_id: current.host_id || hostData[0]?.id || '',
       }))
       setError(null)
     } catch (err) {
@@ -278,6 +371,127 @@ export default function App() {
     })
   }
 
+  async function createOrganization(event: FormEvent) {
+    event.preventDefault()
+    await submit(async () => {
+      await api<Organization>('/api/v1/inventory/organizations', {
+        method: 'POST',
+        body: JSON.stringify({
+          ...organizationForm,
+          description: blankToNull(organizationForm.description),
+        }),
+      })
+      setOrganizationForm(emptyOrganization)
+      await refreshAll()
+      setMessage('Organization created')
+    })
+  }
+
+  async function updateOrganization(organization: Organization, updates: Partial<Organization>) {
+    await submit(async () => {
+      await api<Organization>(`/api/v1/inventory/organizations/${organization.id}`, {
+        method: 'PATCH',
+        body: JSON.stringify(updates),
+      })
+      await refreshAll()
+      setMessage('Organization updated')
+    })
+  }
+
+  async function createDomain(event: FormEvent) {
+    event.preventDefault()
+    await submit(async () => {
+      await api<DomainAsset>('/api/v1/inventory/domains', {
+        method: 'POST',
+        body: JSON.stringify({
+          ...domainForm,
+          description: blankToNull(domainForm.description),
+        }),
+      })
+      setDomainForm({ ...emptyDomain, organization_id: organizations[0]?.id || '' })
+      await refreshAll()
+      setMessage('Domain created')
+    })
+  }
+
+  async function updateDomain(domain: DomainAsset, updates: Partial<DomainAsset>) {
+    await submit(async () => {
+      await api<DomainAsset>(`/api/v1/inventory/domains/${domain.id}`, {
+        method: 'PATCH',
+        body: JSON.stringify(updates),
+      })
+      await refreshAll()
+      setMessage('Domain updated')
+    })
+  }
+
+  async function createHost(event: FormEvent) {
+    event.preventDefault()
+    await submit(async () => {
+      await api<HostAsset>('/api/v1/inventory/hosts', {
+        method: 'POST',
+        body: JSON.stringify({
+          ...hostForm,
+          ip: blankToNull(hostForm.ip),
+          description: blankToNull(hostForm.description),
+        }),
+      })
+      setHostForm({ ...emptyHost, domain_id: domains[0]?.id || '' })
+      await refreshAll()
+      setMessage('Host created')
+    })
+  }
+
+  async function updateHost(host: HostAsset, updates: Partial<HostAsset>) {
+    await submit(async () => {
+      await api<HostAsset>(`/api/v1/inventory/hosts/${host.id}`, {
+        method: 'PATCH',
+        body: JSON.stringify(updates),
+      })
+      await refreshAll()
+      setMessage('Host updated')
+    })
+  }
+
+  async function createHostGroup(event: FormEvent) {
+    event.preventDefault()
+    await submit(async () => {
+      await api<HostGroup>('/api/v1/inventory/host-groups', {
+        method: 'POST',
+        body: JSON.stringify({
+          ...hostGroupForm,
+          description: blankToNull(hostGroupForm.description),
+        }),
+      })
+      setHostGroupForm({ ...emptyHostGroup, organization_id: organizations[0]?.id || '' })
+      await refreshAll()
+      setMessage('Host group created')
+    })
+  }
+
+  async function updateHostGroup(hostGroup: HostGroup, updates: Partial<HostGroup>) {
+    await submit(async () => {
+      await api<HostGroup>(`/api/v1/inventory/host-groups/${hostGroup.id}`, {
+        method: 'PATCH',
+        body: JSON.stringify(updates),
+      })
+      await refreshAll()
+      setMessage('Host group updated')
+    })
+  }
+
+  async function addHostGroupMember(event: FormEvent) {
+    event.preventDefault()
+    await submit(async () => {
+      await api(`/api/v1/inventory/host-groups/${membershipForm.host_group_id}/members`, {
+        method: 'POST',
+        body: JSON.stringify({ host_id: membershipForm.host_id }),
+      })
+      await refreshAll()
+      setMessage('Host added to group')
+    })
+  }
+
   async function submit(action: () => Promise<void>) {
     setBusy(true)
     setError(null)
@@ -300,13 +514,14 @@ export default function App() {
           <button className={tabClass(tab, 'factors')} onClick={() => setTab('factors')}>Factors</button>
           <button className={tabClass(tab, 'snapshots')} onClick={() => setTab('snapshots')}>Snapshots</button>
           <button className={tabClass(tab, 'baseline')} onClick={() => setTab('baseline')}>Baseline</button>
+          <button className={tabClass(tab, 'inventory')} onClick={() => setTab('inventory')}>Inventory</button>
         </div>
       </nav>
 
       <header className="workspace-header">
         <h1>Catalog Administration</h1>
         <div className="status-line">
-          {loading ? 'Loading catalog' : `${issues.length} issues, ${factors.length} factors, ${snapshots.length} snapshots`}
+          {loading ? 'Loading catalog' : `${issues.length} issues, ${factors.length} factors, ${snapshots.length} snapshots, ${hosts.length} hosts`}
         </div>
       </header>
 
@@ -453,6 +668,106 @@ export default function App() {
           </aside>
         </section>
       )}
+
+      {tab === 'inventory' && (
+        <section className="inventory-layout">
+          <div className="inventory-tables">
+            <InventoryTable
+              title="Organizations"
+              headers={['Name', 'Description', 'Active']}
+              rows={organizations.map((organization) => [
+                organization.name,
+                organization.description ?? '-',
+                <button onClick={() => updateOrganization(organization, { active: !organization.active })}>{yesNo(organization.active)}</button>,
+              ])}
+            />
+            <InventoryTable
+              title="Domains"
+              headers={['Domain', 'Organization', 'Active']}
+              rows={domains.map((domain) => [
+                <span className="mono">{domain.name}</span>,
+                domain.organization?.name ?? '-',
+                <button onClick={() => updateDomain(domain, { active: !domain.active })}>{yesNo(domain.active)}</button>,
+              ])}
+            />
+            <InventoryTable
+              title="Hosts"
+              headers={['Hostname', 'IP', 'Domain', 'Active']}
+              rows={hosts.map((host) => [
+                <span className="mono">{host.hostname}</span>,
+                host.ip ?? '-',
+                host.domain?.name ?? '-',
+                <button onClick={() => updateHost(host, { active: !host.active })}>{yesNo(host.active)}</button>,
+              ])}
+            />
+            <InventoryTable
+              title="Host Groups"
+              headers={['Name', 'Organization', 'Active']}
+              rows={hostGroups.map((hostGroup) => [
+                hostGroup.name,
+                hostGroup.organization?.name ?? '-',
+                <button onClick={() => updateHostGroup(hostGroup, { active: !hostGroup.active })}>{yesNo(hostGroup.active)}</button>,
+              ])}
+            />
+          </div>
+
+          <aside className="inventory-forms">
+            <form className="stack" onSubmit={createOrganization}>
+              <h2>Organization</h2>
+              <input required value={organizationForm.name} onChange={(event) => setOrganizationForm({ ...organizationForm, name: event.target.value })} placeholder="Name" />
+              <textarea value={organizationForm.description} onChange={(event) => setOrganizationForm({ ...organizationForm, description: event.target.value })} placeholder="Description" />
+              <button type="submit" disabled={busy}>Create organization</button>
+            </form>
+
+            <form className="stack" onSubmit={createDomain}>
+              <h2>Domain</h2>
+              <select required value={domainForm.organization_id} onChange={(event) => setDomainForm({ ...domainForm, organization_id: event.target.value })}>
+                <option value="">Select organization</option>
+                {organizations.map((organization) => <option key={organization.id} value={organization.id}>{organization.name}</option>)}
+              </select>
+              <input required value={domainForm.name} onChange={(event) => setDomainForm({ ...domainForm, name: event.target.value })} placeholder="example.com" />
+              <textarea value={domainForm.description} onChange={(event) => setDomainForm({ ...domainForm, description: event.target.value })} placeholder="Description" />
+              <button type="submit" disabled={busy || !domainForm.organization_id}>Create domain</button>
+            </form>
+
+            <form className="stack" onSubmit={createHost}>
+              <h2>Host</h2>
+              <select required value={hostForm.domain_id} onChange={(event) => setHostForm({ ...hostForm, domain_id: event.target.value })}>
+                <option value="">Select domain</option>
+                {domains.map((domain) => <option key={domain.id} value={domain.id}>{domain.name}</option>)}
+              </select>
+              <input required value={hostForm.hostname} onChange={(event) => setHostForm({ ...hostForm, hostname: event.target.value })} placeholder="host.example.com" />
+              <input value={hostForm.ip} onChange={(event) => setHostForm({ ...hostForm, ip: event.target.value })} placeholder="IP address" />
+              <textarea value={hostForm.description} onChange={(event) => setHostForm({ ...hostForm, description: event.target.value })} placeholder="Description" />
+              <button type="submit" disabled={busy || !hostForm.domain_id}>Create host</button>
+            </form>
+
+            <form className="stack" onSubmit={createHostGroup}>
+              <h2>Host Group</h2>
+              <select required value={hostGroupForm.organization_id} onChange={(event) => setHostGroupForm({ ...hostGroupForm, organization_id: event.target.value })}>
+                <option value="">Select organization</option>
+                {organizations.map((organization) => <option key={organization.id} value={organization.id}>{organization.name}</option>)}
+              </select>
+              <input required value={hostGroupForm.name} onChange={(event) => setHostGroupForm({ ...hostGroupForm, name: event.target.value })} placeholder="Group name" />
+              <textarea value={hostGroupForm.description} onChange={(event) => setHostGroupForm({ ...hostGroupForm, description: event.target.value })} placeholder="Description" />
+              <button type="submit" disabled={busy || !hostGroupForm.organization_id}>Create group</button>
+            </form>
+
+            <form className="stack" onSubmit={addHostGroupMember}>
+              <h2>Group Member</h2>
+              <select required value={membershipForm.host_group_id} onChange={(event) => setMembershipForm({ ...membershipForm, host_group_id: event.target.value })}>
+                <option value="">Select group</option>
+                {hostGroups.map((hostGroup) => <option key={hostGroup.id} value={hostGroup.id}>{hostGroup.name}</option>)}
+              </select>
+              <select required value={membershipForm.host_id} onChange={(event) => setMembershipForm({ ...membershipForm, host_id: event.target.value })}>
+                <option value="">Select host</option>
+                {hosts.map((host) => <option key={host.id} value={host.id}>{host.hostname}</option>)}
+              </select>
+              <button type="submit" disabled={busy || !membershipForm.host_group_id || !membershipForm.host_id}>Add member</button>
+            </form>
+          </aside>
+        </section>
+      )}
     </main>
   )
 }
@@ -520,6 +835,34 @@ function FactorTable({ factors, onToggleActive }: { factors: Factor[], onToggleA
           ))}
         </tbody>
       </table>
+    </div>
+  )
+}
+
+function InventoryTable({ title, headers, rows }: {
+  title: string
+  headers: string[]
+  rows: React.ReactNode[][]
+}) {
+  return (
+    <div className="inventory-block">
+      <h2>{title}</h2>
+      <div className="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              {headers.map((header) => <th key={header}>{header}</th>)}
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((row, index) => (
+              <tr key={index}>
+                {row.map((cell, cellIndex) => <td key={cellIndex}>{cell}</td>)}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </div>
   )
 }

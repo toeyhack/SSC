@@ -104,6 +104,30 @@ h2 {
   padding: 0 24px 28px;
 }
 
+.inventory-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 340px;
+  gap: 16px;
+  padding: 0 24px 28px;
+}
+
+.inventory-tables {
+  display: grid;
+  gap: 16px;
+  min-width: 0;
+}
+
+.inventory-forms {
+  display: grid;
+  gap: 16px;
+  align-content: start;
+}
+
+.inventory-block {
+  display: grid;
+  gap: 10px;
+}
+
 .primary-pane,
 .side-pane {
   min-width: 0;
@@ -317,7 +341,8 @@ tr:hover td,
   }
 
   .workspace-grid,
-  .workspace-grid.compact {
+  .workspace-grid.compact,
+  .inventory-layout {
     grid-template-columns: 1fr;
     padding: 0 16px 24px;
   }

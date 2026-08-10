@@ -21,4 +21,6 @@ Phase 1B implements the Golden Baseline importer for canonical SSC licensed-UI c
 
 Phase 1C adds a catalog administration workspace for factors, issues, versions, snapshots, and baseline preview/import.
 
+Phase 2 adds manual asset inventory for organizations, domains, hosts, and host groups.
+
 Follow docs/IMPLEMENTATION_STATUS.md for progress and next steps.

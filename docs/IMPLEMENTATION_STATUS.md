@@ -1,6 +1,6 @@
 # Implementation Status
 
-Current phase: Phase 1C - Catalog Administration / Review UI
+Current phase: Phase 2 - Asset Inventory
 
 ## Phase Status
 
@@ -12,7 +12,7 @@ Phase 1B - Golden Baseline Importer: COMPLETE / PASS
 
 Phase 1C - Catalog Administration / Review UI: COMPLETE / PASS
 
-Phase 2 - Asset Inventory: NOT STARTED
+Phase 2 - Asset Inventory: COMPLETE / PASS
 
 Phase 3 - Rule Engine: NOT STARTED
 
@@ -142,3 +142,32 @@ reports/phase1c-validation-20260810-094850.txt
 ```
 
 Validated Phase 1C checks included Docker Compose build/start, backend container exec, Alembic upgrade to head, backend pytest, Golden Baseline preview endpoint, root and health endpoints, catalog list endpoints, frontend HTTP, frontend production build, and container log diagnostics.
+
+## Phase 2 Implemented Scope
+
+Phase 2 adds:
+
+- formalized asset inventory metadata on the Phase 0 scaffold tables
+- Alembic revision `0003_phase2_asset_inventory`
+- inventory models for organizations, domains, hosts, host groups, and group members
+- Pydantic inventory schemas
+- REST API module at `/api/v1/inventory`
+- uniqueness constraints for organization names, domain names per organization, hostnames per domain, host group names per organization, and host group membership
+- same-organization validation for host group membership
+- frontend Inventory tab for manual organization, domain, host, host group, and group member management
+- backend tests for inventory lifecycle, duplicate handling, active-state updates, and membership validation
+- `scripts/phase2_validate.sh`
+
+Phase 2 is manual asset inventory only. It does not add scanning, discovery, findings, scoring, SSC API integration, or SSC public-web scraping.
+
+## Phase 2 Validation
+
+Phase 2 runtime validation: COMPLETE / PASS
+
+Validation report:
+
+```text
+reports/phase2-validation-20260810-143424.txt
+```
+
+Validated Phase 2 checks included Docker Compose build/start, backend container exec, Alembic upgrade to head, backend pytest, root and health endpoints, inventory list endpoints, frontend HTTP, frontend production build, and container log diagnostics.

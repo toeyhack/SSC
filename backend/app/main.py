@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from app.api import catalog, health
+from app.api import catalog, health, inventory
 
 app = FastAPI(title="Internal Security Rating Platform - Backend")
 
@@ -14,6 +14,7 @@ app.add_middleware(
 
 app.include_router(health.router, prefix="/health", tags=["health"])
 app.include_router(catalog.router)
+app.include_router(inventory.router)
 
 @app.get("/", tags=["root"])
 async def root():

@@ -136,3 +136,29 @@ Importer behavior:
 - `catalog_issue_type_versions.source_snapshot_hash` stores the baseline content hash for versions created by the import
 
 Exact-content idempotency is enforced in service logic by reusing an existing `SSC_LICENSED_UI` snapshot with the same content hash.
+
+## Phase 2 Asset Inventory
+
+Phase 2 formalizes the Phase 0 inventory scaffold for manually managed assets.
+
+Tables:
+
+- `organizations`
+- `domains`
+- `hosts`
+- `host_groups`
+- `host_group_members`
+
+Phase 2 adds descriptions, active-state fields where missing, timestamps, uniqueness constraints, and lookup indexes.
+
+Key constraints:
+
+- organization names are unique
+- domain names are unique per organization
+- hostnames are unique per domain
+- host group names are unique per organization
+- host group membership is unique per host/group pair
+
+Host group membership is validated in API logic so a host can only be added to a group in the same organization.
+
+Phase 2 is manual asset inventory only. It does not add scanning, discovery, findings, or scoring.

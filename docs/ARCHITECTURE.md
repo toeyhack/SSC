@@ -45,10 +45,25 @@ Phase 1C adds the catalog administration and review workspace:
 
 Phase 1C remains catalog-only. It does not add scanner execution, scoring, asset inventory, SSC API calls, or public-web synchronization.
 
+Phase 2 adds the manual asset inventory module:
+
+- SQLAlchemy inventory models based on the Phase 0 scaffold
+- Alembic revision `0003_phase2_asset_inventory`
+- REST API routes in `app.api.inventory`
+- frontend Inventory tab for organizations, domains, hosts, host groups, and group membership
+
+Phase 2 does not add scanner discovery, scan execution, findings, or scoring.
+
 The catalog API prefix is:
 
 ```text
 /api/v1/catalog
+```
+
+The inventory API prefix is:
+
+```text
+/api/v1/inventory
 ```
 
 ## Catalog Versioning
@@ -76,4 +91,4 @@ Phase 1A adds a minimal Issue Catalog page that reads from the backend API and d
 - Version
 - Active
 
-No scoring UI, charts, scanner UI, asset inventory UI, or public reference review workflows are included through Phase 1C.
+No scoring UI, charts, scanner execution UI, findings UI, or public reference review workflows are included through Phase 2.
