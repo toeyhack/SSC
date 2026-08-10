@@ -34,6 +34,17 @@ Phase 1B adds the Golden Baseline importer:
 
 The importer writes only to the Phase 1A catalog tables. It does not integrate with SSC APIs, scrape public SSC pages, scan assets, or compute scores.
 
+Phase 1C adds the catalog administration and review workspace:
+
+- issue catalog table with search and breach-risk filtering
+- factor creation and active-state management
+- issue identity creation and active-state management
+- immutable issue-version creation and version-history review
+- snapshot review
+- golden baseline JSON preview/import UI backed by the Phase 1B importer service
+
+Phase 1C remains catalog-only. It does not add scanner execution, scoring, asset inventory, SSC API calls, or public-web synchronization.
+
 The catalog API prefix is:
 
 ```text
@@ -65,4 +76,4 @@ Phase 1A adds a minimal Issue Catalog page that reads from the backend API and d
 - Version
 - Active
 
-No scoring UI, charts, scanner UI, asset inventory UI, or advanced administration workflows are included through Phase 1B.
+No scoring UI, charts, scanner UI, asset inventory UI, or public reference review workflows are included through Phase 1C.

@@ -1,6 +1,6 @@
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Response, status
 from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, joinedload
@@ -26,6 +26,12 @@ from app.schemas.catalog import (
     IssueTypeUpdate,
     IssueTypeVersionCreate,
     IssueTypeVersionRead,
+)
+from app.services.golden_baseline_importer import (
+    GoldenBaselineImportError,
+    GoldenBaselineImportResult,
+    GoldenBaselineInput,
+    import_golden_baseline,
 )
 
 router = APIRouter(prefix="/api/v1/catalog", tags=["catalog"])
@@ -301,3 +307,31 @@ def attach_snapshot_item(snapshot_id: UUID, payload: CatalogSnapshotItemCreate, 
     _commit_or_conflict(db, "Duplicate issue type version in snapshot")
     db.refresh(item)
     return item
+
+
+@router.post("/golden-baseline/preview", response_model=GoldenBaselineImportResult)
+def preview_golden_baseline(payload: GoldenBaselineInput, db: Session = Depends(get_db)):
+    try:
+        return import_golden_baseline(db, payload, dry_run=True)
+    except GoldenBaselineImportError as exc:
+        raise _bad_request({"errors": exc.errors}) from exc
+
+
+@router.post(
+    "/golden-baseline/import",
+    response_model=GoldenBaselineImportResult,
+    status_code=status.HTTP_201_CREATED,
+)
+def import_golden_baseline_endpoint(
+    payload: GoldenBaselineInput,
+    response: Response,
+    db: Session = Depends(get_db),
+):
+    try:
+        result = import_golden_baseline(db, payload, dry_run=False)
+    except GoldenBaselineImportError as exc:
+        raise _bad_request({"errors": exc.errors}) from exc
+
+    if result.snapshot_action == "reused_existing":
+        response.status_code = status.HTTP_200_OK
+    return result

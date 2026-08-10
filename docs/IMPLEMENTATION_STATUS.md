@@ -1,6 +1,6 @@
 # Implementation Status
 
-Current phase: Phase 1B - Golden Baseline Importer
+Current phase: Phase 1C - Catalog Administration / Review UI
 
 ## Phase Status
 
@@ -10,7 +10,7 @@ Phase 1A - Issue Catalog Data Model + Catalog API: COMPLETE / PASS
 
 Phase 1B - Golden Baseline Importer: COMPLETE / PASS
 
-Phase 1C - Catalog Administration / Review UI: NOT STARTED
+Phase 1C - Catalog Administration / Review UI: COMPLETE / PASS
 
 Phase 2 - Asset Inventory: NOT STARTED
 
@@ -110,3 +110,35 @@ reports/phase1b-validation-20260810-092229.txt
 ```
 
 Validated Phase 1B checks included Docker Compose build/start, backend container exec, Alembic upgrade to head, backend pytest, importer dry-run, importer import, exact-content idempotency, root and health endpoints, catalog snapshot endpoint, and container log diagnostics.
+
+## Phase 1C Implemented Scope
+
+Phase 1C adds:
+
+- catalog administration workspace in the React frontend
+- issue catalog search and breach-risk filtering
+- factor creation and active-state management
+- issue identity creation and active-state management
+- issue-version creation with current-version selection
+- version-history review for selected issues
+- catalog snapshot review
+- Golden Baseline JSON preview/import UI backed by Phase 1B importer service
+- backend preview/import endpoints:
+  - `POST /api/v1/catalog/golden-baseline/preview`
+  - `POST /api/v1/catalog/golden-baseline/import`
+- backend tests for the admin preview/import endpoint behavior and idempotency
+- `scripts/phase1c_validate.sh`
+
+SecurityScorecard remains a reference source only. Phase 1C does not add SSC API integration, SSC public-web scraping, scanners, scoring, asset inventory, or public reference sync.
+
+## Phase 1C Validation
+
+Phase 1C runtime validation: COMPLETE / PASS
+
+Validation report:
+
+```text
+reports/phase1c-validation-20260810-094850.txt
+```
+
+Validated Phase 1C checks included Docker Compose build/start, backend container exec, Alembic upgrade to head, backend pytest, Golden Baseline preview endpoint, root and health endpoints, catalog list endpoints, frontend HTTP, frontend production build, and container log diagnostics.

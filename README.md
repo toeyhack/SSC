@@ -19,4 +19,6 @@ Phase 1A implements the versioned issue catalog data model, catalog API, backend
 
 Phase 1B implements the Golden Baseline importer for canonical SSC licensed-UI capture JSON. See `docs/GOLDEN_BASELINE_IMPORTER.md`.
 
+Phase 1C adds a catalog administration workspace for factors, issues, versions, snapshots, and baseline preview/import.
+
 Follow docs/IMPLEMENTATION_STATUS.md for progress and next steps.
