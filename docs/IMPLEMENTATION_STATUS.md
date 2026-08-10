@@ -1,6 +1,6 @@
 # Implementation Status
 
-Current phase: Phase 1A - Issue Catalog Data Model + Catalog API
+Current phase: Phase 1B - Golden Baseline Importer
 
 ## Phase Status
 
@@ -8,7 +8,7 @@ Phase 0 - Foundation: COMPLETE / PASS
 
 Phase 1A - Issue Catalog Data Model + Catalog API: COMPLETE / PASS
 
-Phase 1B - Golden Baseline Importer: NOT STARTED
+Phase 1B - Golden Baseline Importer: COMPLETE / PASS
 
 Phase 1C - Catalog Administration / Review UI: NOT STARTED
 
@@ -73,3 +73,40 @@ reports/phase1a-validation-20260806-183254.txt
 ```
 
 Validated Phase 1A checks included Docker Compose build/start, backend container exec, Alembic version detection, Alembic upgrade to head, backend pytest, root and health endpoints, OpenAPI docs, catalog list endpoints, frontend HTTP, frontend production build, storage diagnostics, and container logs.
+
+## Phase 1B Implemented Scope
+
+Phase 1B adds:
+
+- canonical JSON input schema `phase1b.ssc_licensed_ui.v1`
+- validation for source type, factor codes, issue stable keys, breach risk, threat level, capture timestamp, duplicate issues, and source ordering
+- `app.services.golden_baseline_importer` import service
+- `python -m app.cli.import_golden_baseline` CLI with dry-run/preview mode
+- SHA-256 content hashing over normalized canonical JSON
+- exact-content idempotency by `SSC_LICENSED_UI` snapshot content hash
+- factor creation/reuse by code without metadata overwrite
+- issue type creation/reconciliation by explicit `stable_key`
+- issue version creation only when definition fields change
+- immutable `CatalogSnapshot` and `CatalogSnapshotItem` creation using Phase 1A tables
+- preservation of factor and issue source ordering in snapshot item positions
+- controlled rename/unknown handling that rejects ambiguous name collisions instead of merging by name
+- synthetic validation fixture at `backend/tests/fixtures/phase1b_sample_baseline.json`
+- importer documentation at `docs/GOLDEN_BASELINE_IMPORTER.md`
+- backend tests for dry-run, idempotency, version changes, ordering, and ambiguous rename handling
+- `scripts/phase1b_validate.sh`
+
+SecurityScorecard remains a reference source only. Phase 1B does not add SSC API integration, SSC public-web scraping, scanners, scoring, or asset inventory.
+
+The repository does not contain the real captured SecurityScorecard licensed-UI catalog. The real Golden Baseline import still requires an external JSON file matching `docs/GOLDEN_BASELINE_IMPORTER.md`.
+
+## Phase 1B Validation
+
+Phase 1B runtime validation: COMPLETE / PASS
+
+Validation report:
+
+```text
+reports/phase1b-validation-20260810-092229.txt
+```
+
+Validated Phase 1B checks included Docker Compose build/start, backend container exec, Alembic upgrade to head, backend pytest, importer dry-run, importer import, exact-content idempotency, root and health endpoints, catalog snapshot endpoint, and container log diagnostics.

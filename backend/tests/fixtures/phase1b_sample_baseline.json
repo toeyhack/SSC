@@ -1,0 +1,51 @@
+{
+  "schema_version": "phase1b.ssc_licensed_ui.v1",
+  "name": "Phase 1B Synthetic SSC Licensed UI Baseline",
+  "source_type": "SSC_LICENSED_UI",
+  "source_reference": "local-test-fixture-not-real-ssc-content",
+  "captured_at": "2026-08-06T18:30:00Z",
+  "notes": "Synthetic validation fixture. This is not real SecurityScorecard catalog content.",
+  "factors": [
+    {
+      "code": "phase1b_network_security",
+      "name": "Network Security",
+      "position": 1,
+      "issues": [
+        {
+          "stable_key": "phase1b_network_security.tls_certificate_expired",
+          "name": "TLS certificate expired",
+          "description": "Synthetic test issue for importer validation.",
+          "breach_risk": "HIGH",
+          "threat_level": "HIGH",
+          "affects_score": true,
+          "position": 1
+        },
+        {
+          "stable_key": "phase1b_network_security.secure_tls_observed",
+          "name": "Secure TLS observed",
+          "description": "Synthetic positive issue for importer validation.",
+          "breach_risk": "POSITIVE",
+          "threat_level": "POSITIVE",
+          "affects_score": false,
+          "position": 2
+        }
+      ]
+    },
+    {
+      "code": "phase1b_application_security",
+      "name": "Application Security",
+      "position": 2,
+      "issues": [
+        {
+          "stable_key": "phase1b_application_security.http_headers_missing",
+          "name": "HTTP security headers missing",
+          "description": "Synthetic medium-risk issue for importer validation.",
+          "breach_risk": "MEDIUM",
+          "threat_level": "MEDIUM",
+          "affects_score": true,
+          "position": 1
+        }
+      ]
+    }
+  ]
+}

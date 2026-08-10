@@ -121,3 +121,18 @@ Constraints and indexes:
 - `ix_catalog_snapshot_items_catalog_snapshot_id`
 
 Historical snapshots continue to reference the original `catalog_issue_type_versions` rows even when an issue type later points to a newer current version.
+
+## Phase 1B Golden Baseline Importer
+
+Phase 1B does not add database tables. It imports canonical SSC licensed-UI baseline JSON into the Phase 1A `catalog_*` tables.
+
+Importer behavior:
+
+- `catalog_snapshots.source_type` is `SSC_LICENSED_UI`
+- `catalog_snapshots.captured_at` comes from the baseline input
+- `catalog_snapshots.imported_at` is set by the importer runtime
+- `catalog_snapshots.content_hash` stores the SHA-256 hash of normalized canonical input JSON
+- `catalog_snapshot_items.factor_position` and `catalog_snapshot_items.issue_position` preserve source ordering
+- `catalog_issue_type_versions.source_snapshot_hash` stores the baseline content hash for versions created by the import
+
+Exact-content idempotency is enforced in service logic by reusing an existing `SSC_LICENSED_UI` snapshot with the same content hash.

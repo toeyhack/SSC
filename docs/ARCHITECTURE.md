@@ -25,6 +25,15 @@ Phase 1A adds the issue catalog module:
 - REST API routes in `app.api.catalog`
 - Alembic revision `0002_phase1a_catalog`
 
+Phase 1B adds the Golden Baseline importer:
+
+- canonical SSC licensed-UI capture JSON schema
+- import service in `app.services.golden_baseline_importer`
+- CLI entry point `python -m app.cli.import_golden_baseline`
+- synthetic importer validation fixture under `backend/tests/fixtures`
+
+The importer writes only to the Phase 1A catalog tables. It does not integrate with SSC APIs, scrape public SSC pages, scan assets, or compute scores.
+
 The catalog API prefix is:
 
 ```text
@@ -56,4 +65,4 @@ Phase 1A adds a minimal Issue Catalog page that reads from the backend API and d
 - Version
 - Active
 
-No scoring UI, charts, baseline importer, or advanced administration workflows are included in Phase 1A.
+No scoring UI, charts, scanner UI, asset inventory UI, or advanced administration workflows are included through Phase 1B.
