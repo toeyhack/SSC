@@ -176,6 +176,26 @@ textarea {
   line-height: 1.45;
 }
 
+.json-mini,
+.expression-preview {
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  line-height: 1.4;
+}
+
+.json-mini {
+  min-height: 118px;
+}
+
+.expression-preview {
+  max-height: 180px;
+  overflow: auto;
+  margin: 0;
+  padding: 8px;
+  background: #f5f7fa;
+  border: 1px solid #e0e6ee;
+  font-size: 12px;
+}
+
 .stack {
   display: grid;
   gap: 10px;

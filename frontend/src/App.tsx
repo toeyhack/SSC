@@ -105,11 +105,39 @@ type HostGroup = {
   organization: Organization | null
 }
 
-type Tab = 'issues' | 'factors' | 'snapshots' | 'baseline' | 'inventory'
+type RuleVersion = {
+  id: string
+  rule_id: string
+  version_number: number
+  name: string
+  description: string | null
+  target_type: string
+  rule_expression: Record<string, unknown>
+  evidence_schema: Record<string, unknown> | null
+  remediation: string | null
+  source_type: string
+  source_reference: string | null
+  effective_from: string
+  created_at: string
+}
+
+type DetectionRule = {
+  id: string
+  stable_key: string
+  catalog_issue_type_id: string | null
+  current_version_id: string | null
+  is_active: boolean
+  catalog_issue_type: IssueType | null
+  current_version: RuleVersion | null
+}
+
+type Tab = 'issues' | 'factors' | 'snapshots' | 'baseline' | 'inventory' | 'rules'
 
 const API_BASE = 'http://localhost:8000'
 const riskOptions = ['HIGH', 'MEDIUM', 'LOW', 'INFORMATIONAL', 'POSITIVE', 'UNKNOWN']
 const sourceOptions = ['MANUAL', 'SSC_LICENSED_UI']
+const ruleSourceOptions = ['MANUAL', 'INTERNAL', 'SSC_REFERENCE']
+const ruleTargetOptions = ['DOMAIN', 'HOST', 'URL', 'CERTIFICATE', 'IP', 'ORGANIZATION']
 
 const emptyFactor = {
   code: '',
@@ -169,6 +197,24 @@ const emptyMembership = {
   host_id: '',
 }
 
+const emptyRule = {
+  stable_key: '',
+  catalog_issue_type_id: '',
+  is_active: true,
+}
+
+const emptyRuleVersion = {
+  name: '',
+  description: '',
+  target_type: 'HOST',
+  rule_expression: '{\n  "operator": "exists",\n  "path": "example.field"\n}',
+  evidence_schema: '',
+  remediation: '',
+  source_type: 'MANUAL',
+  source_reference: '',
+  make_current: true,
+}
+
 export default function App() {
   const [tab, setTab] = useState<Tab>('issues')
   const [factors, setFactors] = useState<Factor[]>([])
@@ -178,8 +224,11 @@ export default function App() {
   const [domains, setDomains] = useState<DomainAsset[]>([])
   const [hosts, setHosts] = useState<HostAsset[]>([])
   const [hostGroups, setHostGroups] = useState<HostGroup[]>([])
+  const [rules, setRules] = useState<DetectionRule[]>([])
   const [versions, setVersions] = useState<IssueVersion[]>([])
+  const [ruleVersions, setRuleVersions] = useState<RuleVersion[]>([])
   const [selectedIssueId, setSelectedIssueId] = useState<string | null>(null)
+  const [selectedRuleId, setSelectedRuleId] = useState<string | null>(null)
   const [query, setQuery] = useState('')
   const [riskFilter, setRiskFilter] = useState('ALL')
   const [loading, setLoading] = useState(true)
@@ -196,10 +245,17 @@ export default function App() {
   const [hostForm, setHostForm] = useState(emptyHost)
   const [hostGroupForm, setHostGroupForm] = useState(emptyHostGroup)
   const [membershipForm, setMembershipForm] = useState(emptyMembership)
+  const [ruleForm, setRuleForm] = useState(emptyRule)
+  const [ruleVersionForm, setRuleVersionForm] = useState(emptyRuleVersion)
 
   const selectedIssue = useMemo(
     () => issues.find((issue) => issue.id === selectedIssueId) ?? null,
     [issues, selectedIssueId],
+  )
+
+  const selectedRule = useMemo(
+    () => rules.find((rule) => rule.id === selectedRuleId) ?? null,
+    [rules, selectedRuleId],
   )
 
   const filteredIssues = useMemo(() => {
@@ -230,10 +286,18 @@ export default function App() {
     loadVersions(selectedIssueId)
   }, [selectedIssueId])
 
+  useEffect(() => {
+    if (!selectedRuleId) {
+      setRuleVersions([])
+      return
+    }
+    loadRuleVersions(selectedRuleId)
+  }, [selectedRuleId])
+
   async function refreshAll() {
     setLoading(true)
     try {
-      const [factorData, issueData, snapshotData, organizationData, domainData, hostData, hostGroupData] = await Promise.all([
+      const [factorData, issueData, snapshotData, organizationData, domainData, hostData, hostGroupData, ruleData] = await Promise.all([
         api<Factor[]>('/api/v1/catalog/factors'),
         api<IssueType[]>('/api/v1/catalog/issues'),
         api<Snapshot[]>('/api/v1/catalog/snapshots'),
@@ -241,6 +305,7 @@ export default function App() {
         api<DomainAsset[]>('/api/v1/inventory/domains'),
         api<HostAsset[]>('/api/v1/inventory/hosts'),
         api<HostGroup[]>('/api/v1/inventory/host-groups'),
+        api<DetectionRule[]>('/api/v1/rules'),
       ])
       setFactors(factorData)
       setIssues(issueData)
@@ -249,6 +314,7 @@ export default function App() {
       setDomains(domainData)
       setHosts(hostData)
       setHostGroups(hostGroupData)
+      setRules(ruleData)
       setIssueForm((current) => ({
         ...current,
         factor_id: current.factor_id || factorData[0]?.id || '',
@@ -261,6 +327,7 @@ export default function App() {
         host_group_id: current.host_group_id || hostGroupData[0]?.id || '',
         host_id: current.host_id || hostData[0]?.id || '',
       }))
+      setRuleForm((current) => ({ ...current, catalog_issue_type_id: current.catalog_issue_type_id || '' }))
       setError(null)
     } catch (err) {
       setError(toErrorMessage(err))
@@ -272,6 +339,14 @@ export default function App() {
   async function loadVersions(issueId: string) {
     try {
       setVersions(await api<IssueVersion[]>(`/api/v1/catalog/issues/${issueId}/versions`))
+    } catch (err) {
+      setError(toErrorMessage(err))
+    }
+  }
+
+  async function loadRuleVersions(ruleId: string) {
+    try {
+      setRuleVersions(await api<RuleVersion[]>(`/api/v1/rules/${ruleId}/versions`))
     } catch (err) {
       setError(toErrorMessage(err))
     }
@@ -492,6 +567,64 @@ export default function App() {
     })
   }
 
+  async function createRule(event: FormEvent) {
+    event.preventDefault()
+    await submit(async () => {
+      const rule = await api<DetectionRule>('/api/v1/rules', {
+        method: 'POST',
+        body: JSON.stringify({
+          ...ruleForm,
+          catalog_issue_type_id: blankToNull(ruleForm.catalog_issue_type_id),
+        }),
+      })
+      setRuleForm(emptyRule)
+      setSelectedRuleId(rule.id)
+      await refreshAll()
+      setMessage('Rule identity created')
+    })
+  }
+
+  async function updateRule(rule: DetectionRule, updates: Partial<DetectionRule>) {
+    await submit(async () => {
+      await api<DetectionRule>(`/api/v1/rules/${rule.id}`, {
+        method: 'PATCH',
+        body: JSON.stringify(updates),
+      })
+      await refreshAll()
+      setMessage('Rule updated')
+    })
+  }
+
+  async function createRuleVersion(event: FormEvent) {
+    event.preventDefault()
+    if (!selectedRuleId) {
+      setError('Select a rule first')
+      return
+    }
+    await submit(async () => {
+      await api<RuleVersion>(`/api/v1/rules/${selectedRuleId}/versions`, {
+        method: 'POST',
+        body: JSON.stringify({
+          name: ruleVersionForm.name,
+          description: blankToNull(ruleVersionForm.description),
+          target_type: ruleVersionForm.target_type,
+          rule_expression: parseJsonObject(ruleVersionForm.rule_expression, 'Rule expression'),
+          evidence_schema: blankToNull(ruleVersionForm.evidence_schema)
+            ? parseJsonObject(ruleVersionForm.evidence_schema, 'Evidence schema')
+            : null,
+          remediation: blankToNull(ruleVersionForm.remediation),
+          source_type: ruleVersionForm.source_type,
+          source_reference: blankToNull(ruleVersionForm.source_reference),
+          make_current: ruleVersionForm.make_current,
+        }),
+      })
+      setRuleVersionForm(emptyRuleVersion)
+      await refreshAll()
+      await loadRuleVersions(selectedRuleId)
+      setMessage('Rule version created')
+    })
+  }
+
   async function submit(action: () => Promise<void>) {
     setBusy(true)
     setError(null)
@@ -515,13 +648,14 @@ export default function App() {
           <button className={tabClass(tab, 'snapshots')} onClick={() => setTab('snapshots')}>Snapshots</button>
           <button className={tabClass(tab, 'baseline')} onClick={() => setTab('baseline')}>Baseline</button>
           <button className={tabClass(tab, 'inventory')} onClick={() => setTab('inventory')}>Inventory</button>
+          <button className={tabClass(tab, 'rules')} onClick={() => setTab('rules')}>Rules</button>
         </div>
       </nav>
 
       <header className="workspace-header">
         <h1>Catalog Administration</h1>
         <div className="status-line">
-          {loading ? 'Loading catalog' : `${issues.length} issues, ${factors.length} factors, ${snapshots.length} snapshots, ${hosts.length} hosts`}
+          {loading ? 'Loading catalog' : `${issues.length} issues, ${rules.length} rules, ${hosts.length} hosts, ${snapshots.length} snapshots`}
         </div>
       </header>
 
@@ -768,6 +902,112 @@ export default function App() {
           </aside>
         </section>
       )}
+
+      {tab === 'rules' && (
+        <section className="workspace-grid">
+          <div className="primary-pane">
+            <div className="toolbar">
+              <button onClick={refreshAll} disabled={busy}>Refresh</button>
+            </div>
+            <RuleTable
+              rules={rules}
+              selectedRuleId={selectedRuleId}
+              onSelect={setSelectedRuleId}
+              onToggleActive={(rule) => updateRule(rule, { is_active: !rule.is_active })}
+            />
+          </div>
+
+          <aside className="side-pane">
+            <form className="stack" onSubmit={createRule}>
+              <h2>Rule Identity</h2>
+              <input
+                required
+                value={ruleForm.stable_key}
+                onChange={(event) => setRuleForm({ ...ruleForm, stable_key: event.target.value })}
+                placeholder="stable_key"
+              />
+              <select
+                value={ruleForm.catalog_issue_type_id}
+                onChange={(event) => setRuleForm({ ...ruleForm, catalog_issue_type_id: event.target.value })}
+              >
+                <option value="">No catalog issue link</option>
+                {issues.map((issue) => (
+                  <option key={issue.id} value={issue.id}>{issue.current_version?.name ?? issue.stable_key}</option>
+                ))}
+              </select>
+              <label className="check-row">
+                <input
+                  type="checkbox"
+                  checked={ruleForm.is_active}
+                  onChange={(event) => setRuleForm({ ...ruleForm, is_active: event.target.checked })}
+                />
+                Active
+              </label>
+              <button type="submit" disabled={busy}>Create rule</button>
+            </form>
+
+            <form className="stack" onSubmit={createRuleVersion}>
+              <h2>Rule Version</h2>
+              <div className="selected-line">{selectedRule?.stable_key ?? 'No rule selected'}</div>
+              <input
+                required
+                value={ruleVersionForm.name}
+                onChange={(event) => setRuleVersionForm({ ...ruleVersionForm, name: event.target.value })}
+                placeholder="Rule name"
+              />
+              <textarea
+                value={ruleVersionForm.description}
+                onChange={(event) => setRuleVersionForm({ ...ruleVersionForm, description: event.target.value })}
+                placeholder="Description"
+              />
+              <div className="form-row">
+                <select value={ruleVersionForm.target_type} onChange={(event) => setRuleVersionForm({ ...ruleVersionForm, target_type: event.target.value })}>
+                  {ruleTargetOptions.map((target) => <option key={target} value={target}>{target}</option>)}
+                </select>
+                <select value={ruleVersionForm.source_type} onChange={(event) => setRuleVersionForm({ ...ruleVersionForm, source_type: event.target.value })}>
+                  {ruleSourceOptions.map((source) => <option key={source} value={source}>{source}</option>)}
+                </select>
+              </div>
+              <textarea
+                className="json-mini"
+                required
+                value={ruleVersionForm.rule_expression}
+                onChange={(event) => setRuleVersionForm({ ...ruleVersionForm, rule_expression: event.target.value })}
+                spellCheck={false}
+                placeholder="Rule expression JSON"
+              />
+              <textarea
+                className="json-mini"
+                value={ruleVersionForm.evidence_schema}
+                onChange={(event) => setRuleVersionForm({ ...ruleVersionForm, evidence_schema: event.target.value })}
+                spellCheck={false}
+                placeholder="Evidence schema JSON"
+              />
+              <textarea
+                value={ruleVersionForm.remediation}
+                onChange={(event) => setRuleVersionForm({ ...ruleVersionForm, remediation: event.target.value })}
+                placeholder="Remediation"
+              />
+              <input
+                value={ruleVersionForm.source_reference}
+                onChange={(event) => setRuleVersionForm({ ...ruleVersionForm, source_reference: event.target.value })}
+                placeholder="Source reference"
+              />
+              <label className="check-row">
+                <input
+                  type="checkbox"
+                  checked={ruleVersionForm.make_current}
+                  onChange={(event) => setRuleVersionForm({ ...ruleVersionForm, make_current: event.target.checked })}
+                />
+                Make current
+              </label>
+              <button type="submit" disabled={busy || !selectedRuleId}>Create version</button>
+            </form>
+
+            <RuleVersionHistory versions={ruleVersions} />
+          </aside>
+        </section>
+      )}
     </main>
   )
 }
@@ -839,6 +1079,44 @@ function FactorTable({ factors, onToggleActive }: { factors: Factor[], onToggleA
   )
 }
 
+function RuleTable({ rules, selectedRuleId, onSelect, onToggleActive }: {
+  rules: DetectionRule[]
+  selectedRuleId: string | null
+  onSelect: (id: string) => void
+  onToggleActive: (rule: DetectionRule) => void
+}) {
+  return (
+    <div className="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Stable Key</th>
+            <th>Rule</th>
+            <th>Target</th>
+            <th>Catalog Issue</th>
+            <th>Version</th>
+            <th>Source</th>
+            <th>Active</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rules.map((rule) => (
+            <tr key={rule.id} className={rule.id === selectedRuleId ? 'selected-row' : ''} onClick={() => onSelect(rule.id)}>
+              <td className="mono">{rule.stable_key}</td>
+              <td>{rule.current_version?.name ?? '-'}</td>
+              <td>{rule.current_version?.target_type ?? '-'}</td>
+              <td>{rule.catalog_issue_type?.current_version?.name ?? rule.catalog_issue_type?.stable_key ?? '-'}</td>
+              <td>{rule.current_version?.version_number ?? '-'}</td>
+              <td>{rule.current_version?.source_type ?? '-'}</td>
+              <td><button onClick={(event) => { event.stopPropagation(); onToggleActive(rule) }}>{yesNo(rule.is_active)}</button></td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  )
+}
+
 function InventoryTable({ title, headers, rows }: {
   title: string
   headers: string[]
@@ -863,6 +1141,23 @@ function InventoryTable({ title, headers, rows }: {
           </tbody>
         </table>
       </div>
+    </div>
+  )
+}
+
+function RuleVersionHistory({ versions }: { versions: RuleVersion[] }) {
+  return (
+    <div className="history">
+      <h2>Rule History</h2>
+      {versions.length === 0 && <div className="empty">No versions</div>}
+      {versions.map((version) => (
+        <div className="history-item" key={version.id}>
+          <div className="history-title">v{version.version_number} {version.name}</div>
+          <div>{version.target_type} / {version.source_type}</div>
+          <pre className="expression-preview">{JSON.stringify(version.rule_expression, null, 2)}</pre>
+          <div className="muted">{formatDate(version.effective_from)}</div>
+        </div>
+      ))}
     </div>
   )
 }
@@ -974,6 +1269,14 @@ function yesNo(value: boolean) {
 function blankToNull(value: string) {
   const trimmed = value.trim()
   return trimmed ? trimmed : null
+}
+
+function parseJsonObject(value: string, label: string) {
+  const parsed = JSON.parse(value)
+  if (!parsed || Array.isArray(parsed) || typeof parsed !== 'object') {
+    throw new Error(`${label} must be a JSON object`)
+  }
+  return parsed as Record<string, unknown>
 }
 
 function formatDate(value: string) {

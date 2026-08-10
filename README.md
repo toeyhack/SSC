@@ -23,4 +23,6 @@ Phase 1C adds a catalog administration workspace for factors, issues, versions, 
 
 Phase 2 adds manual asset inventory for organizations, domains, hosts, and host groups.
 
+Phase 3 adds versioned rule-engine definitions for later scanner use.
+
 Follow docs/IMPLEMENTATION_STATUS.md for progress and next steps.

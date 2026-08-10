@@ -54,6 +54,15 @@ Phase 2 adds the manual asset inventory module:
 
 Phase 2 does not add scanner discovery, scan execution, findings, or scoring.
 
+Phase 3 adds the rule engine definition module:
+
+- SQLAlchemy models in `app.models.rule_models`
+- Alembic revision `0004_phase3_rule_engine`
+- REST API routes in `app.api.rules`
+- frontend Rules tab for rule identities, immutable rule versions, and version-history review
+
+Rules are stored as versioned definitions for later scan-engine use. Phase 3 does not execute rules, scan assets, create findings, or calculate scores.
+
 The catalog API prefix is:
 
 ```text
@@ -64,6 +73,12 @@ The inventory API prefix is:
 
 ```text
 /api/v1/inventory
+```
+
+The rule engine API prefix is:
+
+```text
+/api/v1/rules
 ```
 
 ## Catalog Versioning
@@ -91,4 +106,4 @@ Phase 1A adds a minimal Issue Catalog page that reads from the backend API and d
 - Version
 - Active
 
-No scoring UI, charts, scanner execution UI, findings UI, or public reference review workflows are included through Phase 2.
+No scoring UI, charts, scanner execution UI, findings UI, or public reference review workflows are included through Phase 3.

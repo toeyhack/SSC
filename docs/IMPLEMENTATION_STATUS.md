@@ -1,6 +1,6 @@
 # Implementation Status
 
-Current phase: Phase 2 - Asset Inventory
+Current phase: Phase 3 - Rule Engine
 
 ## Phase Status
 
@@ -10,11 +10,13 @@ Phase 1A - Issue Catalog Data Model + Catalog API: COMPLETE / PASS
 
 Phase 1B - Golden Baseline Importer: COMPLETE / PASS
 
+Real SSC Golden Baseline source data: WAITING_FOR_SOURCE_DATA
+
 Phase 1C - Catalog Administration / Review UI: COMPLETE / PASS
 
 Phase 2 - Asset Inventory: COMPLETE / PASS
 
-Phase 3 - Rule Engine: NOT STARTED
+Phase 3 - Rule Engine: COMPLETE / PASS
 
 Phase 4 - Scan Engine: NOT STARTED
 
@@ -171,3 +173,34 @@ reports/phase2-validation-20260810-143424.txt
 ```
 
 Validated Phase 2 checks included Docker Compose build/start, backend container exec, Alembic upgrade to head, backend pytest, root and health endpoints, inventory list endpoints, frontend HTTP, frontend production build, and container log diagnostics.
+
+## Phase 3 Implemented Scope
+
+Phase 3 adds:
+
+- versioned rule-engine definition tables
+- Alembic revision `0004_phase3_rule_engine`
+- `rule_engine_rules`
+- `rule_engine_rule_versions`
+- rule source types `MANUAL`, `INTERNAL`, and `SSC_REFERENCE`
+- rule target types `DOMAIN`, `HOST`, `URL`, `CERTIFICATE`, `IP`, and `ORGANIZATION`
+- optional linkage from rule identities to catalog issue types
+- immutable rule-version creation with current-version selection
+- REST API module at `/api/v1/rules`
+- frontend Rules tab for rule identities, rule versions, JSON rule expressions, and version-history review
+- backend tests for rule lifecycle, duplicate handling, catalog linkage, current-version validation, and expression validation
+- `scripts/phase3_validate.sh`
+
+Phase 3 stores rule definitions only. It does not add scan execution, scanner workers, findings, scoring, SSC API integration, SSC public-web scraping, or proprietary SSC logic.
+
+## Phase 3 Validation
+
+Phase 3 runtime validation: COMPLETE / PASS
+
+Validation report:
+
+```text
+reports/phase3-validation-20260810-150157.txt
+```
+
+Validated Phase 3 checks included Docker Compose build/start, backend container exec, Alembic upgrade to head, backend pytest, root and health endpoints, rule list endpoint, catalog and inventory list endpoints, frontend HTTP, frontend production build, and container log diagnostics.

@@ -162,3 +162,47 @@ Key constraints:
 Host group membership is validated in API logic so a host can only be added to a group in the same organization.
 
 Phase 2 is manual asset inventory only. It does not add scanning, discovery, findings, or scoring.
+
+## Phase 3 Rule Engine
+
+Phase 3 adds versioned rule-definition storage. It does not execute rules.
+
+Tables:
+
+- `rule_engine_rules`
+- `rule_engine_rule_versions`
+
+`rule_engine_rules` stores stable rule identities. `rule_engine_rule_versions` stores immutable rule definitions.
+
+Key fields:
+
+- `stable_key`
+- optional `catalog_issue_type_id`
+- `current_version_id`
+- `version_number`
+- `target_type`
+- `rule_expression`
+- `evidence_schema`
+- `remediation`
+- `source_type`
+- `effective_from`
+- `effective_to`
+
+Supported rule source types:
+
+- `MANUAL`
+- `INTERNAL`
+- `SSC_REFERENCE`
+
+Supported target types:
+
+- `DOMAIN`
+- `HOST`
+- `URL`
+- `CERTIFICATE`
+- `IP`
+- `ORGANIZATION`
+
+Definition changes create new `rule_engine_rule_versions` rows. Historical versions are not overwritten.
+
+Phase 3 does not add scan execution, scanner workers, findings, scoring, or proprietary SSC logic.
