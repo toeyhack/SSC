@@ -1,6 +1,6 @@
 # Implementation Status
 
-Current phase: Phase 3 - Rule Engine
+Current phase: Phase 4 - Scan Engine
 
 ## Phase Status
 
@@ -18,7 +18,7 @@ Phase 2 - Asset Inventory: COMPLETE / PASS
 
 Phase 3 - Rule Engine: COMPLETE / PASS
 
-Phase 4 - Scan Engine: NOT STARTED
+Phase 4 - Scan Engine: COMPLETE / PASS
 
 Phase 5 - Scoring Engine: NOT STARTED
 
@@ -204,3 +204,38 @@ reports/phase3-validation-20260810-150157.txt
 ```
 
 Validated Phase 3 checks included Docker Compose build/start, backend container exec, Alembic upgrade to head, backend pytest, root and health endpoints, rule list endpoint, catalog and inventory list endpoints, frontend HTTP, frontend production build, and container log diagnostics.
+
+## Phase 4 Implemented Scope
+
+Phase 4 adds:
+
+- scan job, scan target, scan run, and scan finding tables
+- Alembic revision `0005_phase4_scan_engine`
+- `scan_jobs`
+- `scan_job_targets`
+- `scan_runs`
+- `scan_findings`
+- deterministic JSON rule-expression evaluation for supplied evidence
+- exact finding references to immutable rule versions
+- exact finding references to linked catalog issue versions when available at scan time
+- REST API module at `/api/v1/scans`
+- synchronous scan run endpoint for explicit admin-triggered execution
+- scanner worker CLI `python -m app.cli.scan_worker`
+- optional Docker Compose `scanner_worker` service under the `workers` profile
+- frontend Scans tab for queueing jobs, running jobs, and reviewing findings
+- backend tests for scan job lifecycle, rule evaluation, findings, exact rule-version references, and validation errors
+- `scripts/phase4_validate.sh`
+
+Phase 4 does not add scoring, external network probing, automated asset discovery, SSC API integration, SSC public-web scraping, or proprietary SSC logic.
+
+## Phase 4 Validation
+
+Phase 4 runtime validation: COMPLETE / PASS
+
+Validation report:
+
+```text
+reports/phase4-validation-20260810-152733.txt
+```
+
+Validated Phase 4 checks included Docker Compose build/start, backend container exec, Alembic upgrade to head, backend pytest, scanner worker once, root and health endpoints, scan/rule/inventory endpoints, frontend HTTP, frontend production build, and container log diagnostics.

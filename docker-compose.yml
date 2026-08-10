@@ -34,6 +34,27 @@ services:
     volumes:
       - ./backend:/app
 
+  scanner_worker:
+    profiles:
+      - workers
+    build: ./backend
+    container_name: ssc_scanner_worker
+    depends_on:
+      - postgres
+      - redis
+    environment:
+      DATABASE_URL: postgresql+psycopg://postgres:postgres@postgres:5432/ssc
+      REDIS_URL: redis://redis:6379/0
+      PYTHONUNBUFFERED: 1
+    volumes:
+      - ./backend:/app
+    command:
+      - python
+      - -m
+      - app.cli.scan_worker
+      - --sleep
+      - "5"
+
   frontend:
     build: ./frontend
     container_name: ssc_frontend

@@ -63,6 +63,18 @@ Phase 3 adds the rule engine definition module:
 
 Rules are stored as versioned definitions for later scan-engine use. Phase 3 does not execute rules, scan assets, create findings, or calculate scores.
 
+Phase 4 adds the scan engine module:
+
+- SQLAlchemy models in `app.models.scan_models`
+- Alembic revision `0005_phase4_scan_engine`
+- REST API routes in `app.api.scans`
+- deterministic rule-expression evaluator in `app.services.scan_engine`
+- scanner worker CLI `python -m app.cli.scan_worker`
+- optional Docker Compose worker service under the `workers` profile
+- frontend Scans tab for queueing jobs, running jobs, and reviewing run findings
+
+Phase 4 evaluates stored rule definitions against supplied evidence for explicit inventory targets. It does not perform external network probing, automated discovery, scoring, SSC API calls, or public-web scraping.
+
 The catalog API prefix is:
 
 ```text
@@ -79,6 +91,12 @@ The rule engine API prefix is:
 
 ```text
 /api/v1/rules
+```
+
+The scan engine API prefix is:
+
+```text
+/api/v1/scans
 ```
 
 ## Catalog Versioning
@@ -106,4 +124,4 @@ Phase 1A adds a minimal Issue Catalog page that reads from the backend API and d
 - Version
 - Active
 
-No scoring UI, charts, scanner execution UI, findings UI, or public reference review workflows are included through Phase 3.
+No scoring UI, charts, external scanner adapter UI, automated discovery UI, or public reference review workflows are included through Phase 4.

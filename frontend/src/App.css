@@ -128,6 +128,13 @@ h2 {
   gap: 10px;
 }
 
+.split-block {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 16px;
+  margin-top: 16px;
+}
+
 .primary-pane,
 .side-pane {
   min-width: 0;
@@ -369,5 +376,9 @@ tr:hover td,
 
   .single-pane {
     padding: 0 16px 24px;
+  }
+
+  .split-block {
+    grid-template-columns: 1fr;
   }
 }

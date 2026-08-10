@@ -206,3 +206,37 @@ Supported target types:
 Definition changes create new `rule_engine_rule_versions` rows. Historical versions are not overwritten.
 
 Phase 3 does not add scan execution, scanner workers, findings, scoring, or proprietary SSC logic.
+
+## Phase 4 Scan Engine
+
+Phase 4 adds scan orchestration and deterministic rule evaluation records.
+
+Tables:
+
+- `scan_jobs`
+- `scan_job_targets`
+- `scan_runs`
+- `scan_findings`
+
+`scan_jobs` stores queued work. `scan_job_targets` stores explicit inventory targets and evidence supplied for a job. `scan_runs` stores each execution attempt. `scan_findings` stores rule matches observed during a run.
+
+Findings preserve exact historical references:
+
+- `rule_version_id` points to the immutable rule definition used during evaluation
+- `catalog_issue_type_version_id` points to the linked catalog issue version that was current at scan time, when a linked issue exists
+
+Supported scan statuses:
+
+- `QUEUED`
+- `RUNNING`
+- `COMPLETED`
+- `FAILED`
+- `CANCELED`
+
+Supported scan target types:
+
+- `ORGANIZATION`
+- `DOMAIN`
+- `HOST`
+
+Phase 4 does not add scoring, external network probing, automated asset discovery, SSC API integration, or SSC public-web scraping.

@@ -131,7 +131,55 @@ type DetectionRule = {
   current_version: RuleVersion | null
 }
 
-type Tab = 'issues' | 'factors' | 'snapshots' | 'baseline' | 'inventory' | 'rules'
+type ScanJobTarget = {
+  id: string
+  scan_job_id: string
+  target_type: string
+  organization_id: string | null
+  domain_id: string | null
+  host_id: string | null
+  evidence: Record<string, unknown> | null
+}
+
+type ScanJob = {
+  id: string
+  name: string
+  status: string
+  requested_by: string | null
+  notes: string | null
+  selected_rule_ids: string[] | null
+  created_at: string
+  started_at: string | null
+  completed_at: string | null
+  error_message: string | null
+  targets: ScanJobTarget[]
+}
+
+type ScanRun = {
+  id: string
+  scan_job_id: string
+  status: string
+  started_at: string
+  completed_at: string | null
+  summary: Record<string, unknown> | null
+  error_message: string | null
+}
+
+type ScanFinding = {
+  id: string
+  scan_run_id: string
+  target_type: string
+  host_id: string | null
+  domain_id: string | null
+  organization_id: string | null
+  rule_id: string
+  rule_version_id: string
+  status: string
+  evidence: Record<string, unknown> | null
+  rule_version: RuleVersion | null
+}
+
+type Tab = 'issues' | 'factors' | 'snapshots' | 'baseline' | 'inventory' | 'rules' | 'scans'
 
 const API_BASE = 'http://localhost:8000'
 const riskOptions = ['HIGH', 'MEDIUM', 'LOW', 'INFORMATIONAL', 'POSITIVE', 'UNKNOWN']
@@ -215,6 +263,16 @@ const emptyRuleVersion = {
   make_current: true,
 }
 
+const emptyScanJob = {
+  name: '',
+  requested_by: '',
+  notes: '',
+  target_type: 'HOST',
+  target_id: '',
+  rule_id: '',
+  evidence: '{\n  "service": {\n    "exposed": true\n  }\n}',
+}
+
 export default function App() {
   const [tab, setTab] = useState<Tab>('issues')
   const [factors, setFactors] = useState<Factor[]>([])
@@ -225,10 +283,14 @@ export default function App() {
   const [hosts, setHosts] = useState<HostAsset[]>([])
   const [hostGroups, setHostGroups] = useState<HostGroup[]>([])
   const [rules, setRules] = useState<DetectionRule[]>([])
+  const [scanJobs, setScanJobs] = useState<ScanJob[]>([])
+  const [scanRuns, setScanRuns] = useState<ScanRun[]>([])
+  const [scanFindings, setScanFindings] = useState<ScanFinding[]>([])
   const [versions, setVersions] = useState<IssueVersion[]>([])
   const [ruleVersions, setRuleVersions] = useState<RuleVersion[]>([])
   const [selectedIssueId, setSelectedIssueId] = useState<string | null>(null)
   const [selectedRuleId, setSelectedRuleId] = useState<string | null>(null)
+  const [selectedScanRunId, setSelectedScanRunId] = useState<string | null>(null)
   const [query, setQuery] = useState('')
   const [riskFilter, setRiskFilter] = useState('ALL')
   const [loading, setLoading] = useState(true)
@@ -247,6 +309,7 @@ export default function App() {
   const [membershipForm, setMembershipForm] = useState(emptyMembership)
   const [ruleForm, setRuleForm] = useState(emptyRule)
   const [ruleVersionForm, setRuleVersionForm] = useState(emptyRuleVersion)
+  const [scanJobForm, setScanJobForm] = useState(emptyScanJob)
 
   const selectedIssue = useMemo(
     () => issues.find((issue) => issue.id === selectedIssueId) ?? null,
@@ -294,10 +357,29 @@ export default function App() {
     loadRuleVersions(selectedRuleId)
   }, [selectedRuleId])
 
+  useEffect(() => {
+    if (!selectedScanRunId) {
+      setScanFindings([])
+      return
+    }
+    loadScanFindings(selectedScanRunId)
+  }, [selectedScanRunId])
+
   async function refreshAll() {
     setLoading(true)
     try {
-      const [factorData, issueData, snapshotData, organizationData, domainData, hostData, hostGroupData, ruleData] = await Promise.all([
+      const [
+        factorData,
+        issueData,
+        snapshotData,
+        organizationData,
+        domainData,
+        hostData,
+        hostGroupData,
+        ruleData,
+        scanJobData,
+        scanRunData,
+      ] = await Promise.all([
         api<Factor[]>('/api/v1/catalog/factors'),
         api<IssueType[]>('/api/v1/catalog/issues'),
         api<Snapshot[]>('/api/v1/catalog/snapshots'),
@@ -306,6 +388,8 @@ export default function App() {
         api<HostAsset[]>('/api/v1/inventory/hosts'),
         api<HostGroup[]>('/api/v1/inventory/host-groups'),
         api<DetectionRule[]>('/api/v1/rules'),
+        api<ScanJob[]>('/api/v1/scans/jobs'),
+        api<ScanRun[]>('/api/v1/scans/runs'),
       ])
       setFactors(factorData)
       setIssues(issueData)
@@ -315,6 +399,8 @@ export default function App() {
       setHosts(hostData)
       setHostGroups(hostGroupData)
       setRules(ruleData)
+      setScanJobs(scanJobData)
+      setScanRuns(scanRunData)
       setIssueForm((current) => ({
         ...current,
         factor_id: current.factor_id || factorData[0]?.id || '',
@@ -328,6 +414,11 @@ export default function App() {
         host_id: current.host_id || hostData[0]?.id || '',
       }))
       setRuleForm((current) => ({ ...current, catalog_issue_type_id: current.catalog_issue_type_id || '' }))
+      setScanJobForm((current) => ({
+        ...current,
+        target_id: current.target_id || hostData[0]?.id || domainData[0]?.id || organizationData[0]?.id || '',
+        rule_id: current.rule_id || ruleData[0]?.id || '',
+      }))
       setError(null)
     } catch (err) {
       setError(toErrorMessage(err))
@@ -347,6 +438,14 @@ export default function App() {
   async function loadRuleVersions(ruleId: string) {
     try {
       setRuleVersions(await api<RuleVersion[]>(`/api/v1/rules/${ruleId}/versions`))
+    } catch (err) {
+      setError(toErrorMessage(err))
+    }
+  }
+
+  async function loadScanFindings(scanRunId: string) {
+    try {
+      setScanFindings(await api<ScanFinding[]>(`/api/v1/scans/runs/${scanRunId}/findings`))
     } catch (err) {
       setError(toErrorMessage(err))
     }
@@ -625,6 +724,41 @@ export default function App() {
     })
   }
 
+  async function createScanJob(event: FormEvent) {
+    event.preventDefault()
+    await submit(async () => {
+      const target = buildScanTarget(scanJobForm.target_type, scanJobForm.target_id)
+      const job = await api<ScanJob>('/api/v1/scans/jobs', {
+        method: 'POST',
+        body: JSON.stringify({
+          name: scanJobForm.name,
+          requested_by: blankToNull(scanJobForm.requested_by),
+          notes: blankToNull(scanJobForm.notes),
+          rule_ids: scanJobForm.rule_id ? [scanJobForm.rule_id] : null,
+          targets: [
+            {
+              ...target,
+              evidence: parseJsonObject(scanJobForm.evidence, 'Evidence'),
+            },
+          ],
+        }),
+      })
+      setScanJobForm({ ...emptyScanJob, target_id: hosts[0]?.id || domains[0]?.id || organizations[0]?.id || '', rule_id: rules[0]?.id || '' })
+      await refreshAll()
+      setMessage(`Scan job queued: ${job.name}`)
+    })
+  }
+
+  async function runScanJob(job: ScanJob) {
+    await submit(async () => {
+      const run = await api<ScanRun>(`/api/v1/scans/jobs/${job.id}/run`, { method: 'POST' })
+      setSelectedScanRunId(run.id)
+      await refreshAll()
+      await loadScanFindings(run.id)
+      setMessage('Scan job completed')
+    })
+  }
+
   async function submit(action: () => Promise<void>) {
     setBusy(true)
     setError(null)
@@ -649,6 +783,7 @@ export default function App() {
           <button className={tabClass(tab, 'baseline')} onClick={() => setTab('baseline')}>Baseline</button>
           <button className={tabClass(tab, 'inventory')} onClick={() => setTab('inventory')}>Inventory</button>
           <button className={tabClass(tab, 'rules')} onClick={() => setTab('rules')}>Rules</button>
+          <button className={tabClass(tab, 'scans')} onClick={() => setTab('scans')}>Scans</button>
         </div>
       </nav>
 
@@ -1008,6 +1143,88 @@ export default function App() {
           </aside>
         </section>
       )}
+
+      {tab === 'scans' && (
+        <section className="workspace-grid">
+          <div className="primary-pane">
+            <div className="toolbar">
+              <button onClick={refreshAll} disabled={busy}>Refresh</button>
+            </div>
+            <ScanJobTable
+              jobs={scanJobs}
+              onRun={runScanJob}
+            />
+            <div className="split-block">
+              <ScanRunTable
+                runs={scanRuns}
+                selectedScanRunId={selectedScanRunId}
+                onSelect={setSelectedScanRunId}
+              />
+              <FindingTable findings={scanFindings} />
+            </div>
+          </div>
+
+          <aside className="side-pane">
+            <form className="stack" onSubmit={createScanJob}>
+              <h2>Scan Job</h2>
+              <input
+                required
+                value={scanJobForm.name}
+                onChange={(event) => setScanJobForm({ ...scanJobForm, name: event.target.value })}
+                placeholder="Job name"
+              />
+              <input
+                value={scanJobForm.requested_by}
+                onChange={(event) => setScanJobForm({ ...scanJobForm, requested_by: event.target.value })}
+                placeholder="Requested by"
+              />
+              <textarea
+                value={scanJobForm.notes}
+                onChange={(event) => setScanJobForm({ ...scanJobForm, notes: event.target.value })}
+                placeholder="Notes"
+              />
+              <div className="form-row">
+                <select
+                  value={scanJobForm.target_type}
+                  onChange={(event) => setScanJobForm({ ...scanJobForm, target_type: event.target.value, target_id: firstTargetId(event.target.value, organizations, domains, hosts) })}
+                >
+                  <option value="HOST">HOST</option>
+                  <option value="DOMAIN">DOMAIN</option>
+                  <option value="ORGANIZATION">ORGANIZATION</option>
+                </select>
+                <select
+                  required
+                  value={scanJobForm.target_id}
+                  onChange={(event) => setScanJobForm({ ...scanJobForm, target_id: event.target.value })}
+                >
+                  <option value="">Select target</option>
+                  {targetOptions(scanJobForm.target_type, organizations, domains, hosts).map((target) => (
+                    <option key={target.id} value={target.id}>{target.label}</option>
+                  ))}
+                </select>
+              </div>
+              <select
+                value={scanJobForm.rule_id}
+                onChange={(event) => setScanJobForm({ ...scanJobForm, rule_id: event.target.value })}
+              >
+                <option value="">All active matching rules</option>
+                {rules.map((rule) => (
+                  <option key={rule.id} value={rule.id}>{rule.current_version?.name ?? rule.stable_key}</option>
+                ))}
+              </select>
+              <textarea
+                className="json-mini"
+                required
+                value={scanJobForm.evidence}
+                onChange={(event) => setScanJobForm({ ...scanJobForm, evidence: event.target.value })}
+                spellCheck={false}
+                placeholder="Evidence JSON"
+              />
+              <button type="submit" disabled={busy || !scanJobForm.target_id}>Queue scan</button>
+            </form>
+          </aside>
+        </section>
+      )}
     </main>
   )
 }
@@ -1113,6 +1330,99 @@ function RuleTable({ rules, selectedRuleId, onSelect, onToggleActive }: {
           ))}
         </tbody>
       </table>
+    </div>
+  )
+}
+
+function ScanJobTable({ jobs, onRun }: { jobs: ScanJob[], onRun: (job: ScanJob) => void }) {
+  return (
+    <div className="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Created</th>
+            <th>Name</th>
+            <th>Status</th>
+            <th>Targets</th>
+            <th>Rules</th>
+            <th>Run</th>
+          </tr>
+        </thead>
+        <tbody>
+          {jobs.map((job) => (
+            <tr key={job.id}>
+              <td>{formatDate(job.created_at)}</td>
+              <td>{job.name}</td>
+              <td>{job.status}</td>
+              <td>{job.targets.length}</td>
+              <td>{job.selected_rule_ids?.length ?? 'All'}</td>
+              <td><button onClick={() => onRun(job)} disabled={job.status !== 'QUEUED' && job.status !== 'FAILED'}>Run</button></td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  )
+}
+
+function ScanRunTable({ runs, selectedScanRunId, onSelect }: {
+  runs: ScanRun[]
+  selectedScanRunId: string | null
+  onSelect: (id: string) => void
+}) {
+  return (
+    <div className="inventory-block">
+      <h2>Runs</h2>
+      <div className="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Started</th>
+              <th>Status</th>
+              <th>Findings</th>
+            </tr>
+          </thead>
+          <tbody>
+            {runs.map((run) => (
+              <tr key={run.id} className={run.id === selectedScanRunId ? 'selected-row' : ''} onClick={() => onSelect(run.id)}>
+                <td>{formatDate(run.started_at)}</td>
+                <td>{run.status}</td>
+                <td>{String(run.summary?.findings_created ?? '-')}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  )
+}
+
+function FindingTable({ findings }: { findings: ScanFinding[] }) {
+  return (
+    <div className="inventory-block">
+      <h2>Findings</h2>
+      <div className="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Rule</th>
+              <th>Target</th>
+              <th>Status</th>
+              <th>Evidence</th>
+            </tr>
+          </thead>
+          <tbody>
+            {findings.map((finding) => (
+              <tr key={finding.id}>
+                <td>{finding.rule_version?.name ?? finding.rule_version_id}</td>
+                <td>{finding.target_type}</td>
+                <td>{finding.status}</td>
+                <td><span className="mono">{JSON.stringify(finding.evidence?.matched_expression ?? {})}</span></td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </div>
   )
 }
@@ -1277,6 +1587,40 @@ function parseJsonObject(value: string, label: string) {
     throw new Error(`${label} must be a JSON object`)
   }
   return parsed as Record<string, unknown>
+}
+
+function buildScanTarget(targetType: string, targetId: string) {
+  if (targetType === 'ORGANIZATION') {
+    return { target_type: targetType, organization_id: targetId }
+  }
+  if (targetType === 'DOMAIN') {
+    return { target_type: targetType, domain_id: targetId }
+  }
+  return { target_type: targetType, host_id: targetId }
+}
+
+function firstTargetId(
+  targetType: string,
+  organizations: Organization[],
+  domains: DomainAsset[],
+  hosts: HostAsset[],
+) {
+  return targetOptions(targetType, organizations, domains, hosts)[0]?.id ?? ''
+}
+
+function targetOptions(
+  targetType: string,
+  organizations: Organization[],
+  domains: DomainAsset[],
+  hosts: HostAsset[],
+) {
+  if (targetType === 'ORGANIZATION') {
+    return organizations.map((organization) => ({ id: organization.id, label: organization.name }))
+  }
+  if (targetType === 'DOMAIN') {
+    return domains.map((domain) => ({ id: domain.id, label: domain.name }))
+  }
+  return hosts.map((host) => ({ id: host.id, label: host.hostname }))
 }
 
 function formatDate(value: string) {

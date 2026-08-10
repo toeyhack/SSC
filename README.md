@@ -25,4 +25,6 @@ Phase 2 adds manual asset inventory for organizations, domains, hosts, and host 
 
 Phase 3 adds versioned rule-engine definitions for later scanner use.
 
+Phase 4 adds scan job orchestration, deterministic rule evaluation against supplied evidence, scan findings, and an optional worker process.
+
 Follow docs/IMPLEMENTATION_STATUS.md for progress and next steps.
