@@ -1,127 +1,57 @@
 # Architecture
 
-The platform is a modular monolith with separate scanner workers planned for later phases.
-
-Current runtime:
+The primary interface is CLI-first. The platform remains a modular monolith with a separate optional scanner worker. Completed Phase 0–4 functionality and the existing FastAPI/React interfaces are preserved. Dashboard-centric development is paused.
 
 ```text
-Browser
-  -> React/Vite frontend
-  -> FastAPI backend
-  -> PostgreSQL
-  -> Redis
+ssc scan --target <approved-inventory-target> --output report
+  -> Authorized Target
+  -> HTTP / TLS / DNS / TCP Executors
+  -> Evidence
+  -> Rule Engine
+  -> Findings
+  -> Scoring Engine
+  -> NormalizedResult (ssc.result.v1)
+  -> Output Adapter
+       REPORT: report.html + result.json
+       SYGNOS: future structured log/event mapping; transport deferred
 ```
 
-SecurityScorecard is not a runtime dependency. It is treated only as a benchmark, taxonomy reference, optional comparison source, or optional future integration.
+SecurityScorecard is a benchmark, public taxonomy/reference, optional comparison source and optional integration. It is not a runtime dependency. The internal scoring model is explicitly documented and does not represent proprietary SSC algorithms.
 
-## Backend Modules
+## Primary runtime
 
-Phase 0 provides the FastAPI application, health endpoints, SQLAlchemy database session, Alembic migrations, PostgreSQL, Redis, and Docker Compose development runtime.
+The CLI calls services directly, using PostgreSQL for inventory, immutable catalog/rule versions, jobs, observations, findings and score snapshots. Running FastAPI, React or Redis is unnecessary for a CLI scan. An optional Docker Compose `cli` profile provides the console command and mounts `/reports` for output. The existing default Web/API services remain available for compatibility; start only `postgres` when using the CLI.
 
-Phase 1A adds the issue catalog module:
+## Separate layers
 
-- SQLAlchemy models in `app.models.catalog_models`
-- Pydantic v2 schemas in `app.schemas.catalog`
-- REST API routes in `app.api.catalog`
-- Alembic revision `0002_phase1a_catalog`
+| Layer | Implementation | Responsibilities |
+| --- | --- | --- |
+| CLI | `app.cli.ssc` | Parse options, load configuration, invoke services and select adapter; no rule evaluation or scoring logic |
+| Authorization/inventory | `app.services.scan_executors.load_authorized_scan_target`, `app.services.cli_setup` | Resolve a unique registered domain/host; require its approval and active parent inventory; support explicit sensitive network approval |
+| Executors | `app.services.scan_executors` | Bounded port lists, request/read limits, socket timeouts and same-target/configured-port redirects; collect observations with source and status |
+| Evidence | `ScanObservation`, `EvidenceSourceEnum` | Preserve manual or scanner observations separately from findings; distinguish success, error and skipped collection |
+| Rule evaluation | `app.services.rule_evaluation` | Existing deterministic JSON evaluator, extracted without replacing its supported expressions; no database/network/output dependency |
+| Scan orchestration | `app.services.scan_engine`, `app.services.cli_scan` | Reuse existing scan jobs/runs; collect evidence, evaluate selected rules and create version-linked findings; save rule assessment and target snapshots |
+| Findings | `ScanFinding`, `app.services.finding_results` | Normalize exact historical rule/catalog versions, remediation, factor identity, target and matched evidence |
+| Scoring | `app.services.scoring_engine`, `app.services.score_results` | Pure internal scoring, model definition/version/hash, observed impacts and append-only saved normalized results |
+| Output | `app.outputs.report` | Render the saved `NormalizedResult` to escaped self-contained HTML and JSON; never probe or score |
 
-Phase 1B adds the Golden Baseline importer:
+Executors pin connections to a checked IP while retaining the inventory hostname for HTTP Host and TLS SNI. Mixed sensitive/public resolution requires sensitive-network permission. Metadata, link-local, multicast and unspecified addresses are prohibited even with that permission. Only concrete inventory targets can execute scanners; organizations alone cannot.
 
-- canonical SSC licensed-UI capture JSON schema
-- import service in `app.services.golden_baseline_importer`
-- CLI entry point `python -m app.cli.import_golden_baseline`
-- synthetic importer validation fixture under `backend/tests/fixtures`
+HTTP probes use configured HTTP/HTTPS ports, bounded response reads, redacted cookie attributes and constrained redirects. TLS records certificate metadata and trust verification, probes configured TLS ports and observes legacy protocol support. Unsupported or inconclusive probes are `null`, not evidence of safety. DNS uses dnspython with resolver lifetimes and system resolvers by default; an explicit resolver can be configured. DNS-only targets do not need A/AAAA records. TCP performs connections only to explicit ports, with no automatic range scan. OS hostname resolution and aggregate scan duration are not a global deadline; further scheduling/concurrency/operational controls belong to hardening.
 
-The importer writes only to the Phase 1A catalog tables. It does not integrate with SSC APIs, scrape public SSC pages, scan assets, or compute scores.
+Collection errors do not become absent security headers or absent SPF/DMARC findings. Rules using unavailable evidence are skipped; endpoint-availability rules can still observe a failed connection. Coverage travels with the result. Missing/skipped rules, unlinked catalog definitions, unknown risk and failed evidence prevent an assessed overall score.
 
-Phase 1C adds the catalog administration and review workspace:
+## Historical versioning and normalized results
 
-- issue catalog table with search and breach-risk filtering
-- factor creation and active-state management
-- issue identity creation and active-state management
-- immutable issue-version creation and version-history review
-- snapshot review
-- golden baseline JSON preview/import UI backed by the Phase 1B importer service
+Catalog changes create `catalog_issue_type_versions`; rule changes create `rule_engine_rule_versions`. Findings reference exact versions. Each new scan summary captures rule assessment statuses, factor identity and affected target identity, so current metadata changes cannot alter normalization of a completed run.
 
-Phase 1C remains catalog-only. It does not add scanner execution, scoring, asset inventory, SSC API calls, or public-web synchronization.
+`ssc.result.v1` includes targets, evidence summaries, findings and remediation, coverage, factor scores, overall score, factor/overall impacts, scoring model name/version/hash and its full definition. Migration `0007_phase5_score_results` stores a unique snapshot for each run/model hash. Repeated generation returns that stored result; a changed model creates another snapshot. Older Phase 4 runs remain readable and may yield an unassessed normalized result because they lack new coverage metadata; they are not silently upgraded into fully assessed scans.
 
-Phase 2 adds the manual asset inventory module:
+REPORT renders this contract to `report.html` and `result.json` in a fresh output directory. Future SYGNOS events must reuse exactly this contract. Sygnos ingestion mapping, credentials, endpoints, batching and transport are unknown and remain unimplemented.
 
-- SQLAlchemy inventory models based on the Phase 0 scaffold
-- Alembic revision `0003_phase2_asset_inventory`
-- REST API routes in `app.api.inventory`
-- frontend Inventory tab for organizations, domains, hosts, host groups, and group membership
+## Preserved optional interfaces
 
-Phase 2 does not add scanner discovery, scan execution, findings, or scoring.
+React/Vite → FastAPI → PostgreSQL/Redis remains available. Existing API prefixes are `/api/v1/catalog`, `/api/v1/inventory`, `/api/v1/rules` and `/api/v1/scans`. Existing administration, catalog history/import, inventory, rules, scans and worker behavior are retained. These interfaces consume the core layers; their dashboard requirements do not drive the scanner/scoring/result architecture.
 
-Phase 3 adds the rule engine definition module:
-
-- SQLAlchemy models in `app.models.rule_models`
-- Alembic revision `0004_phase3_rule_engine`
-- REST API routes in `app.api.rules`
-- frontend Rules tab for rule identities, immutable rule versions, and version-history review
-
-Rules are stored as versioned definitions for later scan-engine use. Phase 3 does not execute rules, scan assets, create findings, or calculate scores.
-
-Phase 4 adds the scan engine module:
-
-- SQLAlchemy models in `app.models.scan_models`
-- Alembic revision `0005_phase4_scan_engine`
-- REST API routes in `app.api.scans`
-- deterministic rule-expression evaluator in `app.services.scan_engine`
-- scanner worker CLI `python -m app.cli.scan_worker`
-- optional Docker Compose worker service under the `workers` profile
-- frontend Scans tab for queueing jobs, running jobs, and reviewing run findings
-
-Phase 4 evaluates stored rule definitions against supplied evidence for explicit inventory targets. It does not perform external network probing, automated discovery, scoring, SSC API calls, or public-web scraping.
-
-The catalog API prefix is:
-
-```text
-/api/v1/catalog
-```
-
-The inventory API prefix is:
-
-```text
-/api/v1/inventory
-```
-
-The rule engine API prefix is:
-
-```text
-/api/v1/rules
-```
-
-The scan engine API prefix is:
-
-```text
-/api/v1/scans
-```
-
-## Catalog Versioning
-
-`CatalogIssueType` represents a stable logical issue identity. `CatalogIssueTypeVersion` represents a specific definition of that issue at a point in time.
-
-Definition changes create new version rows. Historical rows are never overwritten, which preserves:
-
-- issue taxonomy history
-- snapshot history
-- future finding-to-rule history
-- future score reproducibility
-
-`CatalogSnapshot` and `CatalogSnapshotItem` preserve captured catalog states by referencing exact issue-version rows.
-
-## Frontend
-
-Phase 1A adds a minimal Issue Catalog page that reads from the backend API and displays:
-
-- Factor
-- Issue Name
-- Breach Risk
-- Threat Level
-- Affects Score
-- Version
-- Active
-
-No scoring UI, charts, external scanner adapter UI, automated discovery UI, or public reference review workflows are included through Phase 4.
+Phase 0 foundation, Phase 1A catalog, Phase 1B Golden Baseline importer, Phase 1C catalog administration, Phase 2 inventory, Phase 3 rule definitions and Phase 4 supplied-evidence scanning remain completed historical milestones. Phase 4B adds actual network execution; Phase 5 adds scoring; Phases 6A/6B add the primary CLI and REPORT adapter. See `ROADMAP.md` and `IMPLEMENTATION_STATUS.md` for status and validation.

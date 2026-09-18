@@ -1,6 +1,14 @@
 # Implementation Status
 
-Current phase: Phase 4 - Scan Engine
+CLI-FIRST MVP — COMPLETE / PASS
+
+Current phase: Phase 6B - CLI-first REPORT Output
+
+Primary product interface: CLI (`ssc`). Web/API/frontend: OPTIONAL / PRESERVED.
+
+Dashboard-centric work: PAUSED. Implementation sequence: Phase 4B PASS → Phase 5 PASS → Phase 6A CLI → Phase 6B REPORT. SYGNOS ingestion mapping and transport wait for its interface definition.
+
+Phase 0–4 completion and historical validation below are preserved. Completed Phases 4B, 5, 6A and 6B form the CLI-first MVP milestone. This milestone closes the validated implementation; no production deployment or runtime data migration is performed. The preceding Phase 4 commit is `bb11f1b3557a190842eee33b31a1ab137771c026` (`Phase 4: implement scan engine`, 2026-08-10 15:29:45 +07:00). Use Git history for the exact MVP commit hash.
 
 ## Phase Status
 
@@ -20,9 +28,19 @@ Phase 3 - Rule Engine: COMPLETE / PASS
 
 Phase 4 - Scan Engine: COMPLETE / PASS
 
-Phase 5 - Scoring Engine: NOT STARTED
+Phase 4B - Authorized HTTP/TLS/DNS/TCP Scan Executors: COMPLETE / PASS
 
-Phase 6 - Dashboard / Usable Internal Platform: NOT STARTED
+Phase 5 - Scoring Engine: COMPLETE / PASS
+
+Phase 6A - Primary CLI Interface: COMPLETE / PASS
+
+Phase 6B - REPORT HTML/JSON Output: COMPLETE / PASS
+
+Phase 6C - SYGNOS Structured Event Adapter: NOT STARTED / DEFERRED UNTIL INGESTION INTERFACE IS KNOWN
+
+Phase 6D - Optional Web Dashboard: PAUSED / NOT STARTED
+
+The former dashboard-first Phase 6 is superseded by 6A–6D. Existing Web administration through Phase 4 remains preserved.
 
 Phase 7 - SSC Public Reference Sync: NOT STARTED
 
@@ -239,3 +257,111 @@ reports/phase4-validation-20260810-152733.txt
 ```
 
 Validated Phase 4 checks included Docker Compose build/start, backend container exec, Alembic upgrade to head, backend pytest, scanner worker once, root and health endpoints, scan/rule/inventory endpoints, frontend HTTP, frontend production build, and container log diagnostics.
+
+
+## Phase 4B Implemented Scope
+
+Phase 4B completes the pre-existing uncommitted executor draft after Phase 4:
+
+- real HTTP/HTTPS, TLS, DNS TXT and explicit-port TCP executors in `app.services.scan_executors`
+- manual inventory authorization (`approved_for_scan`, sensitive-network permission and approval notes)
+- active inventory and concrete-target approval checks at queueing and execution; revocation blocks queued scans
+- checked-IP connection pinning, HTTP Host and TLS SNI preservation, prohibited-address checks and constrained redirects
+- bounded port lists, socket/resolver timeouts, redirect count and HTTP response reads
+- redacted cookie attributes, security header/redirect observations, certificate metadata/trust/legacy TLS probes, SPF/DMARC TXT normalization and TCP connection observations
+- evidence-source provenance and `scan_observations`, `scan_config`, finding source fields
+- Alembic file `0006_phase4b_authorized_scan_executors.py`, with revision ID `0006_phase4b_executors` (within Alembic's default version-column length)
+- observation API at `GET /api/v1/scans/runs/{scan_run_id}/observations`
+- rule assessment/factor and target identity snapshots in new scan summaries
+- deterministic evaluator extracted to `app.services.rule_evaluation`, with Phase 4 compatibility imports retained
+- failed scan history preserved after transaction rollback
+- existing optional frontend draft preserved; no new dashboard development
+- `scripts/phase4b_validate.sh`
+
+Unsuccessful collection is distinct from absent protection. Unavailable evidence skips applicable detection rules and does not silently produce missing-header/SPF/DMARC findings. Legacy TLS support is unknown when local capability or probe failure is inconclusive. DNS-only domains need no target A/AAAA record. No discovery, range scanning, SSC API calls or SSC scraping is added.
+
+## Phase 4B Validation
+
+Phase 4B local validation: COMPLETE / PASS.
+
+First gate passed before scoring implementation: 45 backend tests and worker-once validation after migrations from empty PostgreSQL through `0006_phase4b_executors`.
+
+Final Phase 4B/legacy subset: 51 tests passed. Validation report: `reports/phase4b-validation-20260918-160055.txt`.
+
+Fixtures perform real authorized local HTTP/HTTPS/DNS/TCP operations. Checks include successful TLS certificate extraction and SNI, trust failure, legacy protocol rejection, configured ports, redaction, sensitive/prohibited addresses, address pinning, redirect boundaries, invalid configuration, timeouts, DNS collection failure semantics, DNS-only targets and approval revoked after queueing. No external target was scanned.
+
+## Phase 5 Implemented Scope
+
+- pure internal scoring engine `app.services.scoring_engine`
+- documented `internal-exposure` v1.0 policy, default HIGH/MEDIUM/LOW penalties and factor weighting
+- per-factor and overall scores, deduplicated/capped per-finding factor impact and weighted overall impact
+- informational/positive/opt-out/resolved findings do not deduct points
+- no assessed overall score when evidence/rule/catalog coverage is incomplete
+- normalization using exact historical rule/catalog versions, captured factor identity, affected targets, evidence and remediation
+- complete model definition, exact model name/version and canonical SHA-256 preserved in results
+- append-only service snapshots in `score_results`, unique by run/model hash; changed model definitions create additional results
+- Alembic revision `0007_phase5_score_results`
+- shared Pydantic contract `ssc.result.v1` in `app.schemas.results`
+- `docs/SCORING.md` and `scripts/phase5_validate.sh`
+
+This is an explicitly defined internal model, not proprietary SSC scoring. Historical Phase 4 runs are preserved; absent new assessment metadata yields an unassessed result rather than an invented score.
+
+## Phase 5 Validation
+
+Phase 5 local validation: COMPLETE / PASS.
+
+The scoring gate passed before CLI/REPORT implementation: 55 tests, including persisted score snapshots and historical-version retention after current rule/catalog/factor changes.
+
+Final Phase 5/legacy subset: 62 tests passed. Validation report: `reports/phase5-validation-20260918-160055.txt`.
+
+Checks include weighted scores, penalty allocation/deduplication/capping, risk exemptions, unknown/unlinked definitions, incomplete coverage, configuration validation, deterministic hashes, idempotent snapshots and separate snapshots on model changes.
+
+## Phase 6A/6B Implemented Scope
+
+- installable primary `ssc` console command, with `python -m app.cli.ssc` equivalent
+- `ssc scan --target <target> --output report` using approved registered inventory and shared services directly
+- CLI target registration/approval and versioned internal detector-bundle loading; idempotent definitions preserve old versions
+- rule selection, executor configuration, scoring configuration and organization disambiguation
+- report regeneration from saved scan results without network probes
+- independent REPORT adapter producing escaped, self-contained `report.html` and `result.json` in a fresh output directory
+- overall/factor scores, findings, score impact, affected target, evidence summary, coverage and remediation in outputs
+- both outputs consume the same validated, saved `ssc.result.v1` model
+- explicit incomplete-result exit code with report written and unassessed overall score
+- `--output sygnos` reserved and rejected before database/network activity; no Sygnos event mapping or transport implemented
+- optional Docker Compose `cli` service and registered CLI in the Python 3.12 backend image; existing API command/services retained
+- `docs/CLI.md`, `docs/ROADMAP.md`, CLI-first architecture and `scripts/phase6_validate.sh`
+
+## Phase 6A/6B and Overall Validation
+
+Phase 6A/6B local validation: COMPLETE / PASS.
+
+Full suite: 71 tests passed, with 2 dependency deprecation warnings, on Python 3.14 and Python 3.12.
+
+Validation reports:
+
+- `reports/phase6-validation-20260918-160055.txt`
+- `reports/cli-first-validation-20260918.txt`
+- `reports/cli-first-final-tests-20260918.txt`
+- `reports/docker-cli-build-20260918.txt`
+- `reports/docker-cli-tests-20260918.txt`
+
+The full suite includes the installed `ssc` subprocess, real four-executor pipeline → evidence → findings → scoring → HTML/JSON, matching persisted normalized results, report regeneration, HTML escaping, retained artifacts, incomplete-report behavior, rejected unapproved targets and SYGNOS preflight rejection. The optional Compose configuration parses successfully. Final executor regression verifies that redirects from all HTTP attempts remain visible when HTTPS is selected for header assessment. Python 3.12 Docker build succeeds with the console command installed.
+
+Migration downgrade to Phase 4 and re-upgrade to `0007` pass on the disposable database; the full suite passes again afterward. Alembic metadata check reports no new upgrade operations, with a warning about pre-existing cyclic catalog/rule foreign keys. Python compilation and dependency checks pass.
+
+Validation uses a separate temporary PostgreSQL database and local fixtures. Existing SSC data and running services were not migrated or replaced. Existing Web/frontend Phase 0–4 runtime validation is historical; no new browser/dashboard validation is claimed. Production deployment and hardening remain incomplete.
+
+
+## CLI-first MVP Milestone Closeout
+
+CLI-FIRST MVP — COMPLETE / PASS
+
+Closeout review confirms the authorized HTTP/TLS/DNS/TCP executors, deterministic rule evaluation, version-linked findings, versioned internal scoring, installed CLI scan command, self-contained HTML report and JSON normalized result remain intact. Completed Phase 0–4 work and the existing optional Web/API/frontend are preserved.
+
+The implementation matches the validated source: 71 tests pass on Python 3.12 and Python 3.14, with two dependency deprecation warnings. Docker build, migration downgrade/upgrade, metadata, compilation, dependency and Compose checks passed. Closeout changes only mark the milestone and exclude local artifacts; no new product feature is added.
+
+Commit contents are limited to source, migrations, synthetic detector definitions/tests, configuration, documentation and validation scripts. Generated reports, caches, build output, secrets and local runtime data are excluded. Validation report paths above reference local evidence intentionally ignored by Git.
+
+Final CLI command: `ssc scan --target <approved-target> --output report`.
+
+Deferred items remain: SYGNOS event mapping/transport pending its ingestion interface; optional dashboard development paused; real SSC Golden Baseline waiting for source data; Phases 7–10 (public reference sync, optional SSC integration, comparison/calibration and production hardening) not started.

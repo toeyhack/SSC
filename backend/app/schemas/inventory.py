@@ -8,8 +8,11 @@ class OrganizationBase(BaseModel):
     name: str = Field(min_length=1, max_length=255)
     description: str | None = None
     active: bool = True
+    approved_for_scan: bool = False
+    allow_sensitive_network_scan: bool = False
+    scan_approval_notes: str | None = None
 
-    @field_validator("name", "description")
+    @field_validator("name", "description", "scan_approval_notes")
     @classmethod
     def trim_text(cls, value: str | None) -> str | None:
         if value is None:
@@ -26,8 +29,11 @@ class OrganizationUpdate(BaseModel):
     name: str | None = Field(default=None, min_length=1, max_length=255)
     description: str | None = None
     active: bool | None = None
+    approved_for_scan: bool | None = None
+    allow_sensitive_network_scan: bool | None = None
+    scan_approval_notes: str | None = None
 
-    @field_validator("name", "description")
+    @field_validator("name", "description", "scan_approval_notes")
     @classmethod
     def trim_text(cls, value: str | None) -> str | None:
         if value is None:
@@ -49,13 +55,16 @@ class DomainBase(BaseModel):
     name: str = Field(min_length=1, max_length=255)
     description: str | None = None
     active: bool = True
+    approved_for_scan: bool = False
+    allow_sensitive_network_scan: bool = False
+    scan_approval_notes: str | None = None
 
     @field_validator("name")
     @classmethod
     def normalize_domain_name(cls, value: str) -> str:
         return value.strip().lower().rstrip(".")
 
-    @field_validator("description")
+    @field_validator("description", "scan_approval_notes")
     @classmethod
     def trim_description(cls, value: str | None) -> str | None:
         if value is None:
@@ -73,6 +82,9 @@ class DomainUpdate(BaseModel):
     name: str | None = Field(default=None, min_length=1, max_length=255)
     description: str | None = None
     active: bool | None = None
+    approved_for_scan: bool | None = None
+    allow_sensitive_network_scan: bool | None = None
+    scan_approval_notes: str | None = None
 
     @field_validator("name")
     @classmethod
@@ -81,7 +93,7 @@ class DomainUpdate(BaseModel):
             return None
         return value.strip().lower().rstrip(".")
 
-    @field_validator("description")
+    @field_validator("description", "scan_approval_notes")
     @classmethod
     def trim_description(cls, value: str | None) -> str | None:
         if value is None:
@@ -105,13 +117,16 @@ class HostBase(BaseModel):
     ip: str | None = Field(default=None, max_length=64)
     description: str | None = None
     active: bool = True
+    approved_for_scan: bool = False
+    allow_sensitive_network_scan: bool = False
+    scan_approval_notes: str | None = None
 
     @field_validator("hostname")
     @classmethod
     def normalize_hostname(cls, value: str) -> str:
         return value.strip().lower().rstrip(".")
 
-    @field_validator("ip", "description")
+    @field_validator("ip", "description", "scan_approval_notes")
     @classmethod
     def trim_optional_text(cls, value: str | None) -> str | None:
         if value is None:
@@ -130,6 +145,9 @@ class HostUpdate(BaseModel):
     ip: str | None = Field(default=None, max_length=64)
     description: str | None = None
     active: bool | None = None
+    approved_for_scan: bool | None = None
+    allow_sensitive_network_scan: bool | None = None
+    scan_approval_notes: str | None = None
 
     @field_validator("hostname")
     @classmethod
@@ -138,7 +156,7 @@ class HostUpdate(BaseModel):
             return None
         return value.strip().lower().rstrip(".")
 
-    @field_validator("ip", "description")
+    @field_validator("ip", "description", "scan_approval_notes")
     @classmethod
     def trim_optional_text(cls, value: str | None) -> str | None:
         if value is None:

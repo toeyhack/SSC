@@ -1,0 +1,213 @@
+{
+  "schema_version": "ssc.detectors.v1",
+  "detectors": [
+    {
+      "stable_key": "internal.web.csp",
+      "factor": {
+        "code": "WEB",
+        "name": "Web security"
+      },
+      "issue": {
+        "name": "Content Security Policy absent",
+        "breach_risk": "MEDIUM",
+        "affects_score": true,
+        "source_type": "MANUAL",
+        "source_reference": "internal starter detector v1"
+      },
+      "rule": {
+        "name": "Content Security Policy absent",
+        "target_type": "HOST",
+        "rule_expression": {
+          "operator": "equals",
+          "path": "http.csp_present",
+          "value": false
+        },
+        "remediation": "Set a Content-Security-Policy appropriate for the application, then verify it in a browser.",
+        "source_type": "INTERNAL",
+        "source_reference": "internal starter detector v1"
+      }
+    },
+    {
+      "stable_key": "internal.web.nosniff",
+      "factor": {
+        "code": "WEB",
+        "name": "Web security"
+      },
+      "issue": {
+        "name": "MIME sniffing protection absent",
+        "breach_risk": "LOW",
+        "affects_score": true,
+        "source_type": "MANUAL",
+        "source_reference": "internal starter detector v1"
+      },
+      "rule": {
+        "name": "MIME sniffing protection absent",
+        "target_type": "HOST",
+        "rule_expression": {
+          "operator": "equals",
+          "path": "http.x_content_type_options_present",
+          "value": false
+        },
+        "remediation": "Return X-Content-Type-Options: nosniff with appropriate Content-Type headers.",
+        "source_type": "INTERNAL",
+        "source_reference": "internal starter detector v1"
+      }
+    },
+    {
+      "stable_key": "internal.web.clickjacking",
+      "factor": {
+        "code": "WEB",
+        "name": "Web security"
+      },
+      "issue": {
+        "name": "Framing protection absent",
+        "breach_risk": "MEDIUM",
+        "affects_score": true,
+        "source_type": "MANUAL",
+        "source_reference": "internal starter detector v1"
+      },
+      "rule": {
+        "name": "Framing protection absent",
+        "target_type": "HOST",
+        "rule_expression": {
+          "operator": "equals",
+          "path": "http.clickjacking_protection_present",
+          "value": false
+        },
+        "remediation": "Set CSP frame-ancestors or X-Frame-Options according to application framing requirements.",
+        "source_type": "INTERNAL",
+        "source_reference": "internal starter detector v1"
+      }
+    },
+    {
+      "stable_key": "internal.tls.trust",
+      "factor": {
+        "code": "TLS",
+        "name": "TLS security"
+      },
+      "issue": {
+        "name": "Certificate trust validation failed",
+        "breach_risk": "HIGH",
+        "affects_score": true,
+        "source_type": "MANUAL",
+        "source_reference": "internal starter detector v1"
+      },
+      "rule": {
+        "name": "Certificate trust validation failed",
+        "target_type": "HOST",
+        "rule_expression": {
+          "operator": "equals",
+          "path": "tls.certificate_trusted",
+          "value": false
+        },
+        "remediation": "Install a valid certificate chain with the approved target hostname and review certificate expiry.",
+        "source_type": "INTERNAL",
+        "source_reference": "internal starter detector v1"
+      }
+    },
+    {
+      "stable_key": "internal.tls.legacy10",
+      "factor": {
+        "code": "TLS",
+        "name": "TLS security"
+      },
+      "issue": {
+        "name": "TLS 1.0 accepted",
+        "breach_risk": "HIGH",
+        "affects_score": true,
+        "source_type": "MANUAL",
+        "source_reference": "internal starter detector v1"
+      },
+      "rule": {
+        "name": "TLS 1.0 accepted",
+        "target_type": "HOST",
+        "rule_expression": {
+          "operator": "equals",
+          "path": "tls.tls10_supported",
+          "value": true
+        },
+        "remediation": "Disable TLS 1.0 on the service and retain supported TLS 1.2 or newer configurations.",
+        "source_type": "INTERNAL",
+        "source_reference": "internal starter detector v1"
+      }
+    },
+    {
+      "stable_key": "internal.tls.legacy11",
+      "factor": {
+        "code": "TLS",
+        "name": "TLS security"
+      },
+      "issue": {
+        "name": "TLS 1.1 accepted",
+        "breach_risk": "MEDIUM",
+        "affects_score": true,
+        "source_type": "MANUAL",
+        "source_reference": "internal starter detector v1"
+      },
+      "rule": {
+        "name": "TLS 1.1 accepted",
+        "target_type": "HOST",
+        "rule_expression": {
+          "operator": "equals",
+          "path": "tls.tls11_supported",
+          "value": true
+        },
+        "remediation": "Disable TLS 1.1 on the service and retain supported TLS 1.2 or newer configurations.",
+        "source_type": "INTERNAL",
+        "source_reference": "internal starter detector v1"
+      }
+    },
+    {
+      "stable_key": "internal.dns.spf",
+      "factor": {
+        "code": "DNS",
+        "name": "DNS and email security"
+      },
+      "issue": {
+        "name": "SPF record absent",
+        "breach_risk": "MEDIUM",
+        "affects_score": true,
+        "source_type": "MANUAL",
+        "source_reference": "internal starter detector v1"
+      },
+      "rule": {
+        "name": "SPF record absent",
+        "target_type": "DOMAIN",
+        "rule_expression": {
+          "operator": "equals",
+          "path": "dns.spf_present",
+          "value": false
+        },
+        "remediation": "Review email-sending requirements and publish an appropriate SPF TXT record.",
+        "source_type": "INTERNAL",
+        "source_reference": "internal starter detector v1"
+      }
+    },
+    {
+      "stable_key": "internal.dns.dmarc",
+      "factor": {
+        "code": "DNS",
+        "name": "DNS and email security"
+      },
+      "issue": {
+        "name": "DMARC record absent",
+        "breach_risk": "MEDIUM",
+        "affects_score": true,
+        "source_type": "MANUAL",
+        "source_reference": "internal starter detector v1"
+      },
+      "rule": {
+        "name": "DMARC record absent",
+        "target_type": "DOMAIN",
+        "rule_expression": {
+          "operator": "equals",
+          "path": "dns.dmarc_present",
+          "value": false
+        },
+        "remediation": "Review email authentication and publish an appropriate DMARC policy at _dmarc.",
+        "source_type": "INTERNAL",
+        "source_reference": "internal starter detector v1"
+      }
+    }
+  ]
+}

@@ -2,7 +2,16 @@
 
 Internal Security Rating Platform (SSC App)
 
-This repository contains the initial foundation for the Internal Security Rating Platform.
+The primary product interface is the `ssc` CLI. Completed Phase 0–4 work and the existing Web/API/frontend are preserved as optional interfaces. Dashboard-centric development is paused.
+
+```bash
+pip install -e ./backend
+ssc scan --target <approved-inventory-target> --output report
+```
+
+REPORT writes human-readable HTML and machine-readable JSON from one versioned normalized result, including scores, findings, impact, targets, evidence and remediation. PostgreSQL and pre-approved inventory/rules are required; running the Web server or frontend is unnecessary. See [CLI setup and operation](docs/CLI.md), [roadmap](docs/ROADMAP.md) and [architecture](docs/ARCHITECTURE.md).
+
+Phase 4B adds real authorized HTTP/TLS/DNS/TCP executors. Phase 5 adds internal versioned scoring and saved result snapshots. Phases 6A/6B add the CLI and REPORT adapter. SYGNOS structured event mapping and transport are deferred until the ingestion interface is known.
 
 See AGENTS.md for the permanent engineering rules and project objectives.
 

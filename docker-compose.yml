@@ -34,6 +34,20 @@ services:
     volumes:
       - ./backend:/app
 
+  cli:
+    profiles:
+      - cli
+    build: ./backend
+    depends_on:
+      - postgres
+    environment:
+      DATABASE_URL: postgresql+psycopg://postgres:postgres@postgres:5432/ssc
+    volumes:
+      - ./backend:/app
+      - ./reports:/reports
+    entrypoint: ["ssc"]
+    command: ["--help"]
+
   scanner_worker:
     profiles:
       - workers

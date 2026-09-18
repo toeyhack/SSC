@@ -75,6 +75,9 @@ type Organization = {
   name: string
   description: string | null
   active: boolean
+  approved_for_scan: boolean
+  allow_sensitive_network_scan: boolean
+  scan_approval_notes: string | null
 }
 
 type DomainAsset = {
@@ -83,6 +86,9 @@ type DomainAsset = {
   name: string
   description: string | null
   active: boolean
+  approved_for_scan: boolean
+  allow_sensitive_network_scan: boolean
+  scan_approval_notes: string | null
   organization: Organization | null
 }
 
@@ -93,6 +99,9 @@ type HostAsset = {
   ip: string | null
   description: string | null
   active: boolean
+  approved_for_scan: boolean
+  allow_sensitive_network_scan: boolean
+  scan_approval_notes: string | null
   domain: DomainAsset | null
 }
 
@@ -139,6 +148,7 @@ type ScanJobTarget = {
   domain_id: string | null
   host_id: string | null
   evidence: Record<string, unknown> | null
+  scan_config: Record<string, unknown> | null
 }
 
 type ScanJob = {
@@ -148,6 +158,7 @@ type ScanJob = {
   requested_by: string | null
   notes: string | null
   selected_rule_ids: string[] | null
+  collect_observations: boolean
   created_at: string
   started_at: string | null
   completed_at: string | null
@@ -176,6 +187,7 @@ type ScanFinding = {
   rule_version_id: string
   status: string
   evidence: Record<string, unknown> | null
+  evidence_source: string | null
   rule_version: RuleVersion | null
 }
 
@@ -216,6 +228,9 @@ const emptyOrganization = {
   name: '',
   description: '',
   active: true,
+  approved_for_scan: false,
+  allow_sensitive_network_scan: false,
+  scan_approval_notes: '',
 }
 
 const emptyDomain = {
@@ -223,6 +238,9 @@ const emptyDomain = {
   name: '',
   description: '',
   active: true,
+  approved_for_scan: false,
+  allow_sensitive_network_scan: false,
+  scan_approval_notes: '',
 }
 
 const emptyHost = {
@@ -231,6 +249,9 @@ const emptyHost = {
   ip: '',
   description: '',
   active: true,
+  approved_for_scan: false,
+  allow_sensitive_network_scan: false,
+  scan_approval_notes: '',
 }
 
 const emptyHostGroup = {
@@ -270,6 +291,8 @@ const emptyScanJob = {
   target_type: 'HOST',
   target_id: '',
   rule_id: '',
+  collect_observations: false,
+  scan_config: '{\n  "executors": ["http"],\n  "http_ports": [80],\n  "https_ports": [],\n  "request_timeout_seconds": 5,\n  "redirect_limit": 5\n}',
   evidence: '{\n  "service": {\n    "exposed": true\n  }\n}',
 }
 
@@ -553,6 +576,7 @@ export default function App() {
         body: JSON.stringify({
           ...organizationForm,
           description: blankToNull(organizationForm.description),
+          scan_approval_notes: blankToNull(organizationForm.scan_approval_notes),
         }),
       })
       setOrganizationForm(emptyOrganization)
@@ -580,6 +604,7 @@ export default function App() {
         body: JSON.stringify({
           ...domainForm,
           description: blankToNull(domainForm.description),
+          scan_approval_notes: blankToNull(domainForm.scan_approval_notes),
         }),
       })
       setDomainForm({ ...emptyDomain, organization_id: organizations[0]?.id || '' })
@@ -608,6 +633,7 @@ export default function App() {
           ...hostForm,
           ip: blankToNull(hostForm.ip),
           description: blankToNull(hostForm.description),
+          scan_approval_notes: blankToNull(hostForm.scan_approval_notes),
         }),
       })
       setHostForm({ ...emptyHost, domain_id: domains[0]?.id || '' })
@@ -728,6 +754,9 @@ export default function App() {
     event.preventDefault()
     await submit(async () => {
       const target = buildScanTarget(scanJobForm.target_type, scanJobForm.target_id)
+      const targetPayload = scanJobForm.collect_observations
+        ? { ...target, scan_config: parseJsonObject(scanJobForm.scan_config, 'Scan config') }
+        : { ...target, evidence: parseJsonObject(scanJobForm.evidence, 'Evidence') }
       const job = await api<ScanJob>('/api/v1/scans/jobs', {
         method: 'POST',
         body: JSON.stringify({
@@ -735,12 +764,8 @@ export default function App() {
           requested_by: blankToNull(scanJobForm.requested_by),
           notes: blankToNull(scanJobForm.notes),
           rule_ids: scanJobForm.rule_id ? [scanJobForm.rule_id] : null,
-          targets: [
-            {
-              ...target,
-              evidence: parseJsonObject(scanJobForm.evidence, 'Evidence'),
-            },
-          ],
+          collect_observations: scanJobForm.collect_observations,
+          targets: [targetPayload],
         }),
       })
       setScanJobForm({ ...emptyScanJob, target_id: hosts[0]?.id || domains[0]?.id || organizations[0]?.id || '', rule_id: rules[0]?.id || '' })
@@ -943,30 +968,36 @@ export default function App() {
           <div className="inventory-tables">
             <InventoryTable
               title="Organizations"
-              headers={['Name', 'Description', 'Active']}
+              headers={['Name', 'Description', 'Active', 'Scan', 'Sensitive']}
               rows={organizations.map((organization) => [
                 organization.name,
                 organization.description ?? '-',
                 <button onClick={() => updateOrganization(organization, { active: !organization.active })}>{yesNo(organization.active)}</button>,
+                <button onClick={() => updateOrganization(organization, { approved_for_scan: !organization.approved_for_scan })}>{yesNo(organization.approved_for_scan)}</button>,
+                <button onClick={() => updateOrganization(organization, { allow_sensitive_network_scan: !organization.allow_sensitive_network_scan })}>{yesNo(organization.allow_sensitive_network_scan)}</button>,
               ])}
             />
             <InventoryTable
               title="Domains"
-              headers={['Domain', 'Organization', 'Active']}
+              headers={['Domain', 'Organization', 'Active', 'Scan', 'Sensitive']}
               rows={domains.map((domain) => [
                 <span className="mono">{domain.name}</span>,
                 domain.organization?.name ?? '-',
                 <button onClick={() => updateDomain(domain, { active: !domain.active })}>{yesNo(domain.active)}</button>,
+                <button onClick={() => updateDomain(domain, { approved_for_scan: !domain.approved_for_scan })}>{yesNo(domain.approved_for_scan)}</button>,
+                <button onClick={() => updateDomain(domain, { allow_sensitive_network_scan: !domain.allow_sensitive_network_scan })}>{yesNo(domain.allow_sensitive_network_scan)}</button>,
               ])}
             />
             <InventoryTable
               title="Hosts"
-              headers={['Hostname', 'IP', 'Domain', 'Active']}
+              headers={['Hostname', 'IP', 'Domain', 'Active', 'Scan', 'Sensitive']}
               rows={hosts.map((host) => [
                 <span className="mono">{host.hostname}</span>,
                 host.ip ?? '-',
                 host.domain?.name ?? '-',
                 <button onClick={() => updateHost(host, { active: !host.active })}>{yesNo(host.active)}</button>,
+                <button onClick={() => updateHost(host, { approved_for_scan: !host.approved_for_scan })}>{yesNo(host.approved_for_scan)}</button>,
+                <button onClick={() => updateHost(host, { allow_sensitive_network_scan: !host.allow_sensitive_network_scan })}>{yesNo(host.allow_sensitive_network_scan)}</button>,
               ])}
             />
             <InventoryTable
@@ -985,6 +1016,15 @@ export default function App() {
               <h2>Organization</h2>
               <input required value={organizationForm.name} onChange={(event) => setOrganizationForm({ ...organizationForm, name: event.target.value })} placeholder="Name" />
               <textarea value={organizationForm.description} onChange={(event) => setOrganizationForm({ ...organizationForm, description: event.target.value })} placeholder="Description" />
+              <textarea value={organizationForm.scan_approval_notes} onChange={(event) => setOrganizationForm({ ...organizationForm, scan_approval_notes: event.target.value })} placeholder="Scan approval notes" />
+              <label className="check-row">
+                <input type="checkbox" checked={organizationForm.approved_for_scan} onChange={(event) => setOrganizationForm({ ...organizationForm, approved_for_scan: event.target.checked })} />
+                Approved for scan
+              </label>
+              <label className="check-row">
+                <input type="checkbox" checked={organizationForm.allow_sensitive_network_scan} onChange={(event) => setOrganizationForm({ ...organizationForm, allow_sensitive_network_scan: event.target.checked })} />
+                Allow sensitive networks
+              </label>
               <button type="submit" disabled={busy}>Create organization</button>
             </form>
 
@@ -996,6 +1036,15 @@ export default function App() {
               </select>
               <input required value={domainForm.name} onChange={(event) => setDomainForm({ ...domainForm, name: event.target.value })} placeholder="example.com" />
               <textarea value={domainForm.description} onChange={(event) => setDomainForm({ ...domainForm, description: event.target.value })} placeholder="Description" />
+              <textarea value={domainForm.scan_approval_notes} onChange={(event) => setDomainForm({ ...domainForm, scan_approval_notes: event.target.value })} placeholder="Scan approval notes" />
+              <label className="check-row">
+                <input type="checkbox" checked={domainForm.approved_for_scan} onChange={(event) => setDomainForm({ ...domainForm, approved_for_scan: event.target.checked })} />
+                Approved for scan
+              </label>
+              <label className="check-row">
+                <input type="checkbox" checked={domainForm.allow_sensitive_network_scan} onChange={(event) => setDomainForm({ ...domainForm, allow_sensitive_network_scan: event.target.checked })} />
+                Allow sensitive networks
+              </label>
               <button type="submit" disabled={busy || !domainForm.organization_id}>Create domain</button>
             </form>
 
@@ -1008,6 +1057,15 @@ export default function App() {
               <input required value={hostForm.hostname} onChange={(event) => setHostForm({ ...hostForm, hostname: event.target.value })} placeholder="host.example.com" />
               <input value={hostForm.ip} onChange={(event) => setHostForm({ ...hostForm, ip: event.target.value })} placeholder="IP address" />
               <textarea value={hostForm.description} onChange={(event) => setHostForm({ ...hostForm, description: event.target.value })} placeholder="Description" />
+              <textarea value={hostForm.scan_approval_notes} onChange={(event) => setHostForm({ ...hostForm, scan_approval_notes: event.target.value })} placeholder="Scan approval notes" />
+              <label className="check-row">
+                <input type="checkbox" checked={hostForm.approved_for_scan} onChange={(event) => setHostForm({ ...hostForm, approved_for_scan: event.target.checked })} />
+                Approved for scan
+              </label>
+              <label className="check-row">
+                <input type="checkbox" checked={hostForm.allow_sensitive_network_scan} onChange={(event) => setHostForm({ ...hostForm, allow_sensitive_network_scan: event.target.checked })} />
+                Allow sensitive networks
+              </label>
               <button type="submit" disabled={busy || !hostForm.domain_id}>Create host</button>
             </form>
 
@@ -1212,14 +1270,33 @@ export default function App() {
                   <option key={rule.id} value={rule.id}>{rule.current_version?.name ?? rule.stable_key}</option>
                 ))}
               </select>
-              <textarea
-                className="json-mini"
-                required
-                value={scanJobForm.evidence}
-                onChange={(event) => setScanJobForm({ ...scanJobForm, evidence: event.target.value })}
-                spellCheck={false}
-                placeholder="Evidence JSON"
-              />
+              <label className="check-row">
+                <input
+                  type="checkbox"
+                  checked={scanJobForm.collect_observations}
+                  onChange={(event) => setScanJobForm({ ...scanJobForm, collect_observations: event.target.checked })}
+                />
+                Collect scanner observations
+              </label>
+              {scanJobForm.collect_observations ? (
+                <textarea
+                  className="json-mini"
+                  required
+                  value={scanJobForm.scan_config}
+                  onChange={(event) => setScanJobForm({ ...scanJobForm, scan_config: event.target.value })}
+                  spellCheck={false}
+                  placeholder="Scan config JSON"
+                />
+              ) : (
+                <textarea
+                  className="json-mini"
+                  required
+                  value={scanJobForm.evidence}
+                  onChange={(event) => setScanJobForm({ ...scanJobForm, evidence: event.target.value })}
+                  spellCheck={false}
+                  placeholder="Evidence JSON"
+                />
+              )}
               <button type="submit" disabled={busy || !scanJobForm.target_id}>Queue scan</button>
             </form>
           </aside>
@@ -1343,6 +1420,7 @@ function ScanJobTable({ jobs, onRun }: { jobs: ScanJob[], onRun: (job: ScanJob) 
             <th>Created</th>
             <th>Name</th>
             <th>Status</th>
+            <th>Mode</th>
             <th>Targets</th>
             <th>Rules</th>
             <th>Run</th>
@@ -1354,6 +1432,7 @@ function ScanJobTable({ jobs, onRun }: { jobs: ScanJob[], onRun: (job: ScanJob) 
               <td>{formatDate(job.created_at)}</td>
               <td>{job.name}</td>
               <td>{job.status}</td>
+              <td>{job.collect_observations ? 'Scanner' : 'Manual'}</td>
               <td>{job.targets.length}</td>
               <td>{job.selected_rule_ids?.length ?? 'All'}</td>
               <td><button onClick={() => onRun(job)} disabled={job.status !== 'QUEUED' && job.status !== 'FAILED'}>Run</button></td>
@@ -1408,6 +1487,7 @@ function FindingTable({ findings }: { findings: ScanFinding[] }) {
               <th>Rule</th>
               <th>Target</th>
               <th>Status</th>
+              <th>Source</th>
               <th>Evidence</th>
             </tr>
           </thead>
@@ -1417,6 +1497,7 @@ function FindingTable({ findings }: { findings: ScanFinding[] }) {
                 <td>{finding.rule_version?.name ?? finding.rule_version_id}</td>
                 <td>{finding.target_type}</td>
                 <td>{finding.status}</td>
+                <td>{finding.evidence_source ?? '-'}</td>
                 <td><span className="mono">{JSON.stringify(finding.evidence?.matched_expression ?? {})}</span></td>
               </tr>
             ))}

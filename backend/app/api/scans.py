@@ -7,9 +7,14 @@ from sqlalchemy.orm import Session, joinedload
 
 from app.db.session import get_db
 from app.models.rule_models import RuleEngineRule
-from app.models.scan_models import ScanFinding, ScanJob, ScanJobTarget, ScanRun
-from app.schemas.scans import ScanFindingRead, ScanJobCreate, ScanJobRead, ScanRunRead
-from app.services.scan_engine import ScanEngineError, run_scan_job, validate_scan_target
+from app.models.scan_models import ScanFinding, ScanJob, ScanJobTarget, ScanObservation, ScanRun
+from app.schemas.scans import ScanFindingRead, ScanJobCreate, ScanJobRead, ScanObservationRead, ScanRunRead
+from app.services.scan_engine import (
+    ScanEngineError,
+    run_scan_job,
+    validate_scan_target,
+    validate_scan_target_authorized_for_scanner,
+)
 
 router = APIRouter(prefix="/api/v1/scans", tags=["scans"])
 
@@ -64,6 +69,7 @@ def create_scan_job(payload: ScanJobCreate, db: Session = Depends(get_db)):
         requested_by=payload.requested_by,
         notes=payload.notes,
         selected_rule_ids=selected_rule_ids,
+        collect_observations=payload.collect_observations,
     )
     db.add(job)
     db.flush()
@@ -72,6 +78,8 @@ def create_scan_job(payload: ScanJobCreate, db: Session = Depends(get_db)):
         target = ScanJobTarget(scan_job_id=job.id, **target_payload.model_dump())
         try:
             validate_scan_target(db, target)
+            if payload.collect_observations:
+                validate_scan_target_authorized_for_scanner(db, target)
         except ScanEngineError as exc:
             db.rollback()
             raise _bad_request(str(exc)) from exc
@@ -109,3 +117,13 @@ def list_scan_findings(scan_run_id: UUID, db: Session = Depends(get_db)):
         .order_by(ScanFinding.created_at)
     )
     return db.execute(stmt).unique().scalars().all()
+
+
+@router.get("/runs/{scan_run_id}/observations", response_model=list[ScanObservationRead])
+def list_scan_observations(scan_run_id: UUID, db: Session = Depends(get_db)):
+    stmt = (
+        select(ScanObservation)
+        .where(ScanObservation.scan_run_id == scan_run_id)
+        .order_by(ScanObservation.observed_at, ScanObservation.evidence_source)
+    )
+    return db.execute(stmt).scalars().all()

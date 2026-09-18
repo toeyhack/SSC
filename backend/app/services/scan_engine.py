@@ -1,4 +1,3 @@
-import re
 from datetime import datetime, timezone
 from typing import Any
 from uuid import UUID
@@ -7,12 +6,28 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session, joinedload
 
 from app.models.models import Domain, Host, Organization
+from app.models.catalog_models import CatalogIssueType
 from app.models.rule_models import RuleEngineRule, RuleEngineRuleVersion, RuleTargetTypeEnum
-from app.models.scan_models import ScanFinding, ScanJob, ScanJobTarget, ScanRun, ScanStatusEnum, ScanTargetTypeEnum
+from app.models.scan_models import (
+    EvidenceSourceEnum,
+    ScanFinding,
+    ScanJob,
+    ScanJobTarget,
+    ScanObservation,
+    ScanRun,
+    ScanStatusEnum,
+    ScanTargetTypeEnum,
+)
+from app.services.rule_evaluation import RuleEvaluationError, evaluate_rule_expression, _extract_path
+from app.services.scan_executors import (
+    ScanExecutorError,
+    collect_scanner_observations,
+    load_authorized_scan_target,
+    validate_scan_config,
+)
 
 
-class ScanEngineError(ValueError):
-    pass
+ScanEngineError = RuleEvaluationError  # Preserve the Phase 4 public exception contract.
 
 
 def run_scan_job(db: Session, scan_job_id: UUID) -> ScanRun:
@@ -34,6 +49,7 @@ def run_scan_job(db: Session, scan_job_id: UUID) -> ScanRun:
     run = ScanRun(scan_job_id=job.id, status=ScanStatusEnum.RUNNING, started_at=now)
     db.add(run)
     db.flush()
+    run_id = run.id
 
     try:
         targets = db.execute(
@@ -44,7 +60,7 @@ def run_scan_job(db: Session, scan_job_id: UUID) -> ScanRun:
             .where(RuleEngineRule.is_active.is_(True), RuleEngineRule.current_version_id.is_not(None))
             .options(
                 joinedload(RuleEngineRule.current_version),
-                joinedload(RuleEngineRule.catalog_issue_type),
+                joinedload(RuleEngineRule.catalog_issue_type).joinedload(CatalogIssueType.factor),
             )
             .order_by(RuleEngineRule.stable_key)
         )
@@ -54,15 +70,41 @@ def run_scan_job(db: Session, scan_job_id: UUID) -> ScanRun:
 
         evaluated = 0
         finding_count = 0
+        skipped = 0
+        assessments = []
+        target_snapshots = []
+        observation_count = 0
         for target in targets:
-            evidence = target.evidence or {}
+            evidence, source_by_root, created_observations = _collect_or_load_evidence(db, job, run, target)
+            observation_count += created_observations
+            identity = target.host or target.domain or target.organization
+            target_snapshots.append({"inventory_id": str(target.host_id or target.domain_id or target.organization_id),
+                                     "scan_job_target_id": str(target.id), "target_type": target.target_type.value,
+                                     "name": getattr(identity, "hostname", None) or identity.name})
             for rule in active_rules:
                 version = rule.current_version
                 if version is None or not _rule_targets_match(version, target):
                     continue
+                issue = rule.catalog_issue_type
+                assessment = {"rule_id": str(rule.id), "rule_version_id": str(version.id),
+                              "catalog_issue_type_version_id": str(issue.current_version_id) if issue and issue.current_version_id else None,
+                              "factor_code": issue.factor.code if issue else "UNCATEGORIZED",
+                              "factor_name": issue.factor.name if issue else "Uncategorized",
+                              "target_id": str(target.id), "status": "evaluated"}
+                assessments.append(assessment)
+                root = version.rule_expression.get("path", "").split(".")[0]
+                source_evidence = evidence.get(root)
+                path = version.rule_expression.get("path", "")
+                if job.collect_observations and (not isinstance(source_evidence, dict) or
+                    (source_evidence.get("status") != "success" and not path.endswith(".endpoint_available")) or
+                    (_extract_path(evidence, path)[1] is None and version.rule_expression.get("operator") != "exists")):
+                    assessment["status"] = "skipped"
+                    skipped += 1
+                    continue
                 evaluated += 1
                 if evaluate_rule_expression(version.rule_expression, evidence):
                     finding_count += 1
+                    evidence_source = _evidence_source_for_expression(version.rule_expression, source_by_root)
                     db.add(
                         ScanFinding(
                             scan_run_id=run.id,
@@ -81,9 +123,11 @@ def run_scan_job(db: Session, scan_job_id: UUID) -> ScanRun:
                                 else None
                             ),
                             evidence={
-                                "target_evidence": evidence,
+                                "evidence_source": evidence_source.value if evidence_source is not None else None,
+                                "target_evidence": _matched_evidence(version.rule_expression, evidence),
                                 "matched_expression": version.rule_expression,
                             },
+                            evidence_source=evidence_source,
                         )
                     )
 
@@ -92,7 +136,12 @@ def run_scan_job(db: Session, scan_job_id: UUID) -> ScanRun:
         run.completed_at = completed_at
         run.summary = {
             "targets": len(targets),
+            "observations_created": observation_count,
+            "evidence_mode": "SCANNER" if job.collect_observations else "MANUAL",
             "rules_evaluated": evaluated,
+            "rules_skipped": skipped,
+            "rule_assessments": assessments,
+            "targets_snapshot": target_snapshots,
             "findings_created": finding_count,
         }
         job.status = ScanStatusEnum.COMPLETED
@@ -107,11 +156,8 @@ def run_scan_job(db: Session, scan_job_id: UUID) -> ScanRun:
             failed_job.status = ScanStatusEnum.FAILED
             failed_job.error_message = str(exc)
             failed_job.completed_at = datetime.now(timezone.utc)
-            failed_run = db.get(ScanRun, run.id)
-            if failed_run is not None:
-                failed_run.status = ScanStatusEnum.FAILED
-                failed_run.error_message = str(exc)
-                failed_run.completed_at = failed_job.completed_at
+            db.add(ScanRun(id=run_id, scan_job_id=scan_job_id, status=ScanStatusEnum.FAILED,
+                           started_at=now, completed_at=failed_job.completed_at, error_message=str(exc)))
             db.commit()
         raise
 
@@ -140,36 +186,12 @@ def validate_scan_target(db: Session, target: ScanJobTarget):
             raise ScanEngineError("Host target not found")
 
 
-def evaluate_rule_expression(expression: dict[str, Any], evidence: dict[str, Any]) -> bool:
-    operator = expression.get("operator")
-    path = expression.get("path")
-    if not isinstance(operator, str):
-        raise ScanEngineError("rule_expression.operator must be a string")
-    if not isinstance(path, str):
-        raise ScanEngineError("rule_expression.path must be a string")
-
-    found, value = _extract_path(evidence, path)
-    if operator == "exists":
-        return found
-    if operator == "missing":
-        return not found
-    if operator == "equals":
-        return found and value == expression.get("value")
-    if operator == "not_equals":
-        return (not found) or value != expression.get("value")
-    if operator == "contains":
-        expected = expression.get("value")
-        if isinstance(value, list):
-            return expected in value
-        if isinstance(value, str) and isinstance(expected, str):
-            return expected in value
-        return False
-    if operator == "regex":
-        pattern = expression.get("pattern")
-        if not isinstance(value, str) or not isinstance(pattern, str):
-            return False
-        return re.search(pattern, value) is not None
-    raise ScanEngineError(f"Unsupported rule_expression.operator: {operator}")
+def validate_scan_target_authorized_for_scanner(db: Session, target: ScanJobTarget):
+    try:
+        validate_scan_config(target.scan_config)
+        load_authorized_scan_target(db, target)
+    except ScanExecutorError as exc:
+        raise ScanEngineError(str(exc)) from exc
 
 
 def _rule_targets_match(version: RuleEngineRuleVersion, target: ScanJobTarget) -> bool:
@@ -177,14 +199,75 @@ def _rule_targets_match(version: RuleEngineRuleVersion, target: ScanJobTarget) -
     return target_type == target.target_type.value
 
 
-def _extract_path(evidence: dict[str, Any], path: str) -> tuple[bool, Any]:
-    current: Any = evidence
-    for part in path.split("."):
-        if isinstance(current, dict) and part in current:
-            current = current[part]
-            continue
-        if isinstance(current, list) and part.isdigit() and int(part) < len(current):
-            current = current[int(part)]
-            continue
-        return False, None
-    return True, current
+def _collect_or_load_evidence(
+    db: Session,
+    job: ScanJob,
+    run: ScanRun,
+    target: ScanJobTarget,
+) -> tuple[dict[str, Any], dict[str, EvidenceSourceEnum], int]:
+    if not job.collect_observations:
+        evidence = target.evidence or {}
+        if target.evidence is not None:
+            db.add(
+                ScanObservation(
+                    scan_run_id=run.id,
+                    scan_job_id=job.id,
+                    scan_job_target_id=target.id,
+                    evidence_source=EvidenceSourceEnum.MANUAL,
+                    evidence=evidence,
+                )
+            )
+            return evidence, {"": EvidenceSourceEnum.MANUAL}, 1
+        return evidence, {"": EvidenceSourceEnum.MANUAL}, 0
+
+    try:
+        inventory_target = load_authorized_scan_target(db, target)
+        observations = collect_scanner_observations(inventory_target, target.scan_config)
+    except ScanExecutorError as exc:
+        raise ScanEngineError(str(exc)) from exc
+
+    evidence: dict[str, Any] = {}
+    source_by_root: dict[str, EvidenceSourceEnum] = {}
+    for observation in observations:
+        root = _root_for_evidence_source(observation.evidence_source)
+        evidence[root] = observation.evidence
+        source_by_root[root] = observation.evidence_source
+        db.add(
+            ScanObservation(
+                scan_run_id=run.id,
+                scan_job_id=job.id,
+                scan_job_target_id=target.id,
+                evidence_source=observation.evidence_source,
+                evidence=observation.evidence,
+            )
+        )
+    return evidence, source_by_root, len(observations)
+
+
+def _root_for_evidence_source(source: EvidenceSourceEnum) -> str:
+    return {
+        EvidenceSourceEnum.MANUAL: "",
+        EvidenceSourceEnum.SCANNER_HTTP: "http",
+        EvidenceSourceEnum.SCANNER_TLS: "tls",
+        EvidenceSourceEnum.SCANNER_DNS: "dns",
+        EvidenceSourceEnum.SCANNER_TCP: "tcp",
+    }[source]
+
+
+def _evidence_source_for_expression(
+    expression: dict[str, Any],
+    source_by_root: dict[str, EvidenceSourceEnum],
+) -> EvidenceSourceEnum | None:
+    path = expression.get("path")
+    if not isinstance(path, str):
+        return source_by_root.get("")
+    root = path.split(".", 1)[0]
+    return source_by_root.get(root) or source_by_root.get("")
+
+
+def _matched_evidence(expression: dict[str, Any], evidence: dict[str, Any]) -> dict[str, Any]:
+    path = expression.get("path")
+    if not isinstance(path, str):
+        return evidence
+    found, value = _extract_path(evidence, path)
+    return {"path": path, "found": found, "value": value}

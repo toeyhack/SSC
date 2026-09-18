@@ -10,6 +10,9 @@ class Organization(Base):
     name = Column(String(255), unique=True, nullable=False)
     description = Column(Text, nullable=True)
     active = Column(Boolean, default=True, nullable=False)
+    approved_for_scan = Column(Boolean, default=False, nullable=False)
+    allow_sensitive_network_scan = Column(Boolean, default=False, nullable=False)
+    scan_approval_notes = Column(Text, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
 
@@ -28,6 +31,9 @@ class Domain(Base):
     name = Column(String(255), nullable=False)
     description = Column(Text, nullable=True)
     active = Column(Boolean, default=True, nullable=False)
+    approved_for_scan = Column(Boolean, default=False, nullable=False)
+    allow_sensitive_network_scan = Column(Boolean, default=False, nullable=False)
+    scan_approval_notes = Column(Text, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
 
@@ -48,6 +54,9 @@ class Host(Base):
     ip = Column(String(64), nullable=True)
     description = Column(Text, nullable=True)
     active = Column(Boolean, default=True, nullable=False)
+    approved_for_scan = Column(Boolean, default=False, nullable=False)
+    allow_sensitive_network_scan = Column(Boolean, default=False, nullable=False)
+    scan_approval_notes = Column(Text, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
 

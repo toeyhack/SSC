@@ -9,3 +9,32 @@ frontend/dist/
 # Validation reports and temporary run artifacts
 reports/
 scripts/reports/
+
+# Local CLI installation artifacts
+.venv/
+*.egg-info/
+
+# Local secrets and environment overrides (keep development templates)
+.env
+.env.*
+!.env.example
+!.env.*.example
+
+# Tool caches, dependencies and build output
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+.coverage.*
+htmlcov/
+node_modules/
+build/
+
+# Local runtime data and logs
+*.log
+*.db
+*.sqlite
+*.sqlite3
+postgres_data/
+redis_data/
+dump.rdb

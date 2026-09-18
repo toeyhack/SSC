@@ -4,7 +4,7 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from app.models.scan_models import FindingStatusEnum, ScanStatusEnum, ScanTargetTypeEnum
+from app.models.scan_models import EvidenceSourceEnum, FindingStatusEnum, ScanStatusEnum, ScanTargetTypeEnum
 from app.schemas.rules import RuleRead, RuleVersionRead
 
 
@@ -14,6 +14,7 @@ class ScanJobTargetBase(BaseModel):
     domain_id: UUID | None = None
     host_id: UUID | None = None
     evidence: dict[str, Any] | None = None
+    scan_config: dict[str, Any] | None = None
 
     @model_validator(mode="after")
     def validate_single_target_reference(self):
@@ -52,6 +53,7 @@ class ScanJobCreate(BaseModel):
     requested_by: str | None = Field(default=None, max_length=255)
     notes: str | None = None
     rule_ids: list[UUID] | None = None
+    collect_observations: bool = False
     targets: list[ScanJobTargetCreate] = Field(min_length=1)
 
 
@@ -64,6 +66,7 @@ class ScanJobRead(BaseModel):
     requested_by: str | None
     notes: str | None
     selected_rule_ids: list[str] | None
+    collect_observations: bool
     created_at: datetime
     updated_at: datetime
     started_at: datetime | None
@@ -85,6 +88,19 @@ class ScanRunRead(BaseModel):
     created_at: datetime
 
 
+class ScanObservationRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    scan_run_id: UUID
+    scan_job_id: UUID
+    scan_job_target_id: UUID
+    evidence_source: EvidenceSourceEnum
+    evidence: dict[str, Any]
+    observed_at: datetime
+    created_at: datetime
+
+
 class ScanFindingRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -102,6 +118,7 @@ class ScanFindingRead(BaseModel):
     catalog_issue_type_version_id: UUID | None
     status: FindingStatusEnum
     evidence: dict[str, Any] | None
+    evidence_source: EvidenceSourceEnum | None
     observed_at: datetime
     created_at: datetime
     rule: RuleRead | None = None
