@@ -10,8 +10,9 @@ from sqlalchemy import (
     Text,
     UniqueConstraint,
     func,
+    text,
 )
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.dialects.postgresql import JSONB, UUID
 import enum
 import uuid
 from app.db.session import Base
@@ -101,6 +102,9 @@ class CatalogIssueTypeVersion(Base):
         nullable=False,
     )
     threat_level = Column(String(64), nullable=True)
+    # Vendor metadata has no implied relationship to internal risk or scoring.
+    ssc_severity = Column(String(128), nullable=True)
+    ssc_metadata = Column(JSONB, nullable=True)
     affects_score = Column(Boolean, default=True, nullable=False)
     source_type = Column(
         Enum(
@@ -127,6 +131,10 @@ class CatalogIssueTypeVersion(Base):
 
 class CatalogSnapshot(Base):
     __tablename__ = "catalog_snapshots"
+    __table_args__ = (
+        Index("uq_catalog_snapshots_ssc_api_hash", "content_hash", unique=True,
+              postgresql_where=text("source_type = 'SSC_API'")),
+    )
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     name = Column(String(255), nullable=False)
@@ -145,6 +153,10 @@ class CatalogSnapshot(Base):
     imported_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     content_hash = Column(String(128), nullable=False)
     notes = Column(Text, nullable=True)
+    normalized_schema_version = Column(String(128), nullable=True)
+    normalized_payload = Column(JSONB, nullable=True)
+    raw_source = Column(JSONB, nullable=True)
+    is_real_baseline = Column(Boolean, nullable=False, default=False, server_default="false")
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 
     items = relationship("CatalogSnapshotItem", back_populates="snapshot")

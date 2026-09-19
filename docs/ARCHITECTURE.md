@@ -18,6 +18,14 @@ ssc scan --target <approved-inventory-target> --output report
 
 SecurityScorecard is a benchmark, public taxonomy/reference, optional comparison source and optional integration. It is not a runtime dependency. The internal scoring model is explicitly documented and does not represent proprietary SSC algorithms.
 
+## Initial taxonomy acquisition
+
+Preferred initial SSC baseline: SSC API metadata endpoints (`GET /metadata/factors` and `GET /metadata/issue-types`) → raw immutable `CatalogSnapshot` provenance → normalization → existing versioned Internal Catalog → Golden Baseline. Fallback: licensed UI/manual canonical JSON through the preserved Phase 1B importer. Future taxonomy updates: SSC API and/or reviewed public SSC methodology changes; no automatic production overwrite. Runtime: no SSC dependency.
+
+`ssc baseline pull-ssc` explicitly acquires and previews metadata, then imports only after approval. Its minimum baseline uses only the two list endpoints. `--enrich-details` optionally adds bounded per-issue detail requests; it is not required for import or taxonomy alignment, and an individual detail failure leaves the list-based issue definition available. `SSC_TOKEN` comes only from the process environment. Acquisition is outside scanner/rules/scoring/report execution. `ssc baseline status` reads persisted provenance: `INTERNAL_ONLY` until a real baseline has been imported, then `SSC_ALIGNED`. A real taxonomy baseline is required once before making an SSC alignment claim; synthetic/internal catalogs do not qualify. Both states support the existing runtime normally without SSC credentials.
+
+Migration `0008_ssc_api_baseline` preserves raw endpoint responses, hashes, capture times, normalizer version and complete factor/issue membership on snapshots. It adds separate raw SSC issue metadata/severity to immutable issue versions. Successful detail enrichment stores the exact response in versioned `ssc_metadata`, and also exposes `short_description` through the existing issue-version description. Factor history lives in snapshot payloads; shared factor metadata is not overwritten. PostgreSQL protects API snapshot rows against update/delete and enforces unique API content hashes. SSC severity is not reinterpreted as internal risk, breach risk, threat level, score impact or scoring relevance; API versions retain `breach_risk=UNKNOWN` and `threat_level=null`. See `GOLDEN_BASELINE_IMPORTER.md` for mapping and operator attestation.
+
 ## Primary runtime
 
 The CLI calls services directly, using PostgreSQL for inventory, immutable catalog/rule versions, jobs, observations, findings and score snapshots. Running FastAPI, React or Redis is unnecessary for a CLI scan. An optional Docker Compose `cli` profile provides the console command and mounts `/reports` for output. The existing default Web/API services remain available for compatibility; start only `postgres` when using the CLI.

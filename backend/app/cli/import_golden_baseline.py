@@ -17,6 +17,8 @@ def main() -> int:
     parser.add_argument("--input", required=True, help="Path to canonical Phase 1B baseline JSON.")
     parser.add_argument("--dry-run", action="store_true", help="Validate and preview without writing catalog rows.")
     parser.add_argument("--json", action="store_true", help="Print the import result as JSON.")
+    parser.add_argument("--attest-real-source", action="store_true",
+                        help="Attest this is a real licensed SSC capture, not synthetic data; enables SSC_ALIGNED.")
     args = parser.parse_args()
 
     try:
@@ -30,7 +32,8 @@ def main() -> int:
 
     with SessionLocal() as db:
         try:
-            result = import_golden_baseline(db, baseline, dry_run=args.dry_run)
+            result = import_golden_baseline(db, baseline, dry_run=args.dry_run,
+                                            attest_real_source=args.attest_real_source)
         except GoldenBaselineImportError as exc:
             for error in exc.errors:
                 print(error, file=sys.stderr)

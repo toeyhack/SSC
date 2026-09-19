@@ -39,6 +39,8 @@ class IssueTypeVersionBase(BaseModel):
     description: str | None = None
     breach_risk: BreachRiskEnum
     threat_level: str | None = Field(default=None, max_length=64)
+    ssc_severity: str | None = Field(default=None, max_length=128)
+    ssc_metadata: dict | None = None
     affects_score: bool = True
     source_type: SourceTypeEnum
     source_reference: str | None = Field(default=None, max_length=1024)
@@ -129,5 +131,9 @@ class CatalogSnapshotRead(BaseModel):
     imported_at: datetime
     content_hash: str
     notes: str | None
+    normalized_schema_version: str | None = None
+    normalized_payload: dict | None = None
+    raw_source: dict | None = None
+    is_real_baseline: bool = False
     created_at: datetime
     items: list[CatalogSnapshotItemRead] = Field(default_factory=list)

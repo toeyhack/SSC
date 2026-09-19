@@ -12,6 +12,7 @@ from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, joinedload
 
+from app.models import models as _models  # Register inventory relationships for standalone CLI use.
 from app.models.catalog_models import (
     BreachRiskEnum,
     CatalogFactor,
@@ -48,6 +49,8 @@ class BaselineIssueInput(BaseModel):
     description: str | None = None
     breach_risk: BreachRiskEnum
     threat_level: ThreatLevelEnum | None = None
+    ssc_severity: str | None = Field(default=None, max_length=128)
+    ssc_metadata: dict | None = None
     affects_score: bool = True
     source_reference: str | None = Field(default=None, max_length=1024)
     position: int | None = Field(default=None, ge=1)
@@ -225,6 +228,16 @@ def load_golden_baseline_file(path: str | Path) -> GoldenBaselineInput:
 
 
 def compute_baseline_content_hash(baseline: GoldenBaselineInput) -> str:
+    if baseline.source_type == "SSC_API":
+        # Capture time, whitespace and source list ordering are not taxonomy changes.
+        payload = {}
+        for endpoint, capture in baseline.raw_source.items():
+            response = json.loads(capture["body"])
+            if isinstance(response, dict) and isinstance(response.get("entries"), list):
+                response["entries"] = sorted(response["entries"], key=lambda entry: entry["key"])
+            payload[endpoint] = response
+        canonical = json.dumps(payload, ensure_ascii=False, separators=(",", ":"), sort_keys=True)
+        return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
     payload = baseline.model_dump(mode="json", exclude_none=True)
     canonical = json.dumps(payload, ensure_ascii=False, separators=(",", ":"), sort_keys=True)
     return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
@@ -235,10 +248,16 @@ def import_golden_baseline(
     baseline: GoldenBaselineInput,
     *,
     dry_run: bool = False,
+    attest_real_source: bool = False,
 ) -> GoldenBaselineImportResult:
     content_hash = compute_baseline_content_hash(baseline)
-    existing_snapshot = _get_existing_snapshot(db, content_hash)
+    existing_snapshot = _get_existing_snapshot(db, content_hash, baseline.source_type)
     if existing_snapshot is not None:
+        if attest_real_source and not existing_snapshot.is_real_baseline:
+            raise GoldenBaselineImportError([
+                "Existing snapshot was not attested as real SSC data; immutable history cannot be relabeled. "
+                "Provide a new verified capture with its actual capture timestamp."
+            ])
         return GoldenBaselineImportResult(
             dry_run=dry_run,
             content_hash=content_hash,
@@ -319,12 +338,16 @@ def import_golden_baseline(
 
         snapshot = CatalogSnapshot(
             name=baseline.name,
-            source_type=SourceTypeEnum.SSC_LICENSED_UI,
+            source_type=SourceTypeEnum(baseline.source_type),
             source_reference=baseline.source_reference,
             captured_at=baseline.captured_at,
             imported_at=imported_at,
             content_hash=content_hash,
             notes=baseline.notes,
+            normalized_schema_version=baseline.schema_version,
+            normalized_payload=baseline.model_dump(mode="json", exclude={"raw_source"}),
+            raw_source=getattr(baseline, "raw_source", None),
+            is_real_baseline=attest_real_source,
         )
         db.add(snapshot)
         db.flush()
@@ -343,7 +366,7 @@ def import_golden_baseline(
         db.commit()
     except IntegrityError as exc:
         db.rollback()
-        existing_snapshot = _get_existing_snapshot(db, content_hash)
+        existing_snapshot = _get_existing_snapshot(db, content_hash, baseline.source_type)
         if existing_snapshot is not None:
             return GoldenBaselineImportResult(
                 dry_run=False,
@@ -503,8 +526,10 @@ def _get_or_create_version(
         description=issue_input.description,
         breach_risk=issue_input.breach_risk,
         threat_level=issue_input.threat_level.value if issue_input.threat_level else None,
+        ssc_severity=issue_input.ssc_severity,
+        ssc_metadata=issue_input.ssc_metadata,
         affects_score=issue_input.affects_score,
-        source_type=SourceTypeEnum.SSC_LICENSED_UI,
+        source_type=SourceTypeEnum(baseline.source_type),
         source_reference=issue_input.source_reference or baseline.source_reference,
         source_snapshot_hash=content_hash,
         effective_from=baseline.captured_at,
@@ -547,7 +572,7 @@ def _find_reconciliation_errors(db: Session, baseline: GoldenBaselineInput) -> l
                 continue
 
             same_name_issue = current_name_index.get((factor_input.code, _normalize_name(issue_input.name)))
-            if same_name_issue is not None:
+            if same_name_issue is not None and baseline.source_type != "SSC_API":
                 errors.append(
                     f"{issue_input.stable_key}: issue name {issue_input.name!r} matches existing stable_key "
                     f"{same_name_issue.stable_key!r}; provide the existing stable_key or resolve the rename manually"
@@ -556,11 +581,11 @@ def _find_reconciliation_errors(db: Session, baseline: GoldenBaselineInput) -> l
     return errors
 
 
-def _get_existing_snapshot(db: Session, content_hash: str) -> CatalogSnapshot | None:
+def _get_existing_snapshot(db: Session, content_hash: str, source_type: str = "SSC_LICENSED_UI") -> CatalogSnapshot | None:
     stmt = (
         select(CatalogSnapshot)
         .where(
-            CatalogSnapshot.source_type == SourceTypeEnum.SSC_LICENSED_UI,
+            CatalogSnapshot.source_type == SourceTypeEnum(source_type),
             CatalogSnapshot.content_hash == content_hash,
         )
         .options(joinedload(CatalogSnapshot.items))
@@ -590,6 +615,8 @@ def _definition_tuple_from_version(version: CatalogIssueTypeVersion) -> tuple[An
         _enum_value(version.breach_risk),
         version.threat_level,
         bool(version.affects_score),
+        version.ssc_severity,
+        version.ssc_metadata,
     )
 
 
@@ -600,6 +627,8 @@ def _definition_tuple_from_input(issue_input: BaselineIssueInput) -> tuple[Any, 
         issue_input.breach_risk.value,
         issue_input.threat_level.value if issue_input.threat_level else None,
         issue_input.affects_score,
+        issue_input.ssc_severity,
+        issue_input.ssc_metadata,
     )
 
 

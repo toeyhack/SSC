@@ -43,11 +43,24 @@ def build_parser():
     rule_commands = rules.add_subparsers(dest="rule_command", required=True)
     load = rule_commands.add_parser("load", help="Load a versioned internal detector bundle")
     load.add_argument("--input", required=True)
+    baseline = commands.add_parser("baseline", help="Acquire and review an SSC taxonomy baseline")
+    baseline_commands = baseline.add_subparsers(dest="baseline_command", required=True)
+    pull = baseline_commands.add_parser("pull-ssc", help="Preview and import SSC API metadata using SSC_TOKEN")
+    pull.add_argument("--dry-run", action="store_true", help="Preview without changing the catalog")
+    pull.add_argument("--enrich-details", action="store_true",
+                      help="Optionally enrich issues from bounded detail requests; individual failures are nonfatal")
+    pull.add_argument("--yes", action="store_true", help="Approve importing the displayed metadata")
+    pull.add_argument("--expect-hash", help="Require the exact content hash from an earlier review")
+    baseline_commands.add_parser("status", help="Show INTERNAL_ONLY or SSC_ALIGNED without SSC access")
+    baseline_commands.add_parser("discover-details", help="Read the three sample issue detail endpoints; report field names")
     return parser
 
 
 def main(argv=None) -> int:
     args = build_parser().parse_args(argv)
+    if args.command == "baseline":
+        from app.cli.ssc_baseline import run
+        return run(args)
     if args.command == "scan" and args.output == "sygnos":
         print("SYGNOS output is deferred until its ingestion interface is known. Use --output report. No scan was started.", file=sys.stderr)
         return 2

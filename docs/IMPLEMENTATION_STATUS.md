@@ -4,6 +4,8 @@ CLI-FIRST MVP — COMPLETE / PASS
 
 Current phase: Phase 6B - CLI-first REPORT Output
 
+Direction correction: Phase 1B SSC API baseline acquisition extension; CLI-FIRST MVP behavior preserved.
+
 Primary product interface: CLI (`ssc`). Web/API/frontend: OPTIONAL / PRESERVED.
 
 Dashboard-centric work: PAUSED. Implementation sequence: Phase 4B PASS → Phase 5 PASS → Phase 6A CLI → Phase 6B REPORT. SYGNOS ingestion mapping and transport wait for its interface definition.
@@ -18,7 +20,7 @@ Phase 1A - Issue Catalog Data Model + Catalog API: COMPLETE / PASS
 
 Phase 1B - Golden Baseline Importer: COMPLETE / PASS
 
-Real SSC Golden Baseline source data: WAITING_FOR_SOURCE_DATA
+Real SSC Golden Baseline: API availability verified by the operator; production import NOT PERFORMED in this implementation. Live read-only issue-detail discovery COMPLETE on 2026-09-19; no catalog or database write was performed.
 
 Phase 1C - Catalog Administration / Review UI: COMPLETE / PASS
 
@@ -44,7 +46,7 @@ The former dashboard-first Phase 6 is superseded by 6A–6D. Existing Web admini
 
 Phase 7 - SSC Public Reference Sync: NOT STARTED
 
-Phase 8 - Optional SSC API Integration: NOT STARTED
+Phase 8 - Broader Optional SSC API Integration: NOT STARTED; initial metadata acquisition brought forward into Phase 1B
 
 Phase 9 - SSC Comparison / Calibration: NOT STARTED
 
@@ -115,11 +117,27 @@ Phase 1B adds:
 - backend tests for dry-run, idempotency, version changes, ordering, and ambiguous rename handling
 - `scripts/phase1b_validate.sh`
 
-SecurityScorecard remains a reference source only. Phase 1B does not add SSC API integration, SSC public-web scraping, scanners, scoring, or asset inventory.
+The original Phase 1B milestone used licensed-UI JSON only and did not add SSC API integration, SSC public-web scraping, scanners, scoring, or asset inventory. The acquisition extension documented below adds the preferred API metadata source.
 
-The repository does not contain the real captured SecurityScorecard licensed-UI catalog. The real Golden Baseline import still requires an external JSON file matching `docs/GOLDEN_BASELINE_IMPORTER.md`.
+The repository does not contain a real captured SSC catalog. The real Golden Baseline can now be acquired through SSC API metadata; an external JSON file matching `docs/GOLDEN_BASELINE_IMPORTER.md` remains the fallback.
 
 ## Phase 1B Validation
+
+### SSC API acquisition extension (2026-09-19)
+
+Preferred initial SSC baseline: SSC API metadata endpoints. Fallback: licensed UI/manual canonical JSON. Future taxonomy updates: SSC API and/or reviewed public SSC methodology changes. Runtime: no SSC dependency.
+
+The extension adds `ssc baseline pull-ssc`, optional `--enrich-details`, `status` and read-only `discover-details`; environment-only authentication; immutable raw API responses and normalized membership; API content hashing/idempotency; separate SSC severity metadata; migration `0008_ssc_api_baseline`; and mocked regression tests. A real baseline is required once for `SSC_ALIGNED`; otherwise the platform remains `INTERNAL_ONLY` with all existing CLI/scanner/rules/scoring/report functionality available. Manual real captures support explicit `--attest-real-source`; internal/synthetic/legacy unattested snapshots do not silently establish alignment.
+
+The complete minimum baseline uses `GET https://api.securityscorecard.io/metadata/factors` and `GET https://api.securityscorecard.io/metadata/issue-types`. Optional enrichment uses `/metadata/issue-types/{type}` with four workers, a 20-second timeout, bounded safe-transient retries and per-issue failure isolation; it is not required for taxonomy alignment. Successful details preserve the exact response in versioned `ssc_metadata`; `short_description` also populates the existing issue-version description.
+
+Live discovery verified HTTP 200 for `tls_weak_protocol`, `cookie_missing_http_only` and `csp_no_policy_v2`. Every response contained exactly `key`, `severity`, `factor`, `title`, `short_description`, `long_description` and `recommendation`, with no additional or nested fields. No returned field explicitly represented internal risk, Breach Risk, Threat Level, score impact or scoring relevance. SSC severity remains separate and unmapped; API issue versions remain `breach_risk=UNKNOWN` and `threat_level=null` unless another authoritative source explicitly provides them.
+
+Validation: COMPLETE / PASS. `scripts/validate_cli_first.sh` passed against isolated PostgreSQL on Python 3.14: **111 tests passed** (71 existing + 40 SSC acquisition/enrichment cases), with the same two dependency deprecation warnings. Phase 4B and Phase 5 regression gates passed with 92 and 103 tests respectively. Downgrade to `0005_phase4_scan_engine`, re-upgrade, Alembic schema check (no new operations), compileall and pip check passed. Alembic reports the existing mutually dependent foreign-key sorting warning. Test HTTP responses are mocked; no live SSC access is required. Validation logs: `reports/phase4b-validation-20260919-224128.txt`, `reports/phase5-validation-20260919-224128.txt`, `reports/phase6-validation-20260919-224128.txt`.
+
+New coverage includes normalization and unknown fields, factor/issue membership, provenance and raw immutability, hash/order/time idempotency, changed issue/factor metadata, alignment gating and real manual attestation, secret exclusion, authentication/partial-response failures, transaction rollback, redirects/pagination/size bounds, detail field discovery and CLI review/approval/hash checks. Historical validation below is preserved. No production migration, baseline import, push, company score comparison, calibration, public sync, dashboard, Sygnos transport or new scanner checks are part of this extension.
+
+Final regression after optional enrichment passed 111 tests in 12.21s with two dependency warnings. The preserved frontend production build had already passed in an isolated temporary copy (Vite 5.4.21); no frontend source or dependency manifest changed. Installing that existing manifest reported two dependency advisories (one moderate, one high); dependency upgrades remain outside this change. `git diff --check` passed. Live detail discovery is complete. Production baseline acquisition remains pending by explicit instruction.
 
 Phase 1B runtime validation: COMPLETE / PASS
 

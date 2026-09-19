@@ -15,7 +15,32 @@ python -m alembic -c migrations/alembic.ini upgrade head
 ssc rules load --input examples/internal-detectors.json
 ```
 
-The starter bundle contains internal catalog definitions and versioned detectors, not captured SSC licensed data. It is loaded only by an explicit command. Reloading identical definitions is idempotent; changed definitions create versions, with old versions preserved. Existing factor metadata is reused and not overwritten. Selecting an existing bundle version can change the current-version pointer, so load only a reviewed bundle. The real Golden Baseline importer remains `python -m app.cli.import_golden_baseline`.
+The starter bundle contains internal catalog definitions and versioned detectors, not captured SSC licensed data. It is loaded only by an explicit command. Reloading identical definitions is idempotent; changed definitions create versions, with old versions preserved. Existing factor metadata is reused and not overwritten. Selecting an existing bundle version can change the current-version pointer, so load only a reviewed bundle. Preferred initial SSC baseline acquisition is `ssc baseline pull-ssc`; `python -m app.cli.import_golden_baseline` remains the supported licensed UI/manual canonical JSON fallback.
+
+## SSC taxonomy baseline
+
+After migrations, provision `SSC_TOKEN` in the process environment through your credential workflow. Never put it into source files or a CLI argument. Then run:
+
+```bash
+ssc baseline status
+ssc baseline pull-ssc --dry-run
+ssc baseline pull-ssc --dry-run --enrich-details
+ssc baseline pull-ssc
+ssc baseline pull-ssc --yes --expect-hash <reviewed-content-hash>
+ssc baseline discover-details
+```
+
+Without enrichment, `pull-ssc` uses only `GET https://api.securityscorecard.io/metadata/factors` and `GET https://api.securityscorecard.io/metadata/issue-types`; this is a complete minimum baseline and can establish taxonomy alignment after approval. `--enrich-details` optionally requests `/metadata/issue-types/{type}` with at most four workers, a 20-second request timeout and at most three attempts for safe transient transport failures or HTTP 408, 425, 429, 500, 502, 503 and 504 responses. Numeric or HTTP-date `Retry-After` is honored up to 60 seconds; longer or invalid delays fail that lookup instead of retrying early. Permanent failures are not retried. An individual detail failure is reported but retains that issue's list metadata and does not discard the baseline.
+
+`pull-ssc` displays source, counts, optional detail success/failure counts, capture time, content hash and existing match before import. The default prompts on a terminal; noninteractive imports require `--yes`. `--dry-run` never writes. `--expect-hash` prevents committing data that changed since review. Same content reuses the original baseline. Failed authentication/acquisition leaves the current catalog unchanged. Baseline commands return 0 on success and 1 on acquisition, validation, approval or database failure; invalid arguments return 2.
+
+`discover-details` reads the three sample issue detail endpoints and reports returned field names/paths without changing the catalog. Live discovery on 2026-09-19 returned exactly `key`, `severity`, `factor`, `title`, `short_description`, `long_description` and `recommendation` for every tested issue. See `GOLDEN_BASELINE_IMPORTER.md` for the observed-field record and storage mapping.
+
+`status` works offline. `INTERNAL_ONLY` means no real SSC baseline has been recorded; all existing runtime features remain available without claiming alignment. `SSC_ALIGNED` requires at least one real imported SSC baseline with provenance. It does not imply scoring calibration. For real licensed UI/manual canonical JSON, use `python -m app.cli.import_golden_baseline --input <capture.json> --attest-real-source --json` on its first import. Never attest synthetic fixtures. Previously unattested snapshots cannot be relabeled on reuse.
+
+Preferred initial SSC baseline: SSC API metadata endpoints. Fallback: licensed UI/manual canonical JSON. Future taxonomy updates: SSC API and/or reviewed public SSC methodology changes. Runtime: no SSC dependency. Neither scan nor report calls SSC. API `severity` stays separate from internal risk, breach risk, threat level, score impact and scoring relevance. API issues remain `breach_risk=UNKNOWN` and `threat_level=null` unless another authoritative source explicitly supplies those semantics.
+
+## Authorized target registration
 
 Register a target you are authorized to assess:
 

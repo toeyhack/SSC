@@ -7,6 +7,7 @@ The primary product interface is the `ssc` CLI. The completed Phase 0–4 core, 
 | Phase | Scope | Direction |
 | --- | --- | --- |
 | 0–4 | Foundation, versioned catalog/importer, inventory, rules, scan jobs and findings | Completed work preserved; historical validation remains recorded |
+| 1B acquisition extension | Preferred real SSC Golden Baseline from API metadata; manual JSON fallback retained | Read-only acquisition, review, provenance and versioning; no runtime SSC dependency |
 | 4B | Real authorized HTTP/TLS/DNS/TCP execution and normalized evidence | Complete and validate before scoring |
 | 5 | Internal versioned scoring with factor scores, overall score and traceable impacts | Complete and validate before CLI output |
 | 6A | CLI orchestration and setup independent of Web/API | `ssc scan --target <target> --output report` |
@@ -14,7 +15,7 @@ The primary product interface is the `ssc` CLI. The completed Phase 0–4 core, 
 | 6C | SYGNOS adapter | Structured logs/events using exactly `ssc.result.v1`; ingestion mapping and transport deferred until interface is known |
 | 6D | Optional Web dashboard | Paused; no dashboard work before 4B, 5, 6A and 6B pass |
 | 7 | SSC public reference sync | Review/approval workflow; never automatic production catalog overwrite |
-| 8 | Optional SSC API integration | No dependency on SSC credentials for normal operation |
+| 8 | Broader optional SSC API integration | Initial metadata acquisition is brought forward into Phase 1B; other integrations remain deferred |
 | 9 | SSC comparison/calibration | Clearly distinguish internal scoring from proprietary SSC scoring |
 | 10 | Production hardening | Authentication/authorization, scheduling, operational limits, immutable storage enforcement and deployment validation |
 
@@ -30,4 +31,6 @@ REPORT is implemented first. `--output sygnos` currently fails before database o
 
 ## Next work
 
-Finalize Sygnos ingestion requirements when available. Until then, focus on broader detector coverage and CLI operating experience; keep the dashboard paused. The starter detectors are internal examples and do not constitute the real licensed SSC Golden Baseline, which still awaits source data.
+A real SSC taxonomy baseline is required once before claiming `SSC_ALIGNED`. Preferred initial SSC baseline: SSC API metadata endpoints. Fallback: licensed UI/manual canonical JSON. Future taxonomy updates: SSC API and/or reviewed public SSC methodology changes. Runtime: no SSC dependency. Without a real baseline, status is `INTERNAL_ONLY` and scanner/rules/scoring/report remain functional.
+
+The Phase 1B acquisition extension does not start Phase 7 public sync, company-score comparison, calibration, Sygnos transport, dashboard work or new scanner checks. Live read-only detail discovery is complete; the production baseline remains deliberately unimported. Optional bounded detail enrichment does not change the two-list-endpoint minimum baseline or alignment requirement. Starter detectors and synthetic fixtures cannot establish SSC alignment.
