@@ -11,6 +11,22 @@ from app.services.ssc_api_baseline import acquire_baseline, discover_issue_detai
 
 def run(args) -> int:
     try:
+        if args.baseline_command == "activate-wave1":
+            if not args.yes:
+                raise ValueError("Review the Wave 1 evaluator definitions, then pass --yes to activate")
+            from app.services.wave1_rules import activate_wave1_rules
+            with SessionLocal() as db:
+                result = activate_wave1_rules(db)
+            print(json.dumps(result, indent=2))
+            return 0 if not result["unavailable"] else 3
+        if args.baseline_command == "activate-wave2":
+            if not args.yes:
+                raise ValueError("Review the Wave 2 evaluator definitions, then pass --yes to activate")
+            from app.services.wave2_rules import activate_wave2_rules
+            with SessionLocal() as db:
+                result = activate_wave2_rules(db)
+            print(json.dumps(result, indent=2))
+            return 0 if not result["unavailable"] else 3
         if args.baseline_command == "discover-details":
             result = discover_issue_details()
             print(json.dumps(result, indent=2))

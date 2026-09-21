@@ -6,7 +6,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session, joinedload
 
 from app.models.models import Domain, Host, Organization
-from app.models.catalog_models import CatalogIssueType
+from app.models.catalog_models import CatalogIssueType, CatalogIssueTypeVersion
 from app.models.rule_models import RuleEngineRule, RuleEngineRuleVersion, RuleTargetTypeEnum
 from app.models.scan_models import (
     EvidenceSourceEnum,
@@ -86,8 +86,15 @@ def run_scan_job(db: Session, scan_job_id: UUID) -> ScanRun:
                 if version is None or not _rule_targets_match(version, target):
                     continue
                 issue = rule.catalog_issue_type
+                pinned_issue_version_id = version.catalog_issue_type_version_id
+                if pinned_issue_version_id is not None:
+                    pinned_issue_version = db.get(CatalogIssueTypeVersion, pinned_issue_version_id)
+                    if issue is None or pinned_issue_version is None or pinned_issue_version.issue_type_id != issue.id:
+                        raise ScanEngineError(f"Rule {rule.stable_key} has an invalid pinned catalog issue version")
+                else:
+                    pinned_issue_version_id = issue.current_version_id if issue else None
                 assessment = {"rule_id": str(rule.id), "rule_version_id": str(version.id),
-                              "catalog_issue_type_version_id": str(issue.current_version_id) if issue and issue.current_version_id else None,
+                              "catalog_issue_type_version_id": str(pinned_issue_version_id) if pinned_issue_version_id else None,
                               "factor_code": issue.factor.code if issue else "UNCATEGORIZED",
                               "factor_name": issue.factor.name if issue else "Uncategorized",
                               "target_id": str(target.id), "status": "evaluated"}
@@ -96,7 +103,7 @@ def run_scan_job(db: Session, scan_job_id: UUID) -> ScanRun:
                 source_evidence = evidence.get(root)
                 path = version.rule_expression.get("path", "")
                 if job.collect_observations and (not isinstance(source_evidence, dict) or
-                    (source_evidence.get("status") != "success" and not path.endswith(".endpoint_available")) or
+                    (source_evidence.get("status") != "success" and ".evaluations." not in path and not path.endswith(".endpoint_available")) or
                     (_extract_path(evidence, path)[1] is None and version.rule_expression.get("operator") != "exists")):
                     assessment["status"] = "skipped"
                     skipped += 1
@@ -117,11 +124,7 @@ def run_scan_job(db: Session, scan_job_id: UUID) -> ScanRun:
                             rule_id=rule.id,
                             rule_version_id=version.id,
                             catalog_issue_type_id=rule.catalog_issue_type_id,
-                            catalog_issue_type_version_id=(
-                                rule.catalog_issue_type.current_version_id
-                                if rule.catalog_issue_type is not None
-                                else None
-                            ),
+                            catalog_issue_type_version_id=pinned_issue_version_id,
                             evidence={
                                 "evidence_source": evidence_source.value if evidence_source is not None else None,
                                 "target_evidence": _matched_evidence(version.rule_expression, evidence),

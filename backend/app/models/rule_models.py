@@ -57,10 +57,19 @@ class RuleEngineRuleVersion(Base):
         UniqueConstraint("rule_id", "version_number", name="uq_rule_engine_rule_versions_rule_version"),
         Index("ix_rule_engine_rule_versions_rule_id", "rule_id"),
         Index("ix_rule_engine_rule_versions_target_type", "target_type"),
+        Index("ix_rule_engine_rule_versions_catalog_issue_version_id", "catalog_issue_type_version_id"),
     )
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     rule_id = Column(UUID(as_uuid=True), ForeignKey("rule_engine_rules.id"), nullable=False)
+    # SSC-aligned evaluators pin the exact catalog definition they were reviewed
+    # against.  Historical findings therefore never inherit a later catalog
+    # definition merely because it became current.
+    catalog_issue_type_version_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("catalog_issue_type_versions.id"),
+        nullable=True,
+    )
     version_number = Column(Integer, nullable=False)
     name = Column(String(255), nullable=False)
     description = Column(Text, nullable=True)
@@ -97,3 +106,4 @@ class RuleEngineRuleVersion(Base):
         back_populates="versions",
         foreign_keys=[rule_id],
     )
+    catalog_issue_type_version = relationship("CatalogIssueTypeVersion")

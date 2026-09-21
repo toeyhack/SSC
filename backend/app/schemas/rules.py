@@ -46,6 +46,7 @@ class RuleVersionBase(BaseModel):
     remediation: str | None = None
     source_type: RuleSourceTypeEnum = RuleSourceTypeEnum.MANUAL
     source_reference: str | None = Field(default=None, max_length=1024)
+    catalog_issue_type_version_id: UUID | None = None
     effective_from: datetime | None = None
     effective_to: datetime | None = None
 

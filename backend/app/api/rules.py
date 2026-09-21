@@ -6,7 +6,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, joinedload
 
 from app.db.session import get_db
-from app.models.catalog_models import CatalogIssueType
+from app.models.catalog_models import CatalogIssueType, CatalogIssueTypeVersion
 from app.models.rule_models import RuleEngineRule, RuleEngineRuleVersion
 from app.schemas.rules import RuleCreate, RuleRead, RuleUpdate, RuleVersionCreate, RuleVersionRead
 
@@ -63,6 +63,16 @@ def _validate_current_version(db: Session, rule_id: UUID, current_version_id: UU
     version = _get_rule_version(db, current_version_id)
     if version.rule_id != rule_id:
         raise _bad_request("Current version must belong to the same rule")
+
+
+def _validate_pinned_issue_version(db: Session, rule: RuleEngineRule, issue_version_id: UUID | None):
+    if issue_version_id is None:
+        return
+    version = db.get(CatalogIssueTypeVersion, issue_version_id)
+    if version is None:
+        raise _bad_request("Catalog issue type version not found")
+    if rule.catalog_issue_type_id is None or version.issue_type_id != rule.catalog_issue_type_id:
+        raise _bad_request("Pinned catalog issue version must belong to the rule's linked issue")
 
 
 @router.get("", response_model=list[RuleRead])
@@ -134,6 +144,7 @@ def list_rule_versions(rule_id: UUID, db: Session = Depends(get_db)):
 @router.post("/{rule_id}/versions", response_model=RuleVersionRead, status_code=status.HTTP_201_CREATED)
 def create_rule_version(rule_id: UUID, payload: RuleVersionCreate, db: Session = Depends(get_db)):
     rule = _get_rule(db, rule_id, for_update=True)
+    _validate_pinned_issue_version(db, rule, payload.catalog_issue_type_version_id)
     version_number = payload.version_number
     if version_number is None:
         latest = db.execute(

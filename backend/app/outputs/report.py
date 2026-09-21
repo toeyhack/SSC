@@ -27,11 +27,11 @@ def render_html(result: NormalizedResult) -> str:
     for f in result.findings:
         findings.append(f"""<article><h3>{_escape(f.title)}</h3>
 <p>Affected target: <strong>{_escape(targets.get(f.target_id, f.target_id))}</strong></p>
-<p>Factor: {_escape(f.factor_name)} · Risk: {_escape(f.breach_risk)} · Status: {_escape(f.status)} · Evidence source: {_escape(f.evidence_source or 'unknown')}</p>
+<p>Factor: {_escape(f.factor_name)} · Internal risk: {_escape(f.breach_risk)} · SSC severity: {_escape(f.ssc_severity or 'not supplied')} · Status: {_escape(f.status)} · Evidence source: {_escape(f.evidence_source or 'unknown')}</p>
 <p>Factor score impact: −{f.score_impact:g} points · Overall score impact: −{f.overall_score_impact:g} points</p>
 <h4>Evidence summary</h4><pre>{_json(f.evidence_summary)}</pre>
 <h4>Remediation</h4><p class="remediation">{_escape(f.remediation or 'Remediation is not defined for this rule; review its exact version.')}</p>
-<small>Rule version: {_escape(f.rule_version_id)} · Catalog issue version: {_escape(f.catalog_issue_type_version_id or 'unlinked')}</small></article>""")
+<small>SSC issue: {_escape(f.ssc_issue_key or 'unlinked')} · Rule version: {_escape(f.rule_version_id)} · Catalog issue version: {_escape(f.catalog_issue_type_version_id or 'unlinked')}</small></article>""")
     evidence = "".join(f"<details><summary>{_escape(e.source)} · {_escape(targets.get(e.target_id, e.target_id))} · {_escape(e.status)}</summary><pre>{_json(e.summary)}</pre></details>" for e in result.evidence)
     warnings = "".join(f"<li>{_escape(w)}</li>" for w in result.warnings)
     return f"""<!doctype html>

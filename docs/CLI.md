@@ -28,6 +28,8 @@ ssc baseline pull-ssc --dry-run --enrich-details
 ssc baseline pull-ssc
 ssc baseline pull-ssc --yes --expect-hash <reviewed-content-hash>
 ssc baseline discover-details
+ssc baseline activate-wave1 --yes
+ssc baseline activate-wave2 --yes
 ```
 
 Without enrichment, `pull-ssc` uses only `GET https://api.securityscorecard.io/metadata/factors` and `GET https://api.securityscorecard.io/metadata/issue-types`; this is a complete minimum baseline and can establish taxonomy alignment after approval. `--enrich-details` optionally requests `/metadata/issue-types/{type}` with at most four workers, a 20-second request timeout and at most three attempts for safe transient transport failures or HTTP 408, 425, 429, 500, 502, 503 and 504 responses. Numeric or HTTP-date `Retry-After` is honored up to 60 seconds; longer or invalid delays fail that lookup instead of retrying early. Permanent failures are not retried. An individual detail failure is reported but retains that issue's list metadata and does not discard the baseline.
@@ -37,6 +39,8 @@ Without enrichment, `pull-ssc` uses only `GET https://api.securityscorecard.io/m
 `discover-details` reads the three sample issue detail endpoints and reports returned field names/paths without changing the catalog. Live discovery on 2026-09-19 returned exactly `key`, `severity`, `factor`, `title`, `short_description`, `long_description` and `recommendation` for every tested issue. See `GOLDEN_BASELINE_IMPORTER.md` for the observed-field record and storage mapping.
 
 `status` works offline. `INTERNAL_ONLY` means no real SSC baseline has been recorded; all existing runtime features remain available without claiming alignment. `SSC_ALIGNED` requires at least one real imported SSC baseline with provenance. It does not imply scoring calibration. For real licensed UI/manual canonical JSON, use `python -m app.cli.import_golden_baseline --input <capture.json> --attest-real-source --json` on its first import. Never attest synthetic fixtures. Previously unattested snapshots cannot be relabeled on reuse.
+
+`activate-wave1 --yes` idempotently creates or selects the reviewed `HTTP_HEADERS`, `HTTP_REDIRECT`, and `TLS_CERTIFICATE` evaluator versions. `activate-wave2 --yes` does the same for the evidence-complete `TLS_HANDSHAKE` and `EMAIL_SECURITY` definitions. Activation succeeds only for exact current issue definitions contained in an attested real `SSC_API` snapshot. Each evaluator version stores a foreign key to that immutable issue version. Approved future SSC definition changes create a new linked rule version; they do not rewrite history. A newly approved `pull-ssc` import performs both reconciliations automatically.
 
 Preferred initial SSC baseline: SSC API metadata endpoints. Fallback: licensed UI/manual canonical JSON. Future taxonomy updates: SSC API and/or reviewed public SSC methodology changes. Runtime: no SSC dependency. Neither scan nor report calls SSC. API `severity` stays separate from internal risk, breach risk, threat level, score impact and scoring relevance. API issues remain `breach_risk=UNKNOWN` and `threat_level=null` unless another authoritative source explicitly supplies those semantics.
 
@@ -68,7 +72,9 @@ ssc scan --target example.com --executors dns --output report
   "executors": ["http", "tls", "dns", "tcp"],
   "http_ports": [80],
   "https_ports": [443],
+  "http_paths": ["/", "/login"],
   "tls_ports": [443],
+  "trusted_self_signed_fingerprints": [],
   "tcp_ports": [443],
   "request_timeout_seconds": 5,
   "connect_timeout_seconds": 3,
@@ -79,7 +85,11 @@ ssc scan --target example.com --executors dns --output report
 }
 ```
 
-Save as `scan.json` and pass `--scan-config scan.json`. HTTP, TLS and DNS are enabled by default. TCP is added only when explicit TCP ports are configured, or selected with `--executors tcp`; it never selects a default range. Maximum distinct lists: 4 HTTP ports, 4 HTTPS ports, 3 TLS ports and 10 TCP ports. Redirects must remain on the authorized hostname and configured scheme/port. HTTP records a representative reachable response (preferring HTTPS) and attempt/redirect summaries; it does not crawl an application. An explicit `dns_server_host`/`dns_server_port` overrides the system resolver; sensitive resolver addresses require the target's sensitive-network permission.
+Save as `scan.json` and pass `--scan-config scan.json`. HTTP, TLS and DNS are enabled by default. TCP is added only when explicit TCP ports are configured, or selected with `--executors tcp`; it never selects a default range. Maximum distinct lists: 4 HTTP ports, 4 HTTPS ports, 20 explicit same-target HTTP paths, 3 TLS ports and 10 TCP ports. Redirects must remain on the authorized hostname and configured scheme/port.
+
+HTTP preserves every relevant header instance, redacted cookie attributes, CSP meta/header policies, a declared-path coverage manifest, and every normalized redirect hop/stop reason. It fetches only configured paths; it is not a general crawler. TLS preserves certificate evidence plus offered/negotiated TLS versions, actual accepted ciphers, alerts and policy/catalog versions. `trusted_self_signed_fingerprints` is an optional reviewed SHA-256 allowlist; it does not modify system trust. DNS preserves TXT response status, records, SPF/DMARC analysis and nonce wildcard queries. `email_subdomains` may contain at most 20 explicitly declared names strictly below the inventory domain; no subdomain discovery or organizational-domain inference is performed. An explicit `dns_server_host`/`dns_server_port` overrides the system resolver; sensitive resolver addresses require the target's sensitive-network permission.
+
+Wave 1 and Wave 2 findings use tri-state evaluators: positive evidence creates a finding, a deterministic non-match creates none, and insufficient/malformed evidence is skipped as indeterminate. Reports show SSC issue key and SSC source severity separately from internal risk and scoring.
 
 ## Outputs and exits
 

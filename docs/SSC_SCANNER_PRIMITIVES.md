@@ -4,16 +4,16 @@ Baseline content hash: `0fe2bc8ffb7e3f734d4e88f70b11cffa6e8e9e47e722dc62107f6ff0
 Review date: 2026-09-20  
 Scope: the 156 issues classified `DIRECTLY_TESTABLE` or `TESTABLE_WITH_ENRICHMENT` after the quality gate.
 
-This is a design catalog, not scanner implementation. A primitive supports a finding only when it records the exact observation, preserves scope and provenance, distinguishes negative results from errors/unknowns, and has a versioned evaluator linked to the SSC-aligned issue. It does not reproduce SSC collection methods or scoring.
+This is a design and implementation-status catalog. A primitive supports a finding only when it records the exact observation, preserves scope and provenance, distinguishes negative results from errors/unknowns, and has a versioned evaluator linked to the SSC-aligned issue. It does not reproduce SSC collection methods or scoring.
 
 ## Current implementation boundary
 
-The current platform has HTTP, TLS, DNS, and TCP collectors. It does not have a body crawler, browser runtime, WebSocket capture, protocol/banner adapters, SSH negotiation, cipher enumeration, revocation client, product fingerprint engine, CVE/lifecycle feeds, or longitudinal patching model. The local database contains **zero active rule versions linked to an `SSC_API` issue type**. Therefore:
+The platform has HTTP, TLS, DNS, and TCP collectors. Wave 1 added declared-path HTTP and certificate evidence. Wave 2 adds version-pinned TLS 1.0/1.1/1.2/1.3 negotiation, constrained property-derived cipher observations, definitive TXT response states, SPF normalization/partial parsing, DMARC parsing, nonce wildcard queries, declared-subdomain policy inheritance, and seven new exact SSC mappings. It still does not have a general body crawler, browser runtime, WebSocket capture, protocol/banner adapters, SSH negotiation, complete legacy-cipher client coverage, stapled-OCSP capture, complete RFC 7208 evaluation, DKIM selector provenance, revocation client, product fingerprint engine, CVE/lifecycle feeds, or longitudinal patching model. Therefore:
 
-- fully `SUPPORTED` today: **0**;
-- `PARTIAL` among the 156 primitive-addressable issues: **119**;
-- `NOT_SUPPORTED` among the 156: **37**;
-- every primitive still requires at least a specific SSC-aligned evaluator, and many require new evidence collection.
+- fully `SUPPORTED` today: **21**;
+- `PARTIAL` among the 156 primitive-addressable issues: **101**;
+- `NOT_SUPPORTED` among the 156: **34**;
+- every supported issue has an active evaluator pinned to an exact attested `SSC_API` issue version; other primitives still require issue-specific evidence and evaluators.
 
 ## Primitive coverage summary
 
@@ -26,21 +26,21 @@ The current platform has HTTP, TLS, DNS, and TCP collectors. It does not have a 
 | `CONTENT_BASELINE` | 1 | 0/1 | 0 | 0 | 1 | HIGH | approved clean snapshots, signed history, similarity model, analyst review |
 | `CVE_CORRELATION` | 33 | 0/33 | 0 | 31 | 2 | HIGH | product/version or SBOM evidence, CPE/package normalization, NVD/vendor advisories, optional KEV |
 | `DOMAIN_PUBLIC_DATA` | 1 | 0/1 | 0 | 1 | 0 | LOW | versioned browser HSTS preload dataset |
-| `EMAIL_SECURITY` | 10 | 7/3 | 0 | 7 | 3 | MEDIUM | DNS parser/evaluator, organizational-domain handling, approved mail samples for DKIM |
+| `EMAIL_SECURITY` | 10 | 7/3 | 6 | 4 | 0 | MEDIUM | complete RFC 7208 permanent-error evaluation and approved mail samples/selectors for DKIM |
 | `EOL_EOS_CORRELATION` | 2 | 0/2 | 0 | 0 | 2 | HIGH | verified product/version and versioned vendor lifecycle records |
 | `HTTP_CONTENT` | 9 | 9/0 | 0 | 1 | 8 | MEDIUM | bounded same-origin crawler, HTML/DOM parser, body-size limits, redaction |
-| `HTTP_HEADERS` | 9 | 6/3 | 0 | 9 | 0 | MEDIUM | all header instances, multi-URL coverage, policy parsers, optional synthetic auth flow |
-| `HTTP_REDIRECT` | 4 | 3/1 | 0 | 4 | 0 | LOW | normalized hop evidence, loop/limit handling, target scope policy, optional passive external-hop data |
+| `HTTP_HEADERS` | 9 | 6/3 | 6 | 3 | 0 | MEDIUM | optional synthetic auth flow and versioned legacy-browser policy for the remaining rows |
+| `HTTP_REDIRECT` | 4 | 3/1 | 3 | 1 | 0 | LOW | approved passive/authorized evidence for an external terminal destination |
 | `LONGITUDINAL_PATCHING` | 11 | 0/11 | 0 | 0 | 11 | HIGH | stable asset/product identity, CVE state history, observation windows, missing-data semantics |
 | `PRODUCT_FINGERPRINT` | 16 | 0/16 | 0 | 15 | 1 | HIGH | versioned multi-signal fingerprints, provenance, ambiguity/confidence model, inventory corroboration |
 | `PROXY_VALIDATION` | 2 | 2/0 | 0 | 2 | 0 | MEDIUM | organization-owned canary, strict egress target, no third-party relay testing |
 | `SERVICE_PROTOCOL_IDENTIFICATION` | 32 | 30/2 | 0 | 32 | 0 | MEDIUM–HIGH | safe protocol adapters, UDP support where needed, transcript hashes, strict per-adapter budgets |
 | `SSH_NEGOTIATION` | 3 | 3/0 | 0 | 3 | 0 | MEDIUM | SSH identification/KEX parser, versioned cryptographic policy, no authentication |
 | `TCP_SERVICE_DISCOVERY` | 1 | 1/0 | 0 | 1 | 0 | LOW | approved port manifest and TCP connect evidence |
-| `TLS_CERTIFICATE` | 9 | 5/4 | 0 | 9 | 0 | MEDIUM–HIGH | full served chain, key/algorithm parser, trust store, CA policy/revocation/registry enrichment |
-| `TLS_HANDSHAKE` | 3 | 3/0 | 0 | 3 | 0 | MEDIUM | bounded protocol/cipher enumeration, OCSP-staple capture, cryptographic policy |
+| `TLS_CERTIFICATE` | 9 | 5/4 | 5 | 4 | 0 | MEDIUM–HIGH | CA policy history, authoritative revocation, jurisdiction, and CA registry enrichment |
+| `TLS_HANDSHAKE` | 3 | 3/0 | 1 | 1 | 1 | MEDIUM | complete prohibited-suite client coverage and OCSP-staple capture/validation |
 | `WEBSOCKET_RUNTIME` | 3 | 2/1 | 0 | 0 | 3 | HIGH | browser runtime, bounded frame metadata, synthetic markers, application data schema |
-| **Total** | **156** | **75/81** | **0** | **119** | **37** |  |  |
+| **Total** | **156** | **75/81** | **21** | **101** | **34** |  |  |
 
 ## Issue grouping
 
@@ -74,7 +74,7 @@ A match requires a defensible product/version range or authoritative SBOM/packag
 
 `dkim_insufficient_key_length`, `dkim_record_detected`, `dkim_weak_signature`, `dmarc_contains_none`, `dmarc_record_missing`, `spf_record_malformed`, `spf_record_missing`, `spf_record_softfail`, `spf_record_wildcard`, `subdomain_dmarc_contains_none`
 
-SPF/DMARC rows can use direct DNS evidence. DKIM rows require an approved message sample or selector inventory; blind selector guessing is not a reliable negative test.
+Six SPF/DMARC rows now have exact active Wave 2 evaluators. `spf_record_malformed` remains partial because complete RFC 7208 macro, void-lookup, and nested A/MX permanent-error evaluation is not yet implemented. DKIM rows require an approved message sample or selector inventory; blind selector guessing is not a reliable negative test.
 
 ### `EOL_EOS_CORRELATION` (2)
 
@@ -130,6 +130,8 @@ The direct rows are key size, expiry, revocation-control extension presence, sel
 
 `tls_ocsp_stapling`, `tls_weak_cipher`, `tls_weak_protocol`
 
+`tls_weak_protocol` is supported by completed version-pinned handshakes for TLS 1.0/1.1 and modern controls for TLS 1.2/1.3. `tls_weak_cipher` remains partial: accepted suites are positively observable, but the packaged client cannot offer every prohibited legacy family, so a negative is not yet conclusive. `tls_ocsp_stapling` remains partial because the current TLS socket API does not expose staple bytes for cryptographic validation.
+
 ### `WEBSOCKET_RUNTIME` (3)
 
 `websocket_receives_data`, `websocket_requests_contain_sensitive_fields`, `websocket_sends_data`
@@ -140,13 +142,13 @@ Only the sensitive-fields row requires application schema/test-flow enrichment. 
 
 The recommended order values defensibility and security usefulness over raw row count:
 
-1. **`HTTP_HEADERS`** — build multi-value header/cookie preservation, CSP/HSTS/clickjacking parsers, URL coverage manifests, and issue-specific evaluators. This can make six direct findings reliable and prepares three enrichment findings.
-2. **`EMAIL_SECURITY`** — add RFC-compliant SPF/DMARC parsing, effective-policy/error semantics, and seven direct evaluators; add DKIM only with selector/message provenance.
-3. **`TLS_CERTIFICATE`** — capture the full served chain and extensions and implement the five direct certificate evaluators first; add CA/B policy, OCSP/CRL, jurisdiction, and CA registry feeds separately.
-4. **`HTTP_REDIRECT`** — persist every normalized hop and stop reason and add the three direct evaluators. Keep external redirect targets indeterminate unless separately authorized or passively evidenced.
+1. **`HTTP_HEADERS` — Wave 1 complete for six direct rows.** Multi-value header preservation, CSP/HSTS/clickjacking parsers, declared-path coverage manifests, and version-pinned evaluators are active. Three enrichment rows remain partial.
+2. **`EMAIL_SECURITY` — Wave 2 complete for six direct rows.** Exact DNS response states, SPF/DMARC policy observations, nonce wildcard checks and declared-subdomain inheritance are active. Complete SPF permanent-error evaluation and DKIM selector/message provenance remain partial.
+3. **`TLS_CERTIFICATE` — Wave 1 complete for five direct rows.** Served-chain/extensions and the five direct evaluators are active; CA/B policy, OCSP/CRL, jurisdiction, and CA registry feeds remain separate.
+4. **`HTTP_REDIRECT` — Wave 1 complete for three direct rows.** Every normalized hop and stop reason is retained. External redirect targets remain indeterminate unless separately authorized or passively evidenced.
 5. **`SERVICE_PROTOCOL_IDENTIFICATION`** — create one safe adapter framework, then add high-value, protocol-definitive adapters in small batches (for example Telnet/FTP, LDAP anonymous bind, RDP/SMB, and exposed databases). The framework can eventually support 30 direct rows, but each adapter must earn support independently.
 
-Next after those: `TLS_HANDSHAKE` and `SSH_NEGOTIATION`. Both are high-confidence and security-relevant, but together cover only six issue types.
+Wave 2 also completes `tls_weak_protocol` under `TLS_HANDSHAKE`; cipher and OCSP-stapling boundaries remain partial. `SERVICE_PROTOCOL_IDENTIFICATION` has not started. Next work requires a separately approved wave.
 
 ## Safety and confidence rules
 

@@ -4,7 +4,34 @@ Baseline content hash: `0fe2bc8ffb7e3f734d4e88f70b11cffa6e8e9e47e722dc62107f6ff0
 Review date: 2026-09-20  
 Scope: analysis/design only; no scanner, rule, score, or Golden Baseline change.
 
-## Outcome
+## Wave 1 implementation update (2026-09-21)
+
+The quality gate below remains the authority for issue selection. Wave 1 implemented only `HTTP_HEADERS`, `HTTP_REDIRECT`, and `TLS_CERTIFICATE`. Activation was verified against an isolated clone of the attested real SSC API baseline with the hash above: **14** exact issue definitions received active deterministic evaluators and immutable rule-version-to-issue-version links.
+
+| Coverage | Before Wave 1 | After Wave 1 |
+|---|---:|---:|
+| `SUPPORTED` | 0 | 14 |
+| `PARTIAL` | 119 | 105 |
+| `NOT_SUPPORTED` | 83 | 83 |
+
+Newly supported: `csp_no_policy_v2`, `csp_too_broad_v2`, `csp_unsafe_policy_v2`, `domain_missing_https_v2`, `hsts_incorrect_v2`, `insecure_https_redirect_pattern_v2`, `insecure_server_certificate_key_size`, `redirect_chain_contains_http_v2`, `tlscert_expired`, `tlscert_no_revocation`, `tlscert_self_signed`, `tlscert_weak_signature`, `x_content_type_options_incorrect_v2`, and `x_frame_options_incorrect_v2`.
+
+The eight reviewed Wave 1 candidates requiring authentication/policy enrichment, external redirect evidence, CA attribution/lifetime data, or authoritative revocation status remain `PARTIAL`. SSC severity remains separate from internal risk and scoring. No score-impact inference was added.
+
+## Wave 2 implementation update (2026-09-21)
+
+Wave 2 implemented only `TLS_HANDSHAKE` and `EMAIL_SECURITY`. Exact activation against an isolated clone of the same attested real SSC API baseline added **7** mappings: `tls_weak_protocol`, `spf_record_missing`, `spf_record_softfail`, `spf_record_wildcard`, `dmarc_record_missing`, `dmarc_contains_none`, and `subdomain_dmarc_contains_none`.
+
+| Coverage | Before Wave 2 | After Wave 2 |
+|---|---:|---:|
+| `SUPPORTED` | 14 | 21 |
+| `PARTIAL` | 105 | 101 |
+| `NOT_SUPPORTED` | 83 | 80 |
+| **Total** | **202** | **202** |
+
+`tls_weak_cipher`, `tls_ocsp_stapling`, `spf_record_malformed`, and the three DKIM issues remain `PARTIAL`: the current client cannot prove rejection of every prohibited legacy suite, the socket API does not expose a cryptographically verifiable staple, full RFC 7208 permanent-error evaluation is incomplete, and no authorized DKIM selector/message evidence exists. No service identification, external intelligence, Golden Baseline, or scoring-methodology changes are included.
+
+## Pre-Wave 1 outcome
 
 The original 87 `DIRECTLY_TESTABLE` rows were re-reviewed against the imported issue descriptions, current executor evidence, authorization boundaries, and public standards. Twelve were over-optimistic and have been downgraded to `TESTABLE_WITH_ENRICHMENT`. No issue was upgraded.
 

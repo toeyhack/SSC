@@ -386,7 +386,10 @@ def test_dns_only_domain_does_not_require_address_record(monkeypatch):
         job = client.post("/api/v1/scans/jobs", json={"name": "DNS only", "rule_ids": [domain_rule["id"]], "collect_observations": True,
                           "targets": [{"target_type": "DOMAIN", "domain_id": domain["id"], "scan_config": {"executors": ["dns"], "dns_server_port": port}}]}).json()
         # Use mocked TXT transport to isolate absence of target address resolution.
-        monkeypatch.setattr(scan_executors, "_query_txt_records", lambda *args: ["v=spf1 -all"])
+        monkeypatch.setattr(scan_executors, "_query_txt_evidence", lambda name, *args: {
+            "name": name, "record_type": "TXT", "status": "ANSWER",
+            "records": ["v=spf1 -all"], "error": None,
+        })
         run_response = client.post(f"/api/v1/scans/jobs/{job['id']}/run")
     assert run_response.status_code == 201, run_response.text
     assert run_response.json()["summary"]["findings_created"] == 1

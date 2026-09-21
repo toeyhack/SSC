@@ -53,6 +53,16 @@ def build_parser():
     pull.add_argument("--expect-hash", help="Require the exact content hash from an earlier review")
     baseline_commands.add_parser("status", help="Show INTERNAL_ONLY or SSC_ALIGNED without SSC access")
     baseline_commands.add_parser("discover-details", help="Read the three sample issue detail endpoints; report field names")
+    activate = baseline_commands.add_parser(
+        "activate-wave1",
+        help="Activate reviewed Wave 1 evaluators against the attested SSC API baseline",
+    )
+    activate.add_argument("--yes", action="store_true", help="Confirm activation of the reviewed evaluator definitions")
+    activate2 = baseline_commands.add_parser(
+        "activate-wave2",
+        help="Activate reviewed Wave 2 evaluators against the attested SSC API baseline",
+    )
+    activate2.add_argument("--yes", action="store_true", help="Confirm activation of the reviewed evaluator definitions")
     return parser
 
 

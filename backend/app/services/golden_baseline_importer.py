@@ -258,6 +258,14 @@ def import_golden_baseline(
                 "Existing snapshot was not attested as real SSC data; immutable history cannot be relabeled. "
                 "Provide a new verified capture with its actual capture timestamp."
             ])
+        warnings = ["Exact baseline content hash already imported; no catalog rows were changed."]
+        if not dry_run and existing_snapshot.is_real_baseline and baseline.source_type == "SSC_API":
+            from app.services.wave1_rules import activate_wave1_rules
+            from app.services.wave2_rules import activate_wave2_rules
+            activation1 = activate_wave1_rules(db, commit=False)
+            activation2 = activate_wave2_rules(db)
+            warnings.append(f"Wave 1 evaluators active: {len(activation1['activated'])}.")
+            warnings.append(f"Wave 2 evaluators active: {len(activation2['activated'])}.")
         return GoldenBaselineImportResult(
             dry_run=dry_run,
             content_hash=content_hash,
@@ -267,7 +275,7 @@ def import_golden_baseline(
             factors_reused=len(baseline.factors),
             issues_reused=sum(len(factor.issues) for factor in baseline.factors),
             snapshot_items=len(existing_snapshot.items),
-            warnings=["Exact baseline content hash already imported; no catalog rows were changed."],
+            warnings=warnings,
         )
 
     plan = _build_import_plan(db, baseline, content_hash)
@@ -362,6 +370,13 @@ def import_golden_baseline(
                         issue_position=_issue_position(factor_input, issue_input),
                     )
                 )
+
+        db.flush()
+        if baseline.source_type == "SSC_API" and attest_real_source:
+            from app.services.wave1_rules import activate_wave1_rules
+            from app.services.wave2_rules import activate_wave2_rules
+            activate_wave1_rules(db, commit=False)
+            activate_wave2_rules(db, commit=False)
 
         db.commit()
     except IntegrityError as exc:

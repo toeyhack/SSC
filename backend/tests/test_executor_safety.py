@@ -58,6 +58,13 @@ def test_real_tls_certificate_sni_and_https(tmp_path):
     assert evidence["public_key_bits"] == 2048
     assert evidence["weak_signature_algorithm"] is False
     assert evidence["certificate_trusted"] is False
+    assert evidence["certificate_fingerprint_sha256"]
+    assert evidence["certificate_chain"][0]["self_signature_valid"] is True
+    assert evidence["evaluations"]["tlscert_self_signed"]["matched"] is True
+    assert evidence["evaluations"]["tlscert_expired"]["matched"] is False
+    assert evidence["evaluations"]["insecure_server_certificate_key_size"]["matched"] is False
+    assert evidence["evaluations"]["tlscert_weak_signature"]["matched"] is False
+    assert evidence["evaluations"]["tlscert_no_revocation"]["matched"] is False
     assert 28 <= evidence["certificate_days_until_expiry"] <= 30
     assert evidence["tls10_supported"] is False
     assert evidence["tls11_supported"] is False
@@ -99,9 +106,9 @@ def test_http_pins_connection_to_checked_address(monkeypatch):
 
 
 def test_dns_failure_is_unknown_not_missing(monkeypatch):
-    def fail(*args):
-        raise executors.ScanExecutorError("timeout")
-    monkeypatch.setattr(executors, "_query_txt_records", fail)
+    def fail(name, *_args):
+        return {"name": name, "record_type": "TXT", "status": "ERROR", "records": [], "error": "LifetimeTimeout"}
+    monkeypatch.setattr(executors, "_query_txt_evidence", fail)
     evidence = executors.DNSExecutor().collect(local_target(), {}).evidence
     assert evidence["status"] == "error"
     assert evidence["spf_present"] is None

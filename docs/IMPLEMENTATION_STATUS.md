@@ -4,6 +4,14 @@ CLI-FIRST MVP — COMPLETE / PASS
 
 Current phase: Phase 6B - CLI-first REPORT Output
 
+SSC-aligned Wave 1 scanner primitives (`HTTP_HEADERS`, `HTTP_REDIRECT`, `TLS_CERTIFICATE`): COMPLETE / PASS. Fourteen reviewed direct issues have sufficient normalized evidence and active deterministic evaluators pinned to exact issue versions from the attested real `SSC_API` baseline. Eight enrichment-dependent candidates remain `PARTIAL`.
+
+SSC-aligned Wave 2 scanner primitives (`TLS_HANDSHAKE`, `EMAIL_SECURITY`): COMPLETE / PASS. Seven additional issues are truly supported: `tls_weak_protocol`, `spf_record_missing`, `spf_record_softfail`, `spf_record_wildcard`, `dmarc_record_missing`, `dmarc_contains_none`, and `subdomain_dmarc_contains_none`. `tls_weak_cipher`, `tls_ocsp_stapling`, `spf_record_malformed`, and three DKIM issues remain `PARTIAL` at their explicit evidence boundaries. No service identification, external intelligence, Golden Baseline mutation, or scoring-methodology work is included.
+
+Wave 1 validation on 2026-09-21 used an isolated PostgreSQL database plus an isolated clone of real Golden Baseline `0fe2bc8ffb7e3f734d4e88f70b11cffa6e8e9e47e722dc62107f6ff09694eca8`. Exact activation created 14 rule/version mappings with zero unavailable definitions. Phase 4B, Phase 5, and Phase 6 gates passed with 97, 108, and 116 tests. Downgrade to `0005_phase4_scan_engine`, re-upgrade to `0009_wave1_ssc_evaluators`, Alembic schema check, the final full suite (**116 passed**), compileall, pip check, coverage regeneration, and `git diff --check` passed. Validation logs: `reports/phase4b-validation-20260921-030512.txt`, `reports/phase5-validation-20260921-030512.txt`, and `reports/phase6-validation-20260921-030512.txt`. The two existing dependency deprecation warnings and the known mutually dependent foreign-key sorting warning remain.
+
+Wave 2 validation on 2026-09-21 used isolated database `ssc_wave2_20260921` and the existing isolated clone of the same real Golden Baseline. Exact activation created 7 Wave 2 rule/version mappings with zero unavailable definitions. Phase 4B, Phase 5, and Phase 6 gates passed with **102**, **113**, and **121** tests. Downgrade to `0005_phase4_scan_engine`, re-upgrade to `0009_wave1_ssc_evaluators`, Alembic schema check, compileall with an isolated bytecode cache, pip check, database-verified coverage regeneration, and `git diff --check` passed. Coverage is **21 SUPPORTED / 101 PARTIAL / 80 NOT_SUPPORTED**. Validation logs: `reports/phase4b-validation-20260921-135900.txt`, `reports/phase5-validation-20260921-135900.txt`, and `reports/phase6-validation-20260921-135900.txt`. The two dependency deprecation warnings, read-only pytest-cache warnings, and known mutually dependent foreign-key sorting warning remain.
+
 Direction correction: Phase 1B SSC API baseline acquisition extension; CLI-FIRST MVP behavior preserved.
 
 Primary product interface: CLI (`ssc`). Web/API/frontend: OPTIONAL / PRESERVED.

@@ -31,6 +31,8 @@ class ResultFinding(ResultRecord):
     rule_id: str
     rule_version_id: str
     catalog_issue_type_version_id: str | None = None
+    ssc_issue_key: str | None = None
+    ssc_severity: str | None = None
     title: str
     factor_code: str
     factor_name: str
