@@ -10,6 +10,8 @@ The overall score is the weighted mean of assessed factor scores, rounded to two
 
 No applicable rules, skipped rules, collection errors, unknown catalog risk or missing catalog linkage produces an unassessed overall score (`null` in JSON). Zero matched findings alone is not proof of a clean target. Coverage appears in every output. Scores describe only the configured detector scope; the starter bundle is intentionally limited. For an incomplete result, observed penalties are retained but no overall impact is claimed.
 
+The 2026-09-21 V1 scope review found that the current completeness check covers only materialized rule assessments, not the full declared V1 issue denominator. Unsupported, partial, unselected, and out-of-scope issues are not explicitly passed, but absent rows do not block a numeric score. Until a versioned assessment profile and explicit `ASSESSED` / `NOT_ASSESSED` / `OUT_OF_SCOPE` states are implemented, a numeric result must be described only as a configured-detector-scope score, never as a complete V1 or SSC factor assessment. The review and proposed eligibility correction are documented in [Version 1 Scope and Scoring Review](V1_SCOPE_AND_SCORING_REVIEW.md); no penalty or weighting methodology changed.
+
 Example configuration for `ssc scan --scoring-model model.json`:
 
 ```json

@@ -2,6 +2,10 @@
 
 The primary product interface is the `ssc` CLI. The completed Phase 0–4 core, existing API, React frontend and scanner worker are preserved. Web administration remains optional. Dashboard-centric work is paused.
 
+## Product versions
+
+Version 1 covers only the immutable-baseline factors `application_security`, `network_security`, `dns_health`, and `patching_cadence`. All other baseline factors are deferred to Version 2 and remain preserved in the 202-issue Golden Baseline. New scanners and implementation waves must optimize Version 1 value until its reviewed exit gate is met; Version 2 scope is not implicitly assessed or scored by a Version 1 run. See [Version 1 Scope and Scoring Review](V1_SCOPE_AND_SCORING_REVIEW.md).
+
 ## Implementation order
 
 | Phase | Scope | Direction |
