@@ -102,10 +102,14 @@ def run_scan_job(db: Session, scan_job_id: UUID) -> ScanRun:
                 root = version.rule_expression.get("path", "").split(".")[0]
                 source_evidence = evidence.get(root)
                 path = version.rule_expression.get("path", "")
+                evaluation = _evaluation_for_expression(version.rule_expression, evidence)
+                if evaluation is not None and evaluation.get("outcome") in {"MATCH", "NO_MATCH", "INDETERMINATE"}:
+                    assessment["evaluation_outcome"] = evaluation["outcome"]
                 if job.collect_observations and (not isinstance(source_evidence, dict) or
                     (source_evidence.get("status") != "success" and ".evaluations." not in path and not path.endswith(".endpoint_available")) or
                     (_extract_path(evidence, path)[1] is None and version.rule_expression.get("operator") != "exists")):
                     assessment["status"] = "skipped"
+                    assessment["reason_code"] = _not_assessed_reason(source_evidence, evaluation)
                     skipped += 1
                     continue
                 evaluated += 1
@@ -266,6 +270,34 @@ def _evidence_source_for_expression(
         return source_by_root.get("")
     root = path.split(".", 1)[0]
     return source_by_root.get(root) or source_by_root.get("")
+
+
+def _evaluation_for_expression(
+    expression: dict[str, Any],
+    evidence: dict[str, Any],
+) -> dict[str, Any] | None:
+    path = expression.get("path")
+    if not isinstance(path, str) or not path.endswith(".matched"):
+        return None
+    found, value = _extract_path(evidence, path.rsplit(".", 1)[0])
+    return value if found and isinstance(value, dict) else None
+
+
+def _not_assessed_reason(
+    source_evidence: Any,
+    evaluation: dict[str, Any] | None,
+) -> str:
+    details = " ".join(str(value) for value in (
+        source_evidence.get("error") if isinstance(source_evidence, dict) else None,
+        evaluation.get("reason") if evaluation else None,
+    ) if value).casefold()
+    if "timeout" in details or "timed out" in details:
+        return "timed_out"
+    if any(token in details for token in ("malformed", "parse", "invalid")):
+        return "malformed_evidence"
+    if isinstance(source_evidence, dict) and source_evidence.get("status") == "error":
+        return "evidence_error"
+    return "insufficient_evidence"
 
 
 def _matched_evidence(expression: dict[str, Any], evidence: dict[str, Any]) -> dict[str, Any]:

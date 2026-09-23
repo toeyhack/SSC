@@ -10,6 +10,7 @@ ROOT = Path(__file__).resolve().parents[1]
 CSV_PATH = ROOT / "docs" / "SSC_ISSUE_COVERAGE.csv"
 MD_PATH = ROOT / "docs" / "SSC_ISSUE_COVERAGE.md"
 BASELINE_HASH = "0fe2bc8ffb7e3f734d4e88f70b11cffa6e8e9e47e722dc62107f6ff09694eca8"
+V1_FACTORS = {"application_security", "network_security", "dns_health", "patching_cadence"}
 
 
 def main() -> int:
@@ -73,9 +74,14 @@ def main() -> int:
             row["notes"] = all_partial_reasons[row["ssc_issue_key"]]
 
     coverage = Counter(row["current_platform_support"] for row in rows)
+    v1_coverage = Counter(
+        row["current_platform_support"] for row in rows if row["factor"] in V1_FACTORS
+    )
     feasibility = Counter(row["feasibility_category"] for row in rows)
     if coverage != {"SUPPORTED": 21, "PARTIAL": 101, "NOT_SUPPORTED": 80}:
         raise SystemExit(f"unexpected coverage totals: {dict(coverage)}")
+    if v1_coverage != {"SUPPORTED": 21, "PARTIAL": 98, "NOT_SUPPORTED": 41}:
+        raise SystemExit(f"unexpected V1 coverage totals: {dict(v1_coverage)}")
 
     if args.write:
         with CSV_PATH.open("w", newline="", encoding="utf-8") as target:
@@ -91,7 +97,14 @@ def main() -> int:
             encoding="utf-8",
         )
 
-    print(f"SUPPORTED={coverage['SUPPORTED']} PARTIAL={coverage['PARTIAL']} NOT_SUPPORTED={coverage['NOT_SUPPORTED']}")
+    print(
+        f"V1 SUPPORTED={v1_coverage['SUPPORTED']} PARTIAL={v1_coverage['PARTIAL']} "
+        f"NOT_SUPPORTED={v1_coverage['NOT_SUPPORTED']} TOTAL={sum(v1_coverage.values())}"
+    )
+    print(
+        f"FULL SUPPORTED={coverage['SUPPORTED']} PARTIAL={coverage['PARTIAL']} "
+        f"NOT_SUPPORTED={coverage['NOT_SUPPORTED']} TOTAL={sum(coverage.values())}"
+    )
     for mapping in mappings:
         print(
             f"{mapping['issue_key']} issue-v{mapping['issue_version_number']}={mapping['issue_version_id']} "

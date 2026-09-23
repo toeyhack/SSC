@@ -16,6 +16,7 @@ Version 1 covers only the immutable-baseline factors `application_security`, `ne
 | 5 | Internal versioned scoring with factor scores, overall score and traceable impacts | Complete and validate before CLI output |
 | 6A | CLI orchestration and setup independent of Web/API | `ssc scan --target <target> --output report` |
 | 6B | REPORT adapter | Self-contained HTML and machine-readable JSON using `ssc.result.v1` |
+| V1 completeness fix | Versioned V1 assessment profile and explicit issue states | Complete before any Wave 3 work; no scanner or scoring-penalty expansion |
 | 6C | SYGNOS adapter | Structured logs/events using exactly `ssc.result.v1`; ingestion mapping and transport deferred until interface is known |
 | 6D | Optional Web dashboard | Paused; no dashboard work before 4B, 5, 6A and 6B pass |
 | 7 | SSC public reference sync | Review/approval workflow; never automatic production catalog overwrite |
@@ -34,6 +35,8 @@ Scanner code must not render reports or calculate scores. The scoring engine mus
 REPORT is implemented first. `--output sygnos` currently fails before database or network activity. Its future event format must contain or reference the shared normalized result rather than define a parallel scoring/result model. No Sygnos transport is implemented.
 
 ## Next work
+
+The V1 Assessment Completeness Fix is implemented. Wave 3 has not started. Any next scanner primitive remains subject to the reviewed V1 exit gate and a separate approved milestone.
 
 A real SSC taxonomy baseline is required once before claiming `SSC_ALIGNED`. Preferred initial SSC baseline: SSC API metadata endpoints. Fallback: licensed UI/manual canonical JSON. Future taxonomy updates: SSC API and/or reviewed public SSC methodology changes. Runtime: no SSC dependency. Without a real baseline, status is `INTERNAL_ONLY` and scanner/rules/scoring/report remain functional.
 

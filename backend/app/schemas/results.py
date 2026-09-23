@@ -46,6 +46,45 @@ class ResultFinding(ResultRecord):
     overall_score_impact: float = 0
 
 
+class AssessmentProfileSummary(ResultRecord):
+    name: str
+    version: str
+    definition_hash: str
+    baseline_content_hash: str
+    scoring_model_name: str
+    scoring_model_version: str
+    in_scope_factor_codes: list[str]
+
+
+class TargetIssueAssessment(ResultRecord):
+    target_id: str
+    state: Literal["ASSESSED", "NOT_ASSESSED"]
+    reason_code: str
+    rule_id: str | None = None
+    rule_version_id: str | None = None
+    evaluator_outcome: Literal["MATCH", "NO_MATCH", "INDETERMINATE"] | None = None
+
+
+class IssueAssessment(ResultRecord):
+    ssc_issue_key: str
+    catalog_issue_type_version_id: str
+    factor_code: str
+    factor_name: str
+    ssc_severity: str | None = None
+    supported_capability: bool
+    state: Literal["ASSESSED", "NOT_ASSESSED", "OUT_OF_SCOPE"]
+    reason_code: str
+    target_assessments: list[TargetIssueAssessment] = Field(default_factory=list)
+
+
+class AssessmentCompleteness(ResultRecord):
+    state: Literal["COMPLETE", "INCOMPLETE"]
+    total_issues_in_profile: int
+    assessed_count: int
+    not_assessed_count: int
+    out_of_scope_count: int
+
+
 class FactorScore(ResultRecord):
     code: str
     name: str
@@ -53,6 +92,11 @@ class FactorScore(ResultRecord):
     weight: float
     score_impact: float = 0
     status: Literal["assessed", "incomplete", "unassessed"]
+    total_issues: int = 0
+    assessed_count: int = 0
+    not_assessed_count: int = 0
+    supported_capability_count: int = 0
+    assessment_state: Literal["ASSESSED", "NOT_ASSESSED"] | None = None
 
 
 class NormalizedResult(ResultRecord):
@@ -70,4 +114,7 @@ class NormalizedResult(ResultRecord):
     findings: list[ResultFinding]
     evidence: list[ResultEvidence]
     coverage: dict[str, int]
+    assessment_profile: AssessmentProfileSummary | None = None
+    assessment_completeness: AssessmentCompleteness | None = None
+    issue_assessments: list[IssueAssessment] = Field(default_factory=list)
     warnings: list[str] = Field(default_factory=list)

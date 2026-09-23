@@ -22,7 +22,40 @@ def _json(value) -> str:
 def render_html(result: NormalizedResult) -> str:
     targets = {t.scan_job_target_id: t.name for t in result.targets}
     target_list = "".join(f"<li>{_escape(t.name)} ({_escape(t.target_type)})</li>" for t in result.targets)
-    factors = "".join(f"<tr><td>{_escape(f.name)} <small>{_escape(f.code)}</small></td><td>{_score(f.score)}</td><td>{_escape(f.weight)}</td><td>{_escape(f.score_impact)}</td><td>{_escape(f.status)}</td></tr>" for f in result.factor_scores)
+    factors = "".join(
+        f"<tr><td>{_escape(f.name)} <small>{_escape(f.code)}</small></td><td>{_score(f.score)}</td>"
+        f"<td>{_escape(f.total_issues)}</td><td>{_escape(f.assessed_count)}</td>"
+        f"<td>{_escape(f.not_assessed_count)}</td><td>{_escape(f.supported_capability_count)}</td>"
+        f"<td>{_escape(f.assessment_state or f.status)}</td><td>{_escape(f.weight)}</td>"
+        f"<td>{_escape(f.score_impact)}</td></tr>"
+        for f in result.factor_scores
+    )
+    completeness = ""
+    issue_assessments = ""
+    if result.assessment_profile and result.assessment_completeness:
+        summary = result.assessment_completeness
+        completeness = f"""<h2>V1 assessment completeness</h2>
+<p>Profile: {_escape(result.assessment_profile.name)} v{_escape(result.assessment_profile.version)} · State: <strong>{_escape(summary.state)}</strong></p>
+<ul><li>Total V1 issues: {_escape(summary.total_issues_in_profile)}</li><li>ASSESSED: {_escape(summary.assessed_count)}</li><li>NOT_ASSESSED: {_escape(summary.not_assessed_count)}</li><li>OUT_OF_SCOPE: {_escape(summary.out_of_scope_count)}</li></ul>"""
+        rows = []
+        for item in result.issue_assessments:
+            targets_summary = ", ".join(
+                f"{targets.get(target.target_id, target.target_id)}: {target.state}"
+                + (f" ({target.evaluator_outcome})" if target.evaluator_outcome else "")
+                for target in item.target_assessments
+            ) or "—"
+            rows.append(
+                f"<tr><td>{_escape(item.ssc_issue_key)}</td><td>{_escape(item.factor_code)}</td>"
+                f"<td>{_escape(item.state)}</td><td>{_escape(item.reason_code)}</td>"
+                f"<td>{_escape('yes' if item.supported_capability else 'no')}</td>"
+                f"<td>{_escape(targets_summary)}</td></tr>"
+            )
+        issue_assessments = (
+            "<details><summary>Issue assessment states (" + str(len(result.issue_assessments)) + ")</summary>"
+            "<table><thead><tr><th>Issue</th><th>Factor</th><th>State</th><th>Reason</th>"
+            "<th>Supported capability</th><th>Targets</th></tr></thead><tbody>"
+            + "".join(rows) + "</tbody></table></details>"
+        )
     findings = []
     for f in result.findings:
         findings.append(f"""<article><h3>{_escape(f.title)}</h3>
@@ -45,8 +78,8 @@ article,details{{background:white;padding:20px;margin:16px 0;border:1px solid #d
 <p>Run: {_escape(result.scan_run_id)} · Generated: {_escape(result.generated_at.isoformat())} · Result: {_escape(result.status)}</p>
 <p class="score">Overall score: {_score(result.overall_score)}</p>
 <p>Internal model: {_escape(result.scoring_model_name)} v{_escape(result.scoring_model_version)}. This score is an internal assessment using the configured rules.</p>
-<ul>{warnings}</ul><h2>Targets</h2><ul>{target_list}</ul>
-<h2>Factor scores</h2><table><thead><tr><th>Factor</th><th>Score</th><th>Weight</th><th>Observed impact</th><th>Coverage</th></tr></thead><tbody>{factors}</tbody></table>
+<ul>{warnings}</ul>{completeness}{issue_assessments}<h2>Targets</h2><ul>{target_list}</ul>
+<h2>Factor scores</h2><table><thead><tr><th>Factor</th><th>Score</th><th>Total issues</th><th>ASSESSED</th><th>NOT_ASSESSED</th><th>Supported capability</th><th>Assessment state</th><th>Weight</th><th>Observed impact</th></tr></thead><tbody>{factors}</tbody></table>
 <h2>Findings ({len(result.findings)})</h2>{''.join(findings) or '<p>No findings matched the evaluated rules. Review coverage before interpreting this result.</p>'}
 <h2>Evidence</h2>{evidence or '<p>No observations recorded.</p>'}
 <h2>Coverage</h2><pre>{_json(result.coverage)}</pre>

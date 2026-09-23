@@ -6,7 +6,7 @@ Golden Baseline: immutable real `SSC_API` snapshot `0fe2bc8ffb7e3f734d4e88f70b11
 
 Implementation state reviewed: Waves 1–2, 21 active exact SSC evaluator mappings
 
-This review changes product scope documentation only. It does not change the Golden Baseline, scanner behavior, rule activation, scoring arithmetic, factor weights, penalties, or report schema.
+This review originally changed product scope documentation only. The V1 Assessment Completeness Fix implemented on 2026-09-23 applies the correction specified here without changing the Golden Baseline, scanner primitives, rule activation, penalty arithmetic, factor weights, or SSC severity.
 
 ## Product scope decision
 
@@ -44,6 +44,14 @@ There is an assessment-completeness defect relative to the newly declared V1 pro
 Consequently, a successful no-match evaluation of one exact rule can produce factor score 100, overall score 100, and result status `complete`, while other `PARTIAL`, `NOT_SUPPORTED`, unselected, or V1-factor issues are absent. They are not explicitly recorded as passed, but their omission can have the same presentation effect. A V2 factor is likewise omitted rather than explicitly reported as out of scope. Supplying every factor in `factor_weights` can force missing factors to unassessed, but it still cannot detect missing issues within an otherwise materialized factor.
 
 The penalty values, capping, deduplication, weighting, SSC-severity separation, and no-score handling for skipped/error evidence do not show a correctness problem. The defect is the completeness denominator and its report representation. No scoring change was made in this review.
+
+## Implemented V1 completeness correction
+
+The versioned `ssc-v1` assessment profile v1.0 pins Golden Baseline hash `0fe2bc8ffb7e3f734d4e88f70b11cffa6e8e9e47e722dc62107f6ff09694eca8`, the four V1 factor codes, and `internal-exposure` v1.0. At result generation it resolves all 202 exact issue-version memberships from that immutable attested snapshot: 160 are in scope and 42 are explicitly `OUT_OF_SCOPE`.
+
+Each in-scope exact issue version is now `ASSESSED` only when its pinned evaluator records a deterministic `MATCH` or `NO_MATCH` for sufficient evidence. Missing, unselected, unsupported, partial, skipped, errored, timed-out, malformed, indeterminate, and legacy assessments without deterministic outcome metadata remain `NOT_ASSESSED`. Factor totals and supported-capability counts come from the full profile rather than executed rows. A factor score is emitted only when every issue in that factor is assessed and the existing scoring prerequisites are satisfied; the overall score requires all 160 V1 issues.
+
+V2 findings remain observable but are excluded from V1 penalties and weights. Normalized JSON and HTML expose the profile identity, overall counts, per-factor totals/counts/state, all exact issue states and target outcomes. Persisted results include the assessment-profile identity so the corrected append-only snapshot can coexist with historical configured-detector-scope results. No SSC score impact, breach risk, or threat level is inferred from SSC severity.
 
 ## Required assessment states
 

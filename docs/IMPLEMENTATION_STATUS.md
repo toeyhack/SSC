@@ -4,6 +4,10 @@ CLI-FIRST MVP — COMPLETE / PASS
 
 Current phase: Phase 6B - CLI-first REPORT Output
 
+V1 Assessment Completeness Fix: COMPLETE / PASS. Versioned profile `ssc-v1` v1.0 resolves the immutable baseline hash into 160 in-scope exact issue versions and 42 explicit `OUT_OF_SCOPE` issue versions. Missing, unsupported, partial, unselected, skipped, errored, timed-out, malformed and indeterminate V1 issues are `NOT_ASSESSED`; only deterministic exact-version `MATCH`/`NO_MATCH` outcomes are `ASSESSED`. Factor and overall scores are withheld until the full required V1 denominator is assessed. Penalty arithmetic, deduplication, capping, weighting, SSC severity separation, Golden Baseline content, and Wave 1/2 evaluator mappings are unchanged. Wave 3 has not started.
+
+Validation on 2026-09-23 used isolated database `ssc_v1_completeness_20260923`; the finalized migration round trip also passed from empty on `ssc_v1_completeness_final_20260923`. Focused gates passed with 14 completeness/profile tests and 42 scan, Wave 1/2, scoring, persistence and report tests; the final persistence/schema adjustment passed 15 focused tests. Migration `0010_v1_assessment` upgraded from empty, downgraded to `0009_wave1_ssc_evaluators`, re-upgraded, and Alembic metadata check reported no new operations apart from the known cyclic-foreign-key warning. The final full suite passed with **135 tests** and the two existing dependency deprecation warnings. Recalculated coverage remains V1 **21 SUPPORTED / 98 PARTIAL / 41 NOT_SUPPORTED / 160 total** and full baseline **21 / 101 / 80 / 202**.
+
 SSC-aligned Wave 1 scanner primitives (`HTTP_HEADERS`, `HTTP_REDIRECT`, `TLS_CERTIFICATE`): COMPLETE / PASS. Fourteen reviewed direct issues have sufficient normalized evidence and active deterministic evaluators pinned to exact issue versions from the attested real `SSC_API` baseline. Eight enrichment-dependent candidates remain `PARTIAL`.
 
 SSC-aligned Wave 2 scanner primitives (`TLS_HANDSHAKE`, `EMAIL_SECURITY`): COMPLETE / PASS. Seven additional issues are truly supported: `tls_weak_protocol`, `spf_record_missing`, `spf_record_softfail`, `spf_record_wildcard`, `dmarc_record_missing`, `dmarc_contains_none`, and `subdomain_dmarc_contains_none`. `tls_weak_cipher`, `tls_ocsp_stapling`, `spf_record_malformed`, and three DKIM issues remain `PARTIAL` at their explicit evidence boundaries. No service identification, external intelligence, Golden Baseline mutation, or scoring-methodology work is included.
@@ -45,6 +49,8 @@ Phase 5 - Scoring Engine: COMPLETE / PASS
 Phase 6A - Primary CLI Interface: COMPLETE / PASS
 
 Phase 6B - REPORT HTML/JSON Output: COMPLETE / PASS
+
+V1 Assessment Completeness Fix: COMPLETE / PASS
 
 Phase 6C - SYGNOS Structured Event Adapter: NOT STARTED / DEFERRED UNTIL INGESTION INTERFACE IS KNOWN
 

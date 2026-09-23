@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 from app.models.score_models import ScoreResult
 from app.models.scan_models import ScanObservation, ScanRun, ScanStatusEnum
 from app.schemas.results import NormalizedResult, ResultEvidence, ResultTarget
+from app.services.assessment_profiles import load_v1_assessment_profile
 from app.services.finding_results import load_result_findings
 from app.services.scoring_engine import ScoringDefinition, score_result
 
@@ -13,7 +14,14 @@ from app.services.scoring_engine import ScoringDefinition, score_result
 def build_score_result(db: Session, run_id, model: ScoringDefinition | None = None) -> NormalizedResult:
     model = model or ScoringDefinition()
     model_hash = model.content_hash()
-    existing_stmt = select(ScoreResult).where(ScoreResult.scan_run_id == run_id, ScoreResult.scoring_model_hash == model_hash)
+    assessment_profile = load_v1_assessment_profile(db)
+    profile_summary = assessment_profile.summary if assessment_profile is not None else None
+    profile_hash = profile_summary.definition_hash if profile_summary is not None else None
+    existing_stmt = select(ScoreResult).where(
+        ScoreResult.scan_run_id == run_id,
+        ScoreResult.scoring_model_hash == model_hash,
+        ScoreResult.assessment_profile_hash == profile_hash,
+    )
     existing = db.execute(existing_stmt).scalar_one_or_none()
     if existing:
         return NormalizedResult.model_validate(existing.result)
@@ -30,9 +38,13 @@ def build_score_result(db: Session, run_id, model: ScoringDefinition | None = No
     result = score_result(scan_run_id=str(run.id), generated_at=datetime.now(timezone.utc),
                         targets=[ResultTarget.model_validate(t) for t in summary.get("targets_snapshot", [])],
                         findings=load_result_findings(db, run.id, assessments), evidence=evidence,
-                        assessments=assessments, model=model)
+                        assessments=assessments, model=model, assessment_profile=assessment_profile)
     snapshot = ScoreResult(scan_run_id=run.id, scoring_model_name=model.name, scoring_model_version=model.version,
-                           scoring_model_hash=model_hash, result=result.model_dump(mode="json"))
+                           scoring_model_hash=model_hash,
+                           assessment_profile_name=profile_summary.name if profile_summary else None,
+                           assessment_profile_version=profile_summary.version if profile_summary else None,
+                           assessment_profile_hash=profile_hash,
+                           result=result.model_dump(mode="json"))
     db.add(snapshot)
     try:
         db.commit()
