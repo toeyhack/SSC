@@ -31,6 +31,19 @@ Wave 2 implemented only `TLS_HANDSHAKE` and `EMAIL_SECURITY`. Exact activation a
 
 `tls_weak_cipher`, `tls_ocsp_stapling`, `spf_record_malformed`, and the three DKIM issues remain `PARTIAL`: the current client cannot prove rejection of every prohibited legacy suite, the socket API does not expose a cryptographically verifiable staple, full RFC 7208 permanent-error evaluation is incomplete, and no authorized DKIM selector/message evidence exists. No service identification, external intelligence, Golden Baseline, or scoring-methodology changes are included.
 
+## Wave 3A implementation update (2026-09-23)
+
+Wave 3A implemented one bounded, non-authenticating service-probe adapter framework and six exact evaluator mappings: `service_vnc`, `service_rsync`, `service_redis`, `service_socks_proxy`, `service_telnet`, and `service_smb`.
+
+| Coverage | Before Wave 3A | After Wave 3A |
+|---|---:|---:|
+| `SUPPORTED` | 21 | 27 |
+| `PARTIAL` | 101 | 95 |
+| `NOT_SUPPORTED` | 80 | 80 |
+| **Total** | **202** | **202** |
+
+Each adapter requires an exact protocol-valid greeting or negotiation response. A complete recognized foreign-protocol response is the only `NO_MATCH` boundary; an open port, suggestive banner, timeout, reset, malformed/truncated response, unsupported transport, or incomplete exchange is `INDETERMINATE`. The probes use fixed byte/time/request budgets and do not authenticate, enumerate data, relay traffic, or issue state-changing commands. All other service-identification issues remain `PARTIAL`; this update does not claim the full primitive ceiling or change the Golden Baseline, scoring weights, penalties, SSC severity, or V1/V2 scope.
+
 ## Pre-Wave 1 outcome
 
 The original 87 `DIRECTLY_TESTABLE` rows were re-reviewed against the imported issue descriptions, current executor evidence, authorization boundaries, and public standards. Twelve were over-optimistic and have been downgraded to `TESTABLE_WITH_ENRICHMENT`. No issue was upgraded.

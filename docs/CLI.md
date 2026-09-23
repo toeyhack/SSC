@@ -30,6 +30,7 @@ ssc baseline pull-ssc --yes --expect-hash <reviewed-content-hash>
 ssc baseline discover-details
 ssc baseline activate-wave1 --yes
 ssc baseline activate-wave2 --yes
+ssc baseline activate-wave3a --yes
 ```
 
 Without enrichment, `pull-ssc` uses only `GET https://api.securityscorecard.io/metadata/factors` and `GET https://api.securityscorecard.io/metadata/issue-types`; this is a complete minimum baseline and can establish taxonomy alignment after approval. `--enrich-details` optionally requests `/metadata/issue-types/{type}` with at most four workers, a 20-second request timeout and at most three attempts for safe transient transport failures or HTTP 408, 425, 429, 500, 502, 503 and 504 responses. Numeric or HTTP-date `Retry-After` is honored up to 60 seconds; longer or invalid delays fail that lookup instead of retrying early. Permanent failures are not retried. An individual detail failure is reported but retains that issue's list metadata and does not discard the baseline.
@@ -40,7 +41,23 @@ Without enrichment, `pull-ssc` uses only `GET https://api.securityscorecard.io/m
 
 `status` works offline. `INTERNAL_ONLY` means no real SSC baseline has been recorded; all existing runtime features remain available without claiming alignment. `SSC_ALIGNED` requires at least one real imported SSC baseline with provenance. It does not imply scoring calibration. For real licensed UI/manual canonical JSON, use `python -m app.cli.import_golden_baseline --input <capture.json> --attest-real-source --json` on its first import. Never attest synthetic fixtures. Previously unattested snapshots cannot be relabeled on reuse.
 
-`activate-wave1 --yes` idempotently creates or selects the reviewed `HTTP_HEADERS`, `HTTP_REDIRECT`, and `TLS_CERTIFICATE` evaluator versions. `activate-wave2 --yes` does the same for the evidence-complete `TLS_HANDSHAKE` and `EMAIL_SECURITY` definitions. Activation succeeds only for exact current issue definitions contained in an attested real `SSC_API` snapshot. Each evaluator version stores a foreign key to that immutable issue version. Approved future SSC definition changes create a new linked rule version; they do not rewrite history. A newly approved `pull-ssc` import performs both reconciliations automatically.
+`activate-wave1 --yes` idempotently creates or selects the reviewed `HTTP_HEADERS`, `HTTP_REDIRECT`, and `TLS_CERTIFICATE` evaluator versions. `activate-wave2 --yes` does the same for the evidence-complete `TLS_HANDSHAKE` and `EMAIL_SECURITY` definitions. `activate-wave3a --yes` activates only the reviewed six-protocol first batch. Activation succeeds only for exact current issue definitions contained in an attested real `SSC_API` snapshot. Each evaluator version stores a foreign key to that immutable issue version. Approved future SSC definition changes create a new linked rule version; they do not rewrite history. A newly approved `pull-ssc` import performs all three reconciliations automatically.
+
+Service probes are declared explicitly in scan configuration; neither a port number nor TCP-open state selects or identifies a protocol:
+
+```json
+{
+  "executors": ["tcp"],
+  "service_probes": [
+    {"protocol": "vnc", "port": 5900},
+    {"protocol": "redis", "port": 6379}
+  ],
+  "service_probe_timeout_seconds": 3.0,
+  "service_probe_response_limit_bytes": 4096
+}
+```
+
+Wave 3A protocol names are `vnc`, `rsync`, `redis`, `socks5`, `telnet`, and `smb2`. A target must retain its existing inventory authorization. Probes do not authenticate, enumerate data, relay traffic, or issue state-changing commands.
 
 Preferred initial SSC baseline: SSC API metadata endpoints. Fallback: licensed UI/manual canonical JSON. Future taxonomy updates: SSC API and/or reviewed public SSC methodology changes. Runtime: no SSC dependency. Neither scan nor report calls SSC. API `severity` stays separate from internal risk, breach risk, threat level, score impact and scoring relevance. API issues remain `breach_risk=UNKNOWN` and `threat_level=null` unless another authoritative source explicitly supplies those semantics.
 

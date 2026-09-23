@@ -262,10 +262,13 @@ def import_golden_baseline(
         if not dry_run and existing_snapshot.is_real_baseline and baseline.source_type == "SSC_API":
             from app.services.wave1_rules import activate_wave1_rules
             from app.services.wave2_rules import activate_wave2_rules
+            from app.services.wave3a_rules import activate_wave3a_rules
             activation1 = activate_wave1_rules(db, commit=False)
-            activation2 = activate_wave2_rules(db)
+            activation2 = activate_wave2_rules(db, commit=False)
+            activation3a = activate_wave3a_rules(db)
             warnings.append(f"Wave 1 evaluators active: {len(activation1['activated'])}.")
             warnings.append(f"Wave 2 evaluators active: {len(activation2['activated'])}.")
+            warnings.append(f"Wave 3A evaluators active: {len(activation3a['activated'])}.")
         return GoldenBaselineImportResult(
             dry_run=dry_run,
             content_hash=content_hash,
@@ -375,8 +378,10 @@ def import_golden_baseline(
         if baseline.source_type == "SSC_API" and attest_real_source:
             from app.services.wave1_rules import activate_wave1_rules
             from app.services.wave2_rules import activate_wave2_rules
+            from app.services.wave3a_rules import activate_wave3a_rules
             activate_wave1_rules(db, commit=False)
             activate_wave2_rules(db, commit=False)
+            activate_wave3a_rules(db, commit=False)
 
         db.commit()
     except IntegrityError as exc:

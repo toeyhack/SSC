@@ -17,6 +17,7 @@ Version 1 covers only the immutable-baseline factors `application_security`, `ne
 | 6A | CLI orchestration and setup independent of Web/API | `ssc scan --target <target> --output report` |
 | 6B | REPORT adapter | Self-contained HTML and machine-readable JSON using `ssc.result.v1` |
 | V1 completeness fix | Versioned V1 assessment profile and explicit issue states | Complete before any Wave 3 work; no scanner or scoring-penalty expansion |
+| Wave 3A | First bounded `SERVICE_PROTOCOL_IDENTIFICATION` batch | Complete for VNC/RFB, rsync, Redis RESP, SOCKS5, Telnet negotiation, and SMB2 negotiate; no next batch implied |
 | 6C | SYGNOS adapter | Structured logs/events using exactly `ssc.result.v1`; ingestion mapping and transport deferred until interface is known |
 | 6D | Optional Web dashboard | Paused; no dashboard work before 4B, 5, 6A and 6B pass |
 | 7 | SSC public reference sync | Review/approval workflow; never automatic production catalog overwrite |
@@ -36,7 +37,7 @@ REPORT is implemented first. `--output sygnos` currently fails before database o
 
 ## Next work
 
-The V1 Assessment Completeness Fix is implemented. Wave 3 has not started. Any next scanner primitive remains subject to the reviewed V1 exit gate and a separate approved milestone.
+The V1 Assessment Completeness Fix and Wave 3A first service-protocol batch are implemented. Any next Wave 3 batch or scanner primitive remains subject to the reviewed V1 exit gate and a separate approved milestone.
 
 A real SSC taxonomy baseline is required once before claiming `SSC_ALIGNED`. Preferred initial SSC baseline: SSC API metadata endpoints. Fallback: licensed UI/manual canonical JSON. Future taxonomy updates: SSC API and/or reviewed public SSC methodology changes. Runtime: no SSC dependency. Without a real baseline, status is `INTERNAL_ONLY` and scanner/rules/scoring/report remain functional.
 

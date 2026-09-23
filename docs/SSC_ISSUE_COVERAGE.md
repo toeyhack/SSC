@@ -2,7 +2,7 @@
 
 Snapshot content hash: `0fe2bc8ffb7e3f734d4e88f70b11cffa6e8e9e47e722dc62107f6ff09694eca8`
 Source: immutable real `SSC_API` Golden Baseline
-Implementation state: Wave 1 (`HTTP_HEADERS`, `HTTP_REDIRECT`, `TLS_CERTIFICATE`) plus Wave 2 (`TLS_HANDSHAKE`, `EMAIL_SECURITY`)
+Implementation state: Waves 1-2 plus Wave 3A first-batch `SERVICE_PROTOCOL_IDENTIFICATION`
 Total mapped issues: **202**
 
 > This is an independent implementation mapped to SSC taxonomy. It does not reproduce or claim knowledge of SSC collection, aggregation, severity, scoring, or proprietary detection logic. `ssc_severity` remains source metadata and is not mapped to internal risk or score impact.
@@ -13,11 +13,11 @@ Total mapped issues: **202**
 
 ## Coverage summary
 
-| Coverage | Before Wave 2 | After Wave 2 | Percentage after |
+| Coverage | Before Wave 3A | After Wave 3A | Percentage after |
 |---|---:|---:|---:|
-| `SUPPORTED` | 14 | 21 | 10.4% |
-| `PARTIAL` | 105 | 101 | 50.0% |
-| `NOT_SUPPORTED` | 83 | 80 | 39.6% |
+| `SUPPORTED` | 21 | 27 | 13.4% |
+| `PARTIAL` | 101 | 95 | 47.0% |
+| `NOT_SUPPORTED` | 80 | 80 | 39.6% |
 | **Total** | **202** | **202** | **100.0%** |
 
 ### Feasibility (unchanged)
@@ -40,7 +40,7 @@ Total mapped issues: **202**
 | `hacker_chatter` | 2 | 0 | 0 | 2 | 0 | 0 | 0 | 2 |
 | `ip_reputation` | 26 | 1 | 1 | 24 | 0 | 0 | 2 | 24 |
 | `leaked_information` | 8 | 0 | 0 | 8 | 0 | 0 | 0 | 8 |
-| `network_security` | 68 | 42 | 20 | 5 | 1 | 5 | 56 | 7 |
+| `network_security` | 68 | 42 | 20 | 5 | 1 | 11 | 50 | 7 |
 | `patching_cadence` | 21 | 0 | 21 | 0 | 0 | 0 | 8 | 13 |
 | `social_engineering` | 1 | 0 | 0 | 1 | 0 | 0 | 0 | 1 |
 
@@ -102,6 +102,19 @@ Every listed rule uses stable key `ssc.wave2.<issue-key>`, method schema `ssc-wa
 | `dkim_record_detected` | Selector discovery requires an approved selector inventory or authorized message sample; selectors are not safely enumerable from DNS. |
 | `dkim_weak_signature` | The platform has no authorized message/selector evidence from which to verify the signature algorithm and selected key. |
 | `dkim_insufficient_key_length` | The platform has no approved selector inventory or authorized message sample, so an exhaustive key-size observation cannot be made. |
+
+## Active Wave 3A evaluator mappings
+
+Every listed rule uses stable key `ssc.wave3a.<issue-key>`, method schema `ssc-wave3a-service-observation.v1`, policy `ssc-wave3a-service-identification.v1`, source type `SSC_REFERENCE`, and an immutable rule-version link to the exact attested `SSC_API` issue version. This is the first six-protocol batch, not the full service-identification ceiling.
+
+| SSC issue key | Protocol | Primitive | Exact MATCH condition | Exact NO_MATCH boundary | INDETERMINATE boundary | Authoritative reference |
+|---|---|---|---|---|---|---|
+| `service_vnc` | `vnc` | `SERVICE_PROTOCOL_IDENTIFICATION` | MATCH only for an exact complete RFB 003.003, 003.007, or 003.008 server greeting followed by the bounded client version reply. | NO_MATCH only when the bounded exchange returns a complete, protocol-valid response identified as a different supported protocol; TCP-open or arbitrary bytes are not negative evidence. | Timeout, reset, acquisition error, malformed or truncated response, ambiguous banner, unsupported transport, or incomplete exchange is INDETERMINATE. | https://www.rfc-editor.org/rfc/rfc6143.html |
+| `service_rsync` | `rsync` | `SERVICE_PROTOCOL_IDENTIFICATION` | MATCH only for a complete @RSYNCD major.minor daemon greeting, followed by a bounded client greeting and #exit without module enumeration. | NO_MATCH only when the bounded exchange returns a complete, protocol-valid response identified as a different supported protocol; TCP-open or arbitrary bytes are not negative evidence. | Timeout, reset, acquisition error, malformed or truncated response, ambiguous banner, unsupported transport, or incomplete exchange is INDETERMINATE. | https://download.samba.org/pub/rsync/rsync.1 |
+| `service_redis` | `redis` | `SERVICE_PROTOCOL_IDENTIFICATION` | MATCH only when a bounded RESP PING returns exact +PONG or a protocol-valid Redis NOAUTH/NOPERM response; no authentication follows. | NO_MATCH only when the bounded exchange returns a complete, protocol-valid response identified as a different supported protocol; TCP-open or arbitrary bytes are not negative evidence. | Timeout, reset, acquisition error, malformed or truncated response, ambiguous banner, unsupported transport, or incomplete exchange is INDETERMINATE. | https://redis.io/docs/latest/develop/reference/protocol-spec/ |
+| `service_socks_proxy` | `socks5` | `SERVICE_PROTOCOL_IDENTIFICATION` | MATCH only when a minimal SOCKS5 no-auth method offer receives an exact two-byte version-5 method-selection response; no connect request follows. | NO_MATCH only when the bounded exchange returns a complete, protocol-valid response identified as a different supported protocol; TCP-open or arbitrary bytes are not negative evidence. | Timeout, reset, acquisition error, malformed or truncated response, ambiguous banner, unsupported transport, or incomplete exchange is INDETERMINATE. | https://www.rfc-editor.org/rfc/rfc1928.html |
+| `service_telnet` | `telnet` | `SERVICE_PROTOCOL_IDENTIFICATION` | MATCH only when a bounded IAC DO SUPPRESS-GO-AHEAD request receives the corresponding protocol-valid IAC WILL or IAC WONT response. | NO_MATCH only when the bounded exchange returns a complete, protocol-valid response identified as a different supported protocol; TCP-open or arbitrary bytes are not negative evidence. | Timeout, reset, acquisition error, malformed or truncated response, ambiguous banner, unsupported transport, or incomplete exchange is INDETERMINATE. | https://www.rfc-editor.org/rfc/rfc854.html |
+| `service_smb` | `smb2` | `SERVICE_PROTOCOL_IDENTIFICATION` | MATCH only when a minimal SMB2 negotiate request receives a correctly framed SMB2 negotiate or SMB2 error response with matching command semantics. | NO_MATCH only when the bounded exchange returns a complete, protocol-valid response identified as a different supported protocol; TCP-open or arbitrary bytes are not negative evidence. | Timeout, reset, acquisition error, malformed or truncated response, ambiguous banner, unsupported transport, or incomplete exchange is INDETERMINATE. | https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-smb2/ |
 
 ## Per-issue index
 
@@ -264,13 +277,13 @@ The CSV remains normative for exact evidence requirements, proposed logic, depen
 | `service_pptp` | PPTP Service Accessible | `network_security` | `medium` | `DIRECTLY_TESTABLE` | `PROTOCOL_PROBE+TCP` | `PARTIAL` |
 | `service_pulse_vpn` | Pulse Connect Secure VPN Product Observed | `network_security` | `medium` | `TESTABLE_WITH_ENRICHMENT` | `TCP+HTTP+TLS+DNS_FINGERPRINT` | `PARTIAL` |
 | `service_rdp` | RDP Service Observed | `network_security` | `medium` | `DIRECTLY_TESTABLE` | `PROTOCOL_PROBE+TCP` | `PARTIAL` |
-| `service_redis` | Redis Service Observed | `network_security` | `medium` | `DIRECTLY_TESTABLE` | `PROTOCOL_PROBE+TCP` | `PARTIAL` |
-| `service_rsync` | rsync Service Observed | `network_security` | `medium` | `DIRECTLY_TESTABLE` | `PROTOCOL_PROBE+TCP` | `PARTIAL` |
-| `service_smb` | SMB Service Observed | `network_security` | `medium` | `DIRECTLY_TESTABLE` | `PROTOCOL_PROBE+TCP` | `PARTIAL` |
+| `service_redis` | Redis Service Observed | `network_security` | `medium` | `DIRECTLY_TESTABLE` | `SERVICE_PROTOCOL_IDENTIFICATION` | `SUPPORTED` |
+| `service_rsync` | rsync Service Observed | `network_security` | `medium` | `DIRECTLY_TESTABLE` | `SERVICE_PROTOCOL_IDENTIFICATION` | `SUPPORTED` |
+| `service_smb` | SMB Service Observed | `network_security` | `medium` | `DIRECTLY_TESTABLE` | `SERVICE_PROTOCOL_IDENTIFICATION` | `SUPPORTED` |
 | `service_soap` | SOAP Server Accessible | `network_security` | `medium` | `DIRECTLY_TESTABLE` | `PROTOCOL_PROBE+TCP` | `PARTIAL` |
-| `service_socks_proxy` | SOCKS Proxy Service Detected | `network_security` | `low` | `DIRECTLY_TESTABLE` | `PROTOCOL_PROBE+TCP` | `PARTIAL` |
-| `service_telnet` | Telnet Service Observed | `network_security` | `medium` | `DIRECTLY_TESTABLE` | `PROTOCOL_PROBE+TCP` | `PARTIAL` |
-| `service_vnc` | VNC Service Observed | `network_security` | `medium` | `DIRECTLY_TESTABLE` | `PROTOCOL_PROBE+TCP` | `PARTIAL` |
+| `service_socks_proxy` | SOCKS Proxy Service Detected | `network_security` | `low` | `DIRECTLY_TESTABLE` | `SERVICE_PROTOCOL_IDENTIFICATION` | `SUPPORTED` |
+| `service_telnet` | Telnet Service Observed | `network_security` | `medium` | `DIRECTLY_TESTABLE` | `SERVICE_PROTOCOL_IDENTIFICATION` | `SUPPORTED` |
+| `service_vnc` | VNC Service Observed | `network_security` | `medium` | `DIRECTLY_TESTABLE` | `SERVICE_PROTOCOL_IDENTIFICATION` | `SUPPORTED` |
 | `sql_payload_using_tor_proxy_detected` | SQL Payload Using Tor proxy Detected | `network_security` | `info` | `EXTERNAL_DATA_REQUIRED` | `EXTERNAL_INTEL_INGEST` | `NOT_SUPPORTED` |
 | `ssh_weak_cipher` | SSH Supports Weak Cipher | `network_security` | `medium` | `DIRECTLY_TESTABLE` | `SSH` | `PARTIAL` |
 | `ssh_weak_mac` | SSH Supports Weak MAC | `network_security` | `medium` | `DIRECTLY_TESTABLE` | `SSH` | `PARTIAL` |

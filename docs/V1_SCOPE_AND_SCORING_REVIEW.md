@@ -1,10 +1,10 @@
 # Version 1 Scope and Scoring Review
 
-Review date: 2026-09-21
+Review date: 2026-09-23
 
 Golden Baseline: immutable real `SSC_API` snapshot `0fe2bc8ffb7e3f734d4e88f70b11cffa6e8e9e47e722dc62107f6ff09694eca8`
 
-Implementation state reviewed: Waves 1–2, 21 active exact SSC evaluator mappings
+Implementation state reviewed: Waves 1–3A, 27 active exact SSC evaluator mappings
 
 This review originally changed product scope documentation only. The V1 Assessment Completeness Fix implemented on 2026-09-23 applies the correction specified here without changing the Golden Baseline, scanner primitives, rule activation, penalty arithmetic, factor weights, or SSC severity.
 
@@ -67,19 +67,21 @@ The proposed correction is a versioned assessment profile that pins the baseline
 
 ## Current V1 coverage
 
-The denominator was verified from the 202 exact snapshot memberships in the attested database clone. Support states come from the reviewed coverage matrix and correspond to the 21 active exact evaluator mappings.
+The denominator was verified from the 202 exact snapshot memberships in the attested database clone. Support states come from the reviewed coverage matrix and correspond to the 27 active exact evaluator mappings after the bounded Wave 3A first batch.
 
 | V1 factor | Total | `SUPPORTED` | `PARTIAL` | `NOT_SUPPORTED` | Supported coverage |
 |---|---:|---:|---:|---:|---:|
 | `application_security` | 61 | 10 | 30 | 21 | 16.4% |
-| `network_security` | 68 | 5 | 56 | 7 | 7.4% |
+| `network_security` | 68 | 11 | 50 | 7 | 16.2% |
 | `dns_health` | 10 | 6 | 4 | 0 | 60.0% |
 | `patching_cadence` | 21 | 0 | 8 | 13 | 0.0% |
-| **V1 total** | **160** | **21** | **98** | **41** | **13.1%** |
+| **V1 total** | **160** | **27** | **92** | **41** | **16.9%** |
 
-For reconciliation, Version 2 contains 42 issues: 0 `SUPPORTED`, 3 `PARTIAL`, and 39 `NOT_SUPPORTED`. The unchanged full-baseline totals remain 21 `SUPPORTED`, 101 `PARTIAL`, and 80 `NOT_SUPPORTED` across 202 issues.
+For reconciliation, Version 2 contains 42 issues: 0 `SUPPORTED`, 3 `PARTIAL`, and 39 `NOT_SUPPORTED`. The full-baseline totals are now 27 `SUPPORTED`, 95 `PARTIAL`, and 80 `NOT_SUPPORTED` across 202 issues.
 
-The active V1 mappings are distributed as 10 Application Security, 6 DNS Health, 5 Network Security, and 0 Patching Cadence. Therefore current support coverage and current score completeness are separate facts; 21 active mappings do not make the four V1 factors fully assessed.
+The active V1 mappings are distributed as 10 Application Security, 6 DNS Health, 11 Network Security, and 0 Patching Cadence. Therefore current support coverage and current score completeness are separate facts; 27 active mappings do not make the four V1 factors fully assessed.
+
+Wave 3A promoted `service_vnc`, `service_rsync`, `service_redis`, `service_socks_proxy`, `service_telnet`, and `service_smb`. The common adapter records bounded request/response metadata and transcript hashes. `MATCH` requires the protocol-specific exchange; `NO_MATCH` requires a complete recognized foreign-protocol response; timeouts, resets, arbitrary banners, malformed/truncated frames, unsupported transports, and incomplete exchanges remain `INDETERMINATE`. The other service-identification candidates remain `PARTIAL`; this batch does not claim the full primitive ceiling.
 
 ## Recommended next five primitives
 
@@ -87,13 +89,13 @@ This ordering favors deterministic support gained per engineering effort using c
 
 | Rank | Primitive | V1 opportunity | Complexity and reliability | Reuse and recommendation |
 |---:|---|---:|---|---|
-| 1 | `SERVICE_PROTOCOL_IDENTIFICATION` | 31 partial issues; 29 are directly testable and 2 require enrichment | Medium–high; high reliability only with protocol-definitive positive transcripts | Extend the TCP executor with one bounded adapter framework, then ship small protocol families. Never infer a service from an open port. Highest supported-coverage ceiling. |
+| 1 | `SERVICE_PROTOCOL_IDENTIFICATION` | After Wave 3A, 26 original-group V1 issues remain partial; 24 are directly testable and 2 require enrichment | Medium–high; high reliability only with protocol-definitive positive transcripts | Reuse the completed adapter framework for later separately approved batches. Never infer a service from an open port. The six-protocol first batch includes five issues from this original group plus `service_socks_proxy`. |
 | 2 | `HTTP_CONTENT` | 9 issues: 1 partial and 8 not supported | Medium; high for declared-path parsing, with explicit crawl/negative boundaries | Reuses HTTP acquisition, limits, redirect scope, and raw observations. Implement link-scheme, server-error, SRI, and content-date rules in evidence-coherent batches. |
 | 3 | `SSH_NEGOTIATION` | 3 partial, directly testable issues | Medium; high with an identification/KEX parser and versioned crypto policy | Reuses TCP safety, target authorization, timeout, and transcript patterns. No authentication is required. |
 | 4 | `TCP_SERVICE_DISCOVERY` | 1 partial, directly testable issue | Low; high for a bounded positive connect observation | The TCP executor already provides the prerequisite. Add an exact scope manifest and evaluator so a closed/timeout result is not conflated with no exposed port. Best single-issue efficiency. |
 | 5 | `EMAIL_SECURITY` completion | 1 directly testable SPF issue can advance; 3 DKIM issues remain selector-dependent | Medium; high for complete RFC 7208 malformed/permanent-error semantics | Reuses the DNS executor and normalized SPF evidence. Implement `spf_record_malformed`; keep DKIM partial until selectors or approved message provenance exist. |
 
-These five have a defensible ceiling of 43 newly supported V1 issues (29 + 9 + 3 + 1 + 1), which would move V1 support from 21 to 64 of 160 (40.0%) if every direct boundary is satisfied. `TLS_HANDSHAKE` is not ranked because the remaining cipher and OCSP rows still need client capabilities that make negative results conclusive. `PRODUCT_FINGERPRINT` → `CVE_CORRELATION` → `LONGITUDINAL_PATCHING` is the critical follow-on path for Patching Cadence, but it is lower in immediate engineering efficiency and must not use ambiguous banners or unversioned vulnerability/lifecycle data.
+Wave 3A has realized six supported issues and moves V1 support from 21 to 27 of 160. The remaining ranked work is a ceiling, not a commitment or a claim of assessment completeness. `TLS_HANDSHAKE` is not ranked because the remaining cipher and OCSP rows still need client capabilities that make negative results conclusive. `PRODUCT_FINGERPRINT` → `CVE_CORRELATION` → `LONGITUDINAL_PATCHING` is the critical follow-on path for Patching Cadence, but it is lower in immediate engineering efficiency and must not use ambiguous banners or unversioned vulnerability/lifecycle data.
 
 ## Recommended V1 exit criterion
 

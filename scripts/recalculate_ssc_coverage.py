@@ -27,8 +27,9 @@ def main() -> int:
     from app.models import models  # noqa: F401 - register inventory ORM relationships
     from app.services.wave1_rules import WAVE1_BY_KEY, WAVE1_PARTIAL_REASONS, WAVE1_RULES
     from app.services.wave2_rules import WAVE2_BY_KEY, WAVE2_PARTIAL_REASONS, WAVE2_RULES
+    from app.services.wave3a_rules import WAVE3A_BY_KEY, WAVE3A_RULES
 
-    all_by_key = {**WAVE1_BY_KEY, **WAVE2_BY_KEY}
+    all_by_key = {**WAVE1_BY_KEY, **WAVE2_BY_KEY, **WAVE3A_BY_KEY}
     all_partial_reasons = {**WAVE1_PARTIAL_REASONS, **WAVE2_PARTIAL_REASONS}
 
     mappings = []
@@ -36,14 +37,15 @@ def main() -> int:
         from app.db.session import SessionLocal
         from app.services.wave1_rules import active_wave1_mappings
         from app.services.wave2_rules import active_wave2_mappings
+        from app.services.wave3a_rules import active_wave3a_mappings
         with SessionLocal() as db:
-            mappings = active_wave1_mappings(db) + active_wave2_mappings(db)
+            mappings = active_wave1_mappings(db) + active_wave2_mappings(db) + active_wave3a_mappings(db)
         active_keys = {item["issue_key"] for item in mappings}
         expected = set(all_by_key)
         if active_keys != expected:
             missing = sorted(expected - active_keys)
             extra = sorted(active_keys - expected)
-            raise SystemExit(f"active Wave 1/2 mappings differ: missing={missing} extra={extra}")
+            raise SystemExit(f"active Wave 1/2/3A mappings differ: missing={missing} extra={extra}")
     else:
         active_keys = set(all_by_key)
 
@@ -55,7 +57,11 @@ def main() -> int:
     for row in rows:
         if row["ssc_issue_key"] in active_keys:
             spec = all_by_key[row["ssc_issue_key"]]
-            wave = "Wave 1" if row["ssc_issue_key"] in WAVE1_BY_KEY else "Wave 2"
+            wave = (
+                "Wave 1" if row["ssc_issue_key"] in WAVE1_BY_KEY else
+                "Wave 2" if row["ssc_issue_key"] in WAVE2_BY_KEY else
+                "Wave 3A"
+            )
             row["current_platform_support"] = "SUPPORTED"
             row["required_executor"] = spec.primitive
             row["proposed_test_method"] = spec.evidence_requirement
@@ -78,9 +84,9 @@ def main() -> int:
         row["current_platform_support"] for row in rows if row["factor"] in V1_FACTORS
     )
     feasibility = Counter(row["feasibility_category"] for row in rows)
-    if coverage != {"SUPPORTED": 21, "PARTIAL": 101, "NOT_SUPPORTED": 80}:
+    if coverage != {"SUPPORTED": 27, "PARTIAL": 95, "NOT_SUPPORTED": 80}:
         raise SystemExit(f"unexpected coverage totals: {dict(coverage)}")
-    if v1_coverage != {"SUPPORTED": 21, "PARTIAL": 98, "NOT_SUPPORTED": 41}:
+    if v1_coverage != {"SUPPORTED": 27, "PARTIAL": 92, "NOT_SUPPORTED": 41}:
         raise SystemExit(f"unexpected V1 coverage totals: {dict(v1_coverage)}")
 
     if args.write:
@@ -93,6 +99,7 @@ def main() -> int:
                 rows, feasibility, coverage,
                 WAVE1_RULES, WAVE1_PARTIAL_REASONS,
                 WAVE2_RULES, WAVE2_PARTIAL_REASONS,
+                WAVE3A_RULES,
             ),
             encoding="utf-8",
         )
@@ -113,7 +120,7 @@ def main() -> int:
     return 0
 
 
-def render_markdown(rows, feasibility, coverage, wave1_rules, wave1_partial, wave2_rules, wave2_partial) -> str:
+def render_markdown(rows, feasibility, coverage, wave1_rules, wave1_partial, wave2_rules, wave2_partial, wave3a_rules) -> str:
     factors = defaultdict(Counter)
     for row in rows:
         factor = factors[row["factor"]]
@@ -126,7 +133,7 @@ def render_markdown(rows, feasibility, coverage, wave1_rules, wave1_partial, wav
         "",
         f"Snapshot content hash: `{BASELINE_HASH}`",
         "Source: immutable real `SSC_API` Golden Baseline",
-        "Implementation state: Wave 1 (`HTTP_HEADERS`, `HTTP_REDIRECT`, `TLS_CERTIFICATE`) plus Wave 2 (`TLS_HANDSHAKE`, `EMAIL_SECURITY`)",
+        "Implementation state: Waves 1-2 plus Wave 3A first-batch `SERVICE_PROTOCOL_IDENTIFICATION`",
         "Total mapped issues: **202**",
         "",
         "> This is an independent implementation mapped to SSC taxonomy. It does not reproduce or claim knowledge of SSC collection, aggregation, severity, scoring, or proprietary detection logic. `ssc_severity` remains source metadata and is not mapped to internal risk or score impact.",
@@ -137,11 +144,11 @@ def render_markdown(rows, feasibility, coverage, wave1_rules, wave1_partial, wav
         "",
         "## Coverage summary",
         "",
-        "| Coverage | Before Wave 2 | After Wave 2 | Percentage after |",
+        "| Coverage | Before Wave 3A | After Wave 3A | Percentage after |",
         "|---|---:|---:|---:|",
-        f"| `SUPPORTED` | 14 | {coverage['SUPPORTED']} | {coverage['SUPPORTED']/202:.1%} |",
-        f"| `PARTIAL` | 105 | {coverage['PARTIAL']} | {coverage['PARTIAL']/202:.1%} |",
-        f"| `NOT_SUPPORTED` | 83 | {coverage['NOT_SUPPORTED']} | {coverage['NOT_SUPPORTED']/202:.1%} |",
+        f"| `SUPPORTED` | 21 | {coverage['SUPPORTED']} | {coverage['SUPPORTED']/202:.1%} |",
+        f"| `PARTIAL` | 101 | {coverage['PARTIAL']} | {coverage['PARTIAL']/202:.1%} |",
+        f"| `NOT_SUPPORTED` | 80 | {coverage['NOT_SUPPORTED']} | {coverage['NOT_SUPPORTED']/202:.1%} |",
         "| **Total** | **202** | **202** | **100.0%** |",
         "",
         "### Feasibility (unchanged)",
@@ -209,6 +216,21 @@ def render_markdown(rows, feasibility, coverage, wave1_rules, wave1_partial, wav
     ]
     for key, reason in wave2_partial.items():
         lines.append(f"| `{key}` | {reason} |")
+
+    lines += [
+        "",
+        "## Active Wave 3A evaluator mappings",
+        "",
+        "Every listed rule uses stable key `ssc.wave3a.<issue-key>`, method schema `ssc-wave3a-service-observation.v1`, policy `ssc-wave3a-service-identification.v1`, source type `SSC_REFERENCE`, and an immutable rule-version link to the exact attested `SSC_API` issue version. This is the first six-protocol batch, not the full service-identification ceiling.",
+        "",
+        "| SSC issue key | Protocol | Primitive | Exact MATCH condition | Exact NO_MATCH boundary | INDETERMINATE boundary | Authoritative reference |",
+        "|---|---|---|---|---|---|---|",
+    ]
+    for spec in wave3a_rules:
+        lines.append(
+            f"| `{spec.issue_key}` | `{spec.protocol}` | `{spec.primitive}` | {spec.match_condition} | "
+            f"{spec.no_match_boundary} | {spec.indeterminate_boundary} | {spec.reference} |"
+        )
 
     lines += [
         "",
