@@ -45,6 +45,10 @@ def test_score_snapshot_uses_exact_versions_and_survives_current_definition_chan
         assert build_score_result(db, UUID(run["id"])).model_dump() == result.model_dump()
         snapshots = db.execute(select(ScoreResult).where(ScoreResult.scan_run_id == UUID(run["id"]))).scalars().all()
         assert len(snapshots) == 1
+        assert snapshots[0].result["overall_score"] == 85
+        assert snapshots[0].result["overall_score_status"] == "COMPLETE"
+        assert snapshots[0].result["factor_scores"][0]["score"] == 85
+        assert snapshots[0].result["factor_scores"][0]["score_status"] == "COMPLETE"
         new_model = ScoringDefinition(version="2", penalties={"HIGH": 20, "MEDIUM": 7, "LOW": 2})
         rescored = build_score_result(db, UUID(run["id"]), new_model)
         assert rescored.overall_score == 80

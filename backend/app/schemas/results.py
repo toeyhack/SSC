@@ -2,7 +2,7 @@
 from datetime import datetime
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 
 class ResultRecord(BaseModel):
@@ -85,6 +85,13 @@ class AssessmentCompleteness(ResultRecord):
     out_of_scope_count: int
 
 
+class AssessmentCoverage(ResultRecord):
+    total_v1_issues: int
+    assessed_count: int
+    not_assessed_count: int
+    coverage_percent: float
+
+
 class FactorScore(ResultRecord):
     code: str
     name: str
@@ -92,11 +99,25 @@ class FactorScore(ResultRecord):
     weight: float
     score_impact: float = 0
     status: Literal["assessed", "incomplete", "unassessed"]
+    score_status: Literal["NOT_RATED", "PROVISIONAL", "COMPLETE"] = "NOT_RATED"
+    total_v1_issues: int | None = None
+    coverage_percent: float | None = None
     total_issues: int = 0
     assessed_count: int = 0
     not_assessed_count: int = 0
     supported_capability_count: int = 0
     assessment_state: Literal["ASSESSED", "NOT_ASSESSED"] | None = None
+
+    @model_validator(mode="before")
+    @classmethod
+    def infer_historical_score_status(cls, value):
+        if isinstance(value, dict) and "score_status" not in value:
+            value = dict(value)
+            value["score_status"] = (
+                "NOT_RATED" if value.get("score") is None else
+                "COMPLETE" if value.get("status") == "assessed" else "PROVISIONAL"
+            )
+        return value
 
 
 class NormalizedResult(ResultRecord):
@@ -109,6 +130,8 @@ class NormalizedResult(ResultRecord):
     scoring_model_hash: str
     scoring_model_definition: dict[str, Any]
     overall_score: float | None
+    overall_score_status: Literal["NOT_RATED", "PROVISIONAL", "COMPLETE"] = "NOT_RATED"
+    assessment_coverage: AssessmentCoverage | None = None
     factor_scores: list[FactorScore]
     targets: list[ResultTarget]
     findings: list[ResultFinding]
@@ -118,3 +141,14 @@ class NormalizedResult(ResultRecord):
     assessment_completeness: AssessmentCompleteness | None = None
     issue_assessments: list[IssueAssessment] = Field(default_factory=list)
     warnings: list[str] = Field(default_factory=list)
+
+    @model_validator(mode="before")
+    @classmethod
+    def infer_historical_overall_status(cls, value):
+        if isinstance(value, dict) and "overall_score_status" not in value:
+            value = dict(value)
+            value["overall_score_status"] = (
+                "NOT_RATED" if value.get("overall_score") is None else
+                "COMPLETE" if value.get("status") == "complete" else "PROVISIONAL"
+            )
+        return value

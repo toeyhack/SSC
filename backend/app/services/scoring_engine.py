@@ -11,6 +11,7 @@ from pydantic import Field, field_validator
 
 from app.schemas.results import (
     AssessmentCompleteness,
+    AssessmentCoverage,
     FactorScore,
     IssueAssessment,
     NormalizedResult,
@@ -115,6 +116,7 @@ def _score_configured_scope(*, scan_run_id: str, generated_at: datetime, targets
             status = "incomplete"
         factor_scores.append(FactorScore(code=code, name=state["name"], status=status,
                           score=float(Decimal(100) - penalties[code]) if status == "assessed" else None,
+                          score_status="COMPLETE" if status == "assessed" else "NOT_RATED",
                           weight=model.factor_weights.get(code, 1), score_impact=float(penalties[code])))
     total_weight = sum(Decimal(str(f.weight)) for f in factor_scores)
     complete = bool(factor_scores) and all(f.status == "assessed" for f in factor_scores) and all(e.status in {"success", "manual"} for e in evidence)
@@ -133,7 +135,8 @@ def _score_configured_scope(*, scan_run_id: str, generated_at: datetime, targets
                 "evidence_collected": len(evidence), "evidence_errors": sum(e.status == "error" for e in evidence)}
     return NormalizedResult(scan_run_id=scan_run_id, generated_at=generated_at, status="complete" if complete else "incomplete",
                             scoring_model_name=model.name, scoring_model_version=model.version, scoring_model_hash=model.content_hash(),
-                            scoring_model_definition=model.model_dump(), overall_score=overall, factor_scores=factor_scores,
+                            scoring_model_definition=model.model_dump(), overall_score=overall,
+                            overall_score_status="COMPLETE" if complete else "NOT_RATED", factor_scores=factor_scores,
                             targets=targets, findings=scored_findings, evidence=evidence, coverage=coverage, warnings=warnings)
 
 
@@ -205,19 +208,41 @@ def _score_assessment_profile(*, scan_run_id: str, generated_at: datetime, targe
         not_assessed_count=not_assessed_count,
         out_of_scope_count=out_of_scope_count,
     )
+    assessment_coverage = AssessmentCoverage(
+        total_v1_issues=len(in_scope_issue_assessments),
+        assessed_count=assessed_count,
+        not_assessed_count=not_assessed_count,
+        coverage_percent=(round(100 * assessed_count / len(in_scope_issue_assessments), 2)
+                          if in_scope_issue_assessments else 0),
+    )
 
     penalties = Counter()
     seen = set()
     unknown_factors = set()
     scored_findings = []
     out_of_scope_findings = False
+    assessed_versions = {
+        issue.catalog_issue_type_version_id
+        for issue in in_scope_issue_assessments if issue.state == "ASSESSED"
+    }
+    assessed_matches = {
+        (row["catalog_issue_type_version_id"], row["target_id"], row["rule_version_id"])
+        for row in assessments
+        if row.get("catalog_issue_type_version_id") in assessed_versions
+        and row.get("status") == "evaluated"
+        and row.get("evaluation_outcome") == "MATCH"
+        and isinstance(row.get("target_id"), str)
+        and isinstance(row.get("rule_version_id"), str)
+    }
     for finding in sorted(findings, key=lambda f: (f.factor_code, f.catalog_issue_type_version_id or "", f.target_id, f.rule_version_id, f.id)):
         profile_issue = profile_by_version.get(finding.catalog_issue_type_version_id or "")
         in_scope = profile_issue is not None and profile_issue.factor_code in in_scope_codes
         amount = Decimal(0)
         if not in_scope:
             out_of_scope_findings = True
-        elif finding.affects_score and finding.status == "OPEN":
+        elif (finding.factor_code == profile_issue.factor_code
+              and (finding.catalog_issue_type_version_id, finding.target_id, finding.rule_version_id) in assessed_matches
+              and finding.affects_score and finding.status == "OPEN"):
             if finding.breach_risk == "UNKNOWN":
                 unknown_factors.add(finding.factor_code)
             if finding.breach_risk in model.penalties:
@@ -239,18 +264,24 @@ def _score_assessment_profile(*, scan_run_id: str, generated_at: datetime, targe
         factor_complete = factor_not_assessed == 0 and bool(factor_issues)
         if not factor_assessed:
             status = "unassessed"
+            score_status = "NOT_RATED"
         elif not factor_complete or code in unknown_factors:
             status = "incomplete"
+            score_status = "PROVISIONAL"
         else:
             status = "assessed"
+            score_status = "COMPLETE"
         name = factor_issues[0].factor_name if factor_issues else code
         factor_scores.append(FactorScore(
             code=code,
             name=name,
             status=status,
-            score=float(Decimal(100) - penalties[code]) if status == "assessed" else None,
+            score=float(Decimal(100) - penalties[code]) if factor_assessed else None,
+            score_status=score_status,
             weight=model.factor_weights.get(code, 1),
             score_impact=float(penalties[code]),
+            total_v1_issues=len(factor_issues),
+            coverage_percent=round(100 * factor_assessed / len(factor_issues), 2) if factor_issues else 0,
             total_issues=len(factor_issues),
             assessed_count=factor_assessed,
             not_assessed_count=factor_not_assessed,
@@ -258,34 +289,38 @@ def _score_assessment_profile(*, scan_run_id: str, generated_at: datetime, targe
             assessment_state="ASSESSED" if factor_complete else "NOT_ASSESSED",
         ))
 
-    total_weight = sum(Decimal(str(factor.weight)) for factor in factor_scores)
+    rated_factors = [factor for factor in factor_scores if factor.score is not None]
+    total_weight = sum(Decimal(str(factor.weight)) for factor in rated_factors)
     complete = (
         completeness.state == "COMPLETE"
-        and all(factor.status == "assessed" for factor in factor_scores)
+        and all(factor.score_status == "COMPLETE" for factor in factor_scores)
         and all(item.status in {"success", "manual"} for item in evidence)
     )
     overall = None
-    if complete:
+    if rated_factors:
         overall = float(round(sum(
             Decimal(str(factor.score)) * Decimal(str(factor.weight))
-            for factor in factor_scores
+            for factor in rated_factors
         ) / total_weight, 2))
+    overall_score_status = "COMPLETE" if complete else "PROVISIONAL" if rated_factors else "NOT_RATED"
 
-    weights = {factor.code: Decimal(str(factor.weight)) for factor in factor_scores}
+    weights = {factor.code: Decimal(str(factor.weight)) for factor in rated_factors}
     scored_findings = [finding.model_copy(update={
         "overall_score_impact": float(round(
             Decimal(str(finding.score_impact)) * weights[finding.factor_code] / total_weight, 4,
-        )) if complete and finding.factor_code in weights else 0,
+        )) if finding.factor_code in weights else 0,
     }) for finding in scored_findings]
 
     warnings = []
-    if not complete:
+    if overall_score_status == "PROVISIONAL":
         warnings.append(
-            "Overall V1 score is unassessed because required V1 issues remain NOT_ASSESSED "
-            "or other documented scoring prerequisites are incomplete."
+            "Overall V1 score is provisional and represents assessed checks only; "
+            "review assessment coverage and NOT_ASSESSED issues before interpreting it."
         )
+    elif overall_score_status == "NOT_RATED":
+        warnings.append("Overall V1 score is not rated because no in-scope factor has an assessed issue.")
     if unknown_factors:
-        warnings.append("UNKNOWN breach risk requires catalog review before a factor score can be assessed.")
+        warnings.append("UNKNOWN internal breach risk requires catalog review; provisional scores omit an unknown penalty.")
     if out_of_scope_findings:
         warnings.append("Findings outside the V1 assessment profile are reported but excluded from V1 scoring.")
     ignored_weights = sorted(set(model.factor_weights) - in_scope_codes)
@@ -310,6 +345,8 @@ def _score_assessment_profile(*, scan_run_id: str, generated_at: datetime, targe
         scoring_model_hash=model.content_hash(),
         scoring_model_definition=model.model_dump(),
         overall_score=overall,
+        overall_score_status=overall_score_status,
+        assessment_coverage=assessment_coverage,
         factor_scores=factor_scores,
         targets=targets,
         findings=scored_findings,

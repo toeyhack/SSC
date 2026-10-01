@@ -12,7 +12,7 @@ def _escape(value) -> str:
 
 
 def _score(value) -> str:
-    return "Unassessed" if value is None else f"{value:g} / 100"
+    return "Not rated" if value is None else f"{value:g} / 100"
 
 
 def _json(value) -> str:
@@ -22,9 +22,14 @@ def _json(value) -> str:
 def render_html(result: NormalizedResult) -> str:
     targets = {t.scan_job_target_id: t.name for t in result.targets}
     target_list = "".join(f"<li>{_escape(t.name)} ({_escape(t.target_type)})</li>" for t in result.targets)
+    def factor_coverage(factor) -> str:
+        if factor.total_v1_issues is None or factor.coverage_percent is None:
+            return "Configured detector scope"
+        return f"{factor.assessed_count} / {factor.total_v1_issues} ({factor.coverage_percent:.1f}%)"
+
     factors = "".join(
         f"<tr><td>{_escape(f.name)} <small>{_escape(f.code)}</small></td><td>{_score(f.score)}</td>"
-        f"<td>{_escape(f.total_issues)}</td><td>{_escape(f.assessed_count)}</td>"
+        f"<td>{_escape(f.score_status)}</td><td>{_escape(factor_coverage(f))}</td>"
         f"<td>{_escape(f.not_assessed_count)}</td><td>{_escape(f.supported_capability_count)}</td>"
         f"<td>{_escape(f.assessment_state or f.status)}</td><td>{_escape(f.weight)}</td>"
         f"<td>{_escape(f.score_impact)}</td></tr>"
@@ -67,6 +72,13 @@ def render_html(result: NormalizedResult) -> str:
 <small>SSC issue: {_escape(f.ssc_issue_key or 'unlinked')} · Rule version: {_escape(f.rule_version_id)} · Catalog issue version: {_escape(f.catalog_issue_type_version_id or 'unlinked')}</small></article>""")
     evidence = "".join(f"<details><summary>{_escape(e.source)} · {_escape(targets.get(e.target_id, e.target_id))} · {_escape(e.status)}</summary><pre>{_json(e.summary)}</pre></details>" for e in result.evidence)
     warnings = "".join(f"<li>{_escape(w)}</li>" for w in result.warnings)
+    overall_coverage = ""
+    if result.assessment_coverage:
+        coverage = result.assessment_coverage
+        overall_coverage = (
+            f"<p>Assessment coverage: {coverage.assessed_count} / {coverage.total_v1_issues} "
+            f"({coverage.coverage_percent:.1f}%)</p>"
+        )
     return f"""<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'">
@@ -77,13 +89,15 @@ article,details{{background:white;padding:20px;margin:16px 0;border:1px solid #d
 </style></head><body><main><h1>Authorized scan report</h1>
 <p>Run: {_escape(result.scan_run_id)} · Generated: {_escape(result.generated_at.isoformat())} · Result: {_escape(result.status)}</p>
 <p class="score">Overall score: {_score(result.overall_score)}</p>
+<p>Overall score status: <strong>{_escape(result.overall_score_status)}</strong></p>
+{overall_coverage}
 <p>Internal model: {_escape(result.scoring_model_name)} v{_escape(result.scoring_model_version)}. This score is an internal assessment using the configured rules.</p>
 <ul>{warnings}</ul>{completeness}{issue_assessments}<h2>Targets</h2><ul>{target_list}</ul>
-<h2>Factor scores</h2><table><thead><tr><th>Factor</th><th>Score</th><th>Total issues</th><th>ASSESSED</th><th>NOT_ASSESSED</th><th>Supported capability</th><th>Assessment state</th><th>Weight</th><th>Observed impact</th></tr></thead><tbody>{factors}</tbody></table>
+<h2>Factor scores</h2><table><thead><tr><th>Factor</th><th>Score</th><th>Status</th><th>Coverage</th><th>NOT_ASSESSED</th><th>Supported capability</th><th>Assessment state</th><th>Weight</th><th>Observed impact</th></tr></thead><tbody>{factors}</tbody></table>
 <h2>Findings ({len(result.findings)})</h2>{''.join(findings) or '<p>No findings matched the evaluated rules. Review coverage before interpreting this result.</p>'}
 <h2>Evidence</h2>{evidence or '<p>No observations recorded.</p>'}
 <h2>Coverage</h2><pre>{_json(result.coverage)}</pre>
-<p>Impacts on incomplete factors represent observed penalties only. An incomplete result has no overall score or overall impact.</p>
+<p>Score and coverage are separate: a provisional score represents observed risk among assessed checks and must be read with its coverage. NOT_ASSESSED is never a pass. Impacts represent assessed findings only.</p>
 <small>Result schema: {_escape(result.schema_version)} · Scoring definition SHA-256: {_escape(result.scoring_model_hash)}</small>
 </main></body></html>"""
 

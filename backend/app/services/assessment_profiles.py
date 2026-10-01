@@ -43,7 +43,8 @@ class AssessmentProfileError(ValueError):
 
 class AssessmentProfileDefinition(ResultRecord):
     name: str = "ssc-v1"
-    version: str = "1.0"
+    # Provisional scoring changes result semantics; keep earlier 1.0 snapshots distinct.
+    version: str = "1.1"
     baseline_content_hash: str = V1_BASELINE_CONTENT_HASH
     scoring_model_name: str = "internal-exposure"
     scoring_model_version: str = "1.0"

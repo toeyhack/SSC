@@ -67,17 +67,30 @@ def _assessment(version_id: str, outcome: str = "NO_MATCH", **changes):
     return item
 
 
-def _score(assessments, findings=None):
+def _score(assessments, findings=None, model=None, evidence=None):
     return score_result(
         scan_run_id="run",
         generated_at=datetime(2026, 9, 23, tzinfo=timezone.utc),
         targets=[],
         findings=findings or [],
-        evidence=[],
+        evidence=evidence or [],
         assessments=assessments,
-        model=ScoringDefinition(),
+        model=model or ScoringDefinition(),
         assessment_profile=_profile(),
     )
+
+
+def _finding(version_id="app-a-v1", **changes):
+    item = dict(
+        id="finding", target_id="target", rule_id="rule-" + version_id,
+        rule_version_id="rule-version-" + version_id,
+        catalog_issue_type_version_id=version_id, ssc_issue_key="app-a", ssc_severity="high",
+        title="Observed issue", factor_code="application_security", factor_name="Application Security",
+        breach_risk="HIGH", affects_score=True, status="OPEN", evidence_source="SCANNER_HTTP",
+        evidence_summary={}, remediation="Review",
+    )
+    item.update(changes)
+    return ResultFinding(**item)
 
 
 def _all_v1_assessments():
@@ -89,7 +102,11 @@ def _all_v1_assessments():
 def test_single_no_match_cannot_make_incomplete_v1_assessment_complete():
     result = _score([_assessment("app-a-v1")])
     assert result.status == "incomplete"
-    assert result.overall_score is None
+    assert result.overall_score == 100
+    assert result.overall_score_status == "PROVISIONAL"
+    assert result.assessment_coverage.model_dump() == {
+        "total_v1_issues": 5, "assessed_count": 1, "not_assessed_count": 4, "coverage_percent": 20.0,
+    }
     assert result.assessment_completeness.assessed_count == 1
     assert result.assessment_completeness.not_assessed_count == 4
     assert result.assessment_completeness.out_of_scope_count == 1
@@ -100,7 +117,69 @@ def test_single_no_match_cannot_make_incomplete_v1_assessment_complete():
     assert application.total_issues == 2
     assert application.assessed_count == 1
     assert application.not_assessed_count == 1
-    assert application.score is None
+    assert application.score == 100
+    assert application.score_status == "PROVISIONAL"
+    assert application.total_v1_issues == 2
+    assert application.coverage_percent == 50.0
+
+
+def test_zero_assessed_is_not_rated_and_never_defaults_to_100():
+    result = _score([])
+    assert result.overall_score is None
+    assert result.overall_score_status == "NOT_RATED"
+    assert result.assessment_coverage.coverage_percent == 0
+    assert all(factor.score is None and factor.score_status == "NOT_RATED" for factor in result.factor_scores)
+    assert all(factor.coverage_percent == 0 for factor in result.factor_scores)
+
+
+def test_scoring_match_penalizes_only_assessed_match_and_non_scoring_match_does_not():
+    assessments = [_assessment("app-a-v1", "MATCH")]
+    scored = _score(assessments, [_finding()])
+    app = next(f for f in scored.factor_scores if f.code == "application_security")
+    assert app.score == 85 and app.score_status == "PROVISIONAL"
+    assert scored.overall_score == 85 and scored.overall_score_status == "PROVISIONAL"
+    assert scored.findings[0].score_impact == 15
+    assert scored.findings[0].overall_score_impact == 15
+
+    informational = _score(assessments, [_finding(affects_score=False, breach_risk="INFORMATIONAL")])
+    assert informational.overall_score == 100
+    assert informational.findings[0].score_impact == 0
+    assert informational.findings[0].overall_score_impact == 0
+
+
+def test_not_assessed_finding_cannot_change_provisional_score():
+    result = _score([_assessment("app-a-v1")], [_finding("app-b-v1", ssc_issue_key="app-b")])
+    assert result.overall_score == 100
+    assert result.assessment_completeness.not_assessed_count == 4
+    assert result.findings[0].score_impact == 0
+    assert result.findings[0].overall_score_impact == 0
+
+
+def test_no_match_cannot_penalize_stale_finding():
+    result = _score([_assessment("app-a-v1", "NO_MATCH")], [_finding()])
+    assert result.overall_score == 100
+    assert result.findings[0].score_impact == 0
+
+
+def test_overall_uses_only_rated_factor_weights():
+    model = ScoringDefinition(factor_weights={"application_security": 3, "network_security": 1})
+    result = _score([_assessment("app-a-v1", "MATCH")], [_finding()], model=model)
+    assert result.overall_score == 85
+    assert result.overall_score_status == "PROVISIONAL"
+    assert next(f for f in result.factor_scores if f.code == "network_security").score_status == "NOT_RATED"
+    assert result.findings[0].overall_score_impact == 15
+
+
+def test_complete_profile_retains_final_score_and_penalty():
+    assessments = _all_v1_assessments()
+    assessments[0] = _assessment("app-a-v1", "MATCH")
+    result = _score(assessments, [_finding()])
+    assert result.status == "complete"
+    assert result.assessment_completeness.state == "COMPLETE"
+    assert result.overall_score_status == "COMPLETE"
+    assert result.overall_score == 96.25
+    assert all(f.score_status == "COMPLETE" for f in result.factor_scores)
+    assert result.assessment_coverage.coverage_percent == 100
 
 
 def test_v2_issues_are_out_of_scope_and_do_not_change_v1_score():
@@ -114,6 +193,7 @@ def test_v2_issues_are_out_of_scope_and_do_not_change_v1_score():
     result = _score(_all_v1_assessments() + [_assessment("v2-a-v1", "MATCH")], [v2_finding])
     assert result.status == "complete"
     assert result.overall_score == 100
+    assert result.overall_score_status == "COMPLETE"
     assert result.findings[0].score_impact == 0
     v2 = next(item for item in result.issue_assessments if item.ssc_issue_key == "v2-a")
     assert v2.state == "OUT_OF_SCOPE"
@@ -132,7 +212,8 @@ def test_indeterminate_execution_states_are_not_assessed(reason):
     issue = next(item for item in result.issue_assessments if item.ssc_issue_key == "app-a")
     assert issue.state == "NOT_ASSESSED"
     assert issue.reason_code == reason
-    assert result.overall_score is None
+    assert result.overall_score == 100
+    assert result.overall_score_status == "PROVISIONAL"
 
 
 @pytest.mark.parametrize(("source", "evaluation", "expected"), [
@@ -160,8 +241,16 @@ def test_json_and_html_expose_v1_assessment_completeness():
     result = _score([_assessment("app-a-v1")])
     payload = NormalizedResult.model_validate_json(result.model_dump_json())
     assert payload.assessment_profile.name == "ssc-v1"
+    assert payload.assessment_profile.version == "1.1"
     assert payload.coverage["issues_not_assessed"] == 4
+    assert payload.overall_score == 100
+    assert payload.overall_score_status == "PROVISIONAL"
+    assert payload.assessment_coverage.coverage_percent == 20.0
     document = render_html(payload)
+    assert "Overall score: 100 / 100" in document
+    assert "Overall score status: <strong>PROVISIONAL</strong>" in document
+    assert "Assessment coverage: 1 / 5 (20.0%)" in document
+    assert "1 / 2 (50.0%)" in document
     assert "V1 assessment completeness" in document
     assert "NOT_ASSESSED: 4" in document
     assert "OUT_OF_SCOPE: 1" in document

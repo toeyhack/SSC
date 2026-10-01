@@ -8,6 +8,10 @@ Implementation state reviewed: Waves 1–3A, 27 active exact SSC evaluator mappi
 
 This review originally changed product scope documentation only. The V1 Assessment Completeness Fix implemented on 2026-09-23 applies the correction specified here without changing the Golden Baseline, scanner primitives, rule activation, penalty arithmetic, factor weights, or SSC severity.
 
+## Provisional scoring update (2026-10-01)
+
+The later `ssc-v1` v1.1 profile keeps the same 160 in-scope exact issue versions, 42 `OUT_OF_SCOPE` versions, and strict `ASSESSED`/`NOT_ASSESSED` semantics. It changes score availability: a factor with at least one assessed issue now has an internal `PROVISIONAL` score from assessed findings, while a zero-assessed factor remains `NOT_RATED` with a null score. The overall score weights only rated factors and stays `PROVISIONAL` until the existing complete-profile prerequisites hold. Neither a provisional 100 nor a `NO_MATCH` count implies that missing issues passed. The earlier v1.0 behavior described below is retained as historical context; [Internal Scoring Model](SCORING.md) documents current output fields and persistence.
+
 ## Product scope decision
 
 Version 1 covers exactly these SSC factors:

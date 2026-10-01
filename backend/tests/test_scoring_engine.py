@@ -2,7 +2,7 @@ from datetime import datetime, timezone
 
 import pytest
 from pydantic import ValidationError
-from app.schemas.results import ResultFinding
+from app.schemas.results import NormalizedResult, ResultFinding
 from app.services.scoring_engine import ScoringDefinition, score_result
 
 
@@ -70,3 +70,17 @@ def test_unversioned_linked_catalog_without_findings_is_unassessed():
     result = score([], [{"factor_code": "WEB", "factor_name": "Web", "status": "evaluated", "catalog_issue_type_version_id": None}])
     assert result.overall_score is None
     assert result.factor_scores[0].status == "unassessed"
+
+
+def test_historical_result_without_new_status_fields_keeps_its_numeric_score():
+    payload = score([finding()]).model_dump()
+    payload.pop("overall_score_status")
+    payload.pop("assessment_coverage")
+    for factor in payload["factor_scores"]:
+        factor.pop("score_status")
+        factor.pop("total_v1_issues")
+        factor.pop("coverage_percent")
+    historical = NormalizedResult.model_validate(payload)
+    assert historical.overall_score == 85
+    assert historical.overall_score_status == "COMPLETE"
+    assert historical.factor_scores[0].score_status == "COMPLETE"
