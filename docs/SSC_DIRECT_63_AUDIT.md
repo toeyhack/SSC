@@ -1,0 +1,110 @@
+# SSC DIRECT 63 Audit
+
+Audit date: 2026-10-01. Baseline: immutable `SSC_API` Golden Baseline content hash `0fe2bc8ffb7e3f734d4e88f70b11cffa6e8e9e47e722dc62107f6ff09694eca8` as captured in the repository. This is a mapping/design milestone; no catalog, scanner, evaluator, score, or production data was changed. The 63 dashboard labels form a separate input set and do not replace or reduce the 202 issue baseline.
+
+The [row-level CSV](SSC_DIRECT_63_AUDIT.csv) is the audit ledger. Each row includes the exact catalog key, factor, captured SSC severity, mapping status, current capability and implementation, proposed primitive, required evidence, deterministic MATCH/NO_MATCH/INDETERMINATE boundaries, classification, and rationale. `EXACT` means the dashboard label matches the captured catalog title character for character; no key was inferred from the label. `mapping_candidates` is reserved for ambiguous rows and is empty here.
+
+## Source and decision rules
+
+- Keys, titles, factors, SSC severity, feasibility, evidence proposals, and current support were read from [SSC_ISSUE_COVERAGE.csv](SSC_ISSUE_COVERAGE.csv) and checked against [SSC_ISSUE_COVERAGE.md](SSC_ISSUE_COVERAGE.md). The source CSV contains 202 distinct keys. No live SSC API was called.
+- Feasibility and downgrades were cross-checked with [SSC_COVERAGE_QUALITY_REVIEW.md](SSC_COVERAGE_QUALITY_REVIEW.md), [SSC_SCANNER_PRIMITIVES.md](SSC_SCANNER_PRIMITIVES.md), and [SSC_TEST_METHOD_CATALOG.md](SSC_TEST_METHOD_CATALOG.md).
+- Current implementation was checked against the Wave 1/2/3A rule registries, `scan_executors.py`, `service_probes.py`, focused Wave tests, and [IMPLEMENTATION_STATUS.md](IMPLEMENTATION_STATUS.md). `SUPPORTED` retains the existing exact-version active-evaluator gate; proposed probes do not imply support.
+- `VERIFIED_DIRECT` means the condition is deterministically observable on an authorized target within a declared URL/port/flow manifest. It does not assert full Internet-wide absence, SSC collection equivalence, or that an evaluator is already implemented. A complete scoped negative is required for `NO_MATCH`; missing, failed, ambiguous, or out-of-scope evidence is `INDETERMINATE`/`NOT_ASSESSED`. A port number or open socket never identifies a service.
+- `MOVE_TO_ENRICHMENT` means the title requires authorized flow context, a reviewed catalog/policy, external terminal-destination proof, authoritative revocation data, or inventory/canary evidence in addition to a simple target probe. Such rows are excluded from the direct implementation backlog. No candidate remained `UNRESOLVED`.
+
+## Exact counts
+
+| Measure | Count |
+|---|---:|
+| Total reviewed | 63 |
+| `VERIFIED_DIRECT` | 53 |
+| `MOVE_TO_ENRICHMENT` | 10 |
+| `UNRESOLVED` | 0 |
+| `EXACT` mappings | 63 |
+| `NAME_VARIANT` mappings | 0 |
+| `AMBIGUOUS` mappings | 0 |
+| `NOT_FOUND` mappings | 0 |
+| Current `SUPPORTED` | 23 |
+| Current `PARTIAL` | 34 |
+| Current `NOT_SUPPORTED` | 6 |
+| Direct backlog: verified and not supported | 30 |
+
+The 63 include **23 of the platform’s 27 supported capabilities**. The other four supported issues are `spf_record_softfail`, `dmarc_record_missing`, `dmarc_contains_none`, and `subdomain_dmarc_contains_none`; they are in the 202 issue catalog but outside this dashboard list. All 23 supported rows here remain `VERIFIED_DIRECT`.
+
+## By SSC factor
+
+| Factor | Reviewed | Verified direct | Move to enrichment | Unresolved | Supported | Partial | Not supported |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| `application_security` | 22 | 16 | 6 | 0 | 10 | 6 | 6 |
+| `network_security` | 37 | 33 | 4 | 0 | 11 | 26 | 0 |
+| `dns_health` | 3 | 3 | 0 | 0 | 2 | 1 | 0 |
+| `ip_reputation` | 1 | 1 | 0 | 0 | 0 | 1 | 0 |
+| **Total** | **63** | **53** | **10** | **0** | **23** | **34** | **6** |
+
+## By proposed scanner primitive
+
+The primary implementation backlog groups direct rows by reusable primitive. Composite primitives below show the extra dependency needed by reclassified rows. `SERVICE_PROTOCOL` means a protocol-specific bounded adapter on the existing framework, including DNS over the service endpoint; `DNS` means authoritative TXT/SPF policy evidence.
+
+| Primitive | Reviewed | Verified direct | Move to enrichment | Supported | Direct backlog |
+|---|---:|---:|---:|---:|---:|
+| `SERVICE_PROTOCOL` | 24 | 24 | 0 | 6 | 18 |
+| `HTTP_CONTENT` | 7 | 7 | 0 | 0 | 7 |
+| `HTTP_HEADERS` | 6 | 6 | 0 | 6 | 0 |
+| `TLS_CERTIFICATE` | 5 | 5 | 0 | 5 | 0 |
+| `HTTP_REDIRECT` | 3 | 3 | 0 | 3 | 0 |
+| `SSH_NEGOTIATION` | 3 | 3 | 0 | 0 | 3 |
+| `DNS` | 3 | 3 | 0 | 2 | 1 |
+| `HTTP_HEADERS+AUTH_FLOW` | 2 | 0 | 2 | 0 | 0 |
+| `TLS_NEGOTIATION` | 2 | 2 | 0 | 1 | 1 |
+| `BROWSER_RUNTIME+PRODUCT_FINGERPRINT` | 1 | 0 | 1 | 0 | 0 |
+| `HTTP_REDIRECT+EXTERNAL_EVIDENCE` | 1 | 0 | 1 | 0 | 0 |
+| `HTTP_CONTENT+PRODUCT_FINGERPRINT` | 1 | 0 | 1 | 0 | 0 |
+| `BROWSER_RUNTIME+TLS_CERTIFICATE` | 1 | 0 | 1 | 0 | 0 |
+| `TLS_REVOCATION` | 1 | 0 | 1 | 0 | 0 |
+| `PROXY_VALIDATION` | 1 | 0 | 1 | 0 | 0 |
+| `SERVICE_PROTOCOL+PRODUCT_FINGERPRINT` | 1 | 0 | 1 | 0 | 0 |
+| `TLS_CERTIFICATE+POLICY` | 1 | 0 | 1 | 0 | 0 |
+| **Total** | **63** | **53** | **10** | **23** | **30** |
+
+## Prioritized direct implementation backlog
+
+Only the 30 `VERIFIED_DIRECT` rows lacking `SUPPORTED` status appear below. Priority favors shared collectors and parsers that unlock several exact catalog issues. Each later implementation batch still needs exact-version rule linkage, positive and negative tests, and false-positive/unknown-boundary tests before its coverage can become `SUPPORTED`. The order is a planning recommendation, not implementation authorization.
+
+| Priority | Primitive | Count | Exact SSC keys and batch scope |
+|---:|---|---:|---|
+| 1 | `HTTP_CONTENT` | 7 | Build a bounded same-origin HTML/resource crawler with URL resolution, redaction and declared-path coverage; add SRI, contact/link schemes, repeatable 5xx, and scoped SOAP/WSDL evaluation.<br>`unsafe_sri_v2`, `insecure_ftp`, `contact_information_detected`, `local_file_path_exposed_via_url_scheme`, `server_error`, `links_to_insecure_website`, `service_soap` |
+| 2 | `SERVICE_PROTOCOL` | 18 | Extend the Wave 3A bounded adapter framework in small protocol-specific groups; begin with greeting/negotiation protocols, then framed database protocols, then bounded UDP/HTTP service signatures. Preserve foreign-protocol-only negatives.<br>`service_cassandra`, `service_couchdb`, `service_dns`, `service_elasticsearch`, `service_ftp`, `service_imap`, `service_ldap`, `service_microsoft_sql`, `minecraft_server`, `service_mongodb`, `service_mysql`, `service_oracle_db`, `service_pop3`, `service_pptp`, `service_postgresql`, `service_rdp`, `upnp_accessible`, `mail_server_unusual_port` |
+| 3 | `SSH_NEGOTIATION` | 3 | Add one unauthenticated SSH identification/KEXINIT collector and a versioned cryptographic policy for protocol, cipher and MAC evaluation.<br>`ssh_weak_protocol`, `ssh_weak_cipher`, `ssh_weak_mac` |
+| 4 | `DNS` | 1 | Complete RFC 7208 macro, void-lookup and nested A/MX permanent-error evaluation using the existing DNS/SPF collector.<br>`spf_record_malformed` |
+| 5 | `TLS_NEGOTIATION` | 1 | Use a client capable of offering every prohibited suite in the pinned policy and retain successful modern controls before making a negative claim.<br>`tls_weak_cipher` |
+
+The `SERVICE_PROTOCOL` group has 18 remaining rows, but the shared framework alone cannot make them supported: every service needs its own protocol-valid acquisition, parser, versioned evaluator, and conclusive-negative boundary. HTTP content unlocks seven rows through one reusable crawler. SSH negotiation unlocks three issues through one exchange. The final DNS and TLS batches each close one specific evidence gap.
+
+## Candidates that do not survive DIRECT review
+
+| # | Exact SSC key | Why moved |
+|---:|---|---|
+| 1 | `cookie_missing_http_only` | Session purpose needs a reviewed cookie inventory and authorized synthetic authentication flow. |
+| 2 | `cookie_missing_secure_attribute` | Session purpose needs a reviewed cookie inventory and authorized synthetic authentication flow. |
+| 4 | `payment_provider` | Provider identity needs a reviewed provider/SDK catalog; a contacted origin alone is insufficient. |
+| 12 | `redirect_to_insecure_website` | An external Location is only a next hop; terminal scheme needs authorized or passive external redirect evidence. |
+| 13 | `references_object_storage_v2` | Provider identity needs reviewed multi-signal storage fingerprints and a versioned catalog. |
+| 17 | `communication_server_with_expired_cert` | A contacted third-party origin may be outside probe scope; expiry needs authorized TLS or fresh passive certificate evidence. |
+| 23 | `tlscert_revoked` | Revocation requires fresh signed issuer OCSP/CRL evidence beyond the target certificate and TLS handshake. |
+| 30 | `service_http_proxy` | Conclusive proxy semantics need a separately authorized organization-owned canary destination; an HTTP banner or 407 alone is insufficient. |
+| 37 | `service_open_vpn` | OpenVPN may be silent unauthenticated; a unique product fingerprint or authoritative inventory is needed. |
+| 56 | `tlscert_excessive_expiration` | Applicable maximum needs historical CA/B policy and certificate applicability at issuance. |
+
+Nine of these ten already carry `TESTABLE_WITH_ENRICHMENT` in the current coverage matrix. `service_http_proxy` is the new downgrade in this audit: a generic HTTP response, proxy-looking error, or open port does not prove proxy forwarding; an organization-owned canary would need separate authorization and evidence. `service_open_vpn` may remain silent without authentication. A certificate with an OCSP URI is not proof of current non-revocation.
+
+## Mapping and coverage observations
+
+- All 63 titles match exactly one captured catalog title. There are no ambiguous or missing keys. `SPF Record Found Ineffective` is exactly `spf_record_wildcard` in this catalog; it is specifically about wildcard-synthesized SPF, not every weak SPF policy.
+- `Server error detected` is only `PARTIAL`: the current executor records a representative root response, while the proposed direct rule requires repeatable 5xx evidence across a declared URL set.
+- `TLS Service Supports Weak Cipher Suite` is `PARTIAL`: current constrained handshakes can prove some positive acceptance, but the client cannot offer every prohibited suite needed for a conclusive negative.
+- `SOAP Server Accessible` is direct only for explicitly declared authorized HTTP endpoints. Unknown paths cannot produce a host-wide `NO_MATCH`.
+- The active Wave 3A adapters cover six service labels in this set. The other service rows retain `PARTIAL` until a protocol-specific response is validated; a port number or arbitrary banner is never sufficient.
+
+## Validation boundary
+
+This docs-only audit validates the CSV against the repository’s 202-row coverage snapshot, active Wave rule keys, factor/severity/status metadata, and row counts. No live SSC request, scanner probe, database mutation, full pytest run, scoring change, commit, or push was performed. The audit inherits the repository snapshot’s baseline attestation; it does not independently query a production database.
