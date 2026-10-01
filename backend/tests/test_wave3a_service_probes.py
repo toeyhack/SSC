@@ -256,7 +256,8 @@ def test_wave3a_exact_version_activation_and_end_to_end_finding(db):
     finding = result.findings[0]
     assert finding.ssc_issue_key == "service_vnc"
     assert finding.ssc_severity == "medium"
-    assert finding.breach_risk == "UNKNOWN" and finding.score_impact == 0
+    assert finding.breach_risk == "LOW" and finding.affects_score is True
+    assert finding.score_impact == 2
     assert result.evidence[0].summary["evaluations"]["service_vnc"]["outcome"] == "MATCH"
     payload = result.model_dump(mode="json")
     probe = payload["evidence"][0]["summary"]["service_probes"][0]

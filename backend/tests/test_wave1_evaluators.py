@@ -297,7 +297,8 @@ def test_real_baseline_activation_linkage_observation_finding_and_report(db):
     assert finding.ssc_issue_key == "csp_no_policy_v2"
     assert finding.ssc_severity == "low"
     assert finding.catalog_issue_type_version_id == str(rule.current_version.catalog_issue_type_version_id)
-    assert finding.breach_risk == "UNKNOWN" and finding.score_impact == 0
+    assert finding.breach_risk == "LOW" and finding.affects_score is True
+    assert finding.score_impact == 2
     html = render_html(result)
     assert "csp_no_policy_v2" in html and "SSC severity: low" in html
 

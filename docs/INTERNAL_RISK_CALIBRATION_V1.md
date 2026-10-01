@@ -1,6 +1,6 @@
-# Internal risk calibration V1 — review proposal
+# Internal risk calibration V1
 
-**Status:** proposed for review; no catalog, rule, scanner, or scoring behavior has changed. **Scope:** the 27 `SUPPORTED` keys in [SSC issue coverage](SSC_ISSUE_COVERAGE.md) for the attested SSC API baseline `0fe2bc8ffb7e3f734d4e88f70b11cffa6e8e9e47e722dc62107f6ff09694eca8`. The companion [CSV](INTERNAL_RISK_CALIBRATION_V1.csv) is the row-level decision record, including rationale and conditions for every key. SSC severity remains vendor metadata; these are independent internal judgments and make no claim about SSC's scoring method.
+**Status:** approved and implemented on 2026-10-02. **Scope:** the 27 `SUPPORTED` keys in [SSC issue coverage](SSC_ISSUE_COVERAGE.md) for the attested SSC API baseline `0fe2bc8ffb7e3f734d4e88f70b11cffa6e8e9e47e722dc62107f6ff09694eca8`. The companion [CSV](INTERNAL_RISK_CALIBRATION_V1.csv) is the row-level decision record, including rationale and conditions for every key. SSC severity remains vendor metadata; these are independent internal judgments and make no claim about SSC's scoring method.
 
 ## Decision basis
 
@@ -67,15 +67,15 @@ The same **four** keys should remain `UNKNOWN` and `affects_score=false`:
 | `service_socks_proxy` | Method selection does not show that relay succeeds or can be abused. | Selected authentication method and authorized relay test or configuration. |
 | `tlscert_no_revocation` | Missing OCSP/CRL URI does not establish compromise or the issuer's complete status strategy. | Issuer strategy, lifetime, and client validation behavior. |
 
-The current scoring engine only treats `UNKNOWN` as an unresolved scoring risk when `affects_score=true`. With these proposals, the four observations would remain assessed findings but have no penalty. Their unscored status is a deliberate review decision; it must not be represented as proof that the services or configurations are safe.
+The current scoring engine only treats `UNKNOWN` as an unresolved scoring risk when `affects_score=true`. With the implemented decisions, the four observations remain assessed findings but have no penalty. Their unscored status is a deliberate review decision; it must not be represented as proof that the services or configurations are safe.
 
 ### `csp_unsafe_policy_v2`
 
-Recommend `LOW`, `affects_score=true`, **2 factor points for one qualifying MATCH**. The evaluator's MATCH means the effective active-content policy permits `unsafe-eval` or permits `unsafe-inline` without nonce/hash control. This weakens a browser defense against script injection; it does not establish an actual injection path or compromise. Its observed SSC severity is `low` metadata and is not the basis for the internal rating. A sensitive session plus a demonstrated injection path would justify a separate impact review based on additional evidence, not an automatic upgrade of this issue type. Until an approved catalog version carries LOW, the current `UNKNOWN` yields zero deduction even when a real MATCH occurs; a provisional 100 therefore must be read with coverage and the unresolved-risk warning.
+Implemented as `LOW`, `affects_score=true`, **2 factor points for one qualifying MATCH**. The evaluator's MATCH means the effective active-content policy permits `unsafe-eval` or permits `unsafe-inline` without nonce/hash control. This weakens a browser defense against script injection; it does not establish an actual injection path or compromise. Its observed SSC severity is `low` metadata and is not the basis for the internal rating. A sensitive session plus a demonstrated injection path would justify a separate impact review based on additional evidence, not an automatic upgrade of this issue type.
 
-## Where an approved decision would live
+## Implementation
 
-The intended configuration point is each exact [catalog issue version](../backend/app/models/catalog_models.py): `CatalogIssueTypeVersion.breach_risk` and `CatalogIssueTypeVersion.affects_score`, alongside separate `ssc_severity`. The [SSC API baseline importer](../backend/app/services/ssc_api_baseline.py) currently supplies `UNKNOWN` and `true`; the [finding loader](../backend/app/services/finding_results.py) reads the version pinned to the finding, and the [scoring engine](../backend/app/services/scoring_engine.py) applies that version's internal risk and relevance. An approved implementation should create reviewed immutable issue versions or use the existing catalog version review path, preserve exact rule and snapshot links for historical results, and avoid silently reinterpreting old scans. This document makes no database or code change.
+The versioned internal registry is [internal_risk_calibration.py](../backend/app/services/internal_risk_calibration.py). The [finding loader](../backend/app/services/finding_results.py) applies it only to findings pinned to imported `SSC_API` issue versions. Imported taxonomy rows keep their original SSC metadata and are not rewritten with internal risk. Missing SSC calibration entries fail closed to `UNKNOWN` and `affects_score=false`; SSC severity is never used as a fallback. Manual and other non-SSC catalog versions continue to use their explicit catalog risk metadata. Persisted normalized score results retain the internal risk, score relevance, exact catalog issue version, SSC severity, and allocated score impact used for that result. No schema migration is required.
 
 ## Supporting security references
 
