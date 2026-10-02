@@ -435,6 +435,10 @@ def public_content_observation(content: dict[str, Any] | None) -> dict[str, Any]
 
 def evaluate_http_content(attempts: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
     declared = [attempt for attempt in attempts if attempt.get("coverage_declared")]
+    groups = _group_declared_endpoints(declared)
+    responsive_endpoint_keys = {
+        key for key, group in groups.items() if _endpoint_has_http_response(group)
+    }
     evaluations: dict[str, dict[str, Any]] = {}
     issue_to_count = {
         "insecure_ftp": "insecure_ftp",
@@ -446,6 +450,13 @@ def evaluate_http_content(attempts: list[dict[str, Any]]) -> dict[str, dict[str,
         values, details = [], []
         for attempt in declared:
             state, detail = _content_attempt_state(attempt)
+            endpoint_responsive = _endpoint_key(attempt) in responsive_endpoint_keys
+            detail["endpoint_responsive"] = endpoint_responsive
+            detail["content_evaluation_applicable"] = endpoint_responsive
+            if not endpoint_responsive:
+                detail["applicability_reason"] = "no_http_response"
+                details.append(detail)
+                continue
             content = attempt.get("content") if state is not None else None
             if state is not True or not isinstance(content, dict) or content.get("content_kind") != "HTML":
                 value = None
@@ -465,6 +476,13 @@ def evaluate_http_content(attempts: list[dict[str, Any]]) -> dict[str, dict[str,
     sri_values, sri_details = [], []
     for attempt in declared:
         state, detail = _content_attempt_state(attempt)
+        endpoint_responsive = _endpoint_key(attempt) in responsive_endpoint_keys
+        detail["endpoint_responsive"] = endpoint_responsive
+        detail["content_evaluation_applicable"] = endpoint_responsive
+        if not endpoint_responsive:
+            detail["applicability_reason"] = "no_http_response"
+            sri_details.append(detail)
+            continue
         content = attempt.get("content") if state is not None else None
         candidates = content.get("sri_candidates", []) if isinstance(content, dict) else []
         if state is not True or not isinstance(content, dict) or content.get("content_kind") != "HTML":
@@ -490,6 +508,13 @@ def evaluate_http_content(attempts: list[dict[str, Any]]) -> dict[str, dict[str,
     soap_values, soap_details = [], []
     for attempt in declared:
         state, detail = _content_attempt_state(attempt)
+        endpoint_responsive = _endpoint_key(attempt) in responsive_endpoint_keys
+        detail["endpoint_responsive"] = endpoint_responsive
+        detail["content_evaluation_applicable"] = endpoint_responsive
+        if not endpoint_responsive:
+            detail["applicability_reason"] = "no_http_response"
+            soap_details.append(detail)
+            continue
         content = attempt.get("content") if state is not None else None
         soap = content.get("soap") if isinstance(content, dict) else None
         if state is not True or not isinstance(soap, dict):
@@ -506,20 +531,19 @@ def evaluate_http_content(attempts: list[dict[str, Any]]) -> dict[str, dict[str,
     )
 
     server_values, server_details = [], []
-    groups: dict[tuple[Any, Any, Any], list[dict[str, Any]]] = {}
-    for attempt in declared:
-        key = (attempt.get("request_scheme"), attempt.get("request_port"), attempt.get("request_path"))
-        groups.setdefault(key, []).append(attempt)
     for (scheme, port, path), group in groups.items():
         ordered = sorted(group, key=lambda item: item.get("attempt_number", 0))
         statuses = [item.get("status_code") for item in ordered]
+        responsive = _endpoint_has_http_response(ordered)
         complete = len(ordered) == 2 and all(
             item.get("endpoint_available") and item.get("stop_reason") == "terminal_response"
             and isinstance(item.get("status_code"), int)
             for item in ordered
         )
         five_xx = [isinstance(status, int) and 500 <= status <= 599 for status in statuses]
-        if not complete:
+        if not responsive:
+            value = None
+        elif not complete:
             value = None
         elif all(five_xx):
             value = True
@@ -527,9 +551,13 @@ def evaluate_http_content(attempts: list[dict[str, Any]]) -> dict[str, dict[str,
             value = None
         else:
             value = False
-        server_values.append(value)
+        if responsive:
+            server_values.append(value)
         server_details.append({
             "scheme": scheme, "port": port, "path": path,
+            "endpoint_responsive": responsive,
+            "server_error_evaluation_applicable": responsive,
+            "applicability_reason": None if responsive else "no_http_response",
             "attempts": [
                 {
                     "attempt_number": item.get("attempt_number"),
@@ -547,6 +575,27 @@ def evaluate_http_content(attempts: list[dict[str, Any]]) -> dict[str, dict[str,
         server_details,
     )
     return evaluations
+
+
+def _endpoint_key(attempt: dict[str, Any]) -> tuple[Any, Any, Any]:
+    return (
+        attempt.get("request_scheme"),
+        attempt.get("request_port"),
+        attempt.get("request_path"),
+    )
+
+
+def _group_declared_endpoints(
+    attempts: list[dict[str, Any]],
+) -> dict[tuple[Any, Any, Any], list[dict[str, Any]]]:
+    groups: dict[tuple[Any, Any, Any], list[dict[str, Any]]] = {}
+    for attempt in attempts:
+        groups.setdefault(_endpoint_key(attempt), []).append(attempt)
+    return groups
+
+
+def _endpoint_has_http_response(attempts: list[dict[str, Any]]) -> bool:
+    return any(isinstance(attempt.get("status_code"), int) for attempt in attempts)
 
 
 def _content_attempt_state(attempt: dict[str, Any]) -> tuple[bool | None, dict[str, Any]]:

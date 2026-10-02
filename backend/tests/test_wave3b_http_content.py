@@ -46,21 +46,24 @@ def _attempt(
     status: int = 200,
     attempt_number: int = 1,
     body_complete: bool = True,
+    request_scheme: str = "https",
+    request_port: int = 443,
+    request_path: str = "/covered",
 ):
     content = inspect_http_content(
         body,
         content_type,
-        "https://example.test:443/covered",
+        f"{request_scheme}://example.test:{request_port}{request_path}",
         body_complete=body_complete,
         content_encoding=None,
     )
     return {
         "endpoint_available": True,
         "status_code": status,
-        "request_scheme": "https",
-        "request_port": 443,
-        "request_path": "/covered",
-        "terminal_scheme": "https",
+        "request_scheme": request_scheme,
+        "request_port": request_port,
+        "request_path": request_path,
+        "terminal_scheme": request_scheme,
         "stop_reason": "terminal_response",
         "content_type": content_type,
         "body_complete": body_complete,
@@ -70,6 +73,45 @@ def _attempt(
         "observed_at": f"2026-10-02T00:00:0{attempt_number}+00:00",
         "content": content,
     }
+
+
+def _unavailable_attempt(attempt_number: int, *, request_scheme: str = "http", request_port: int = 80):
+    return {
+        "endpoint_available": False,
+        "status_code": None,
+        "request_scheme": request_scheme,
+        "request_port": request_port,
+        "request_path": "/",
+        "stop_reason": "request_error",
+        "coverage_declared": True,
+        "attempt_number": attempt_number,
+    }
+
+
+def _parallel_http_unavailable_with_https(
+    body: bytes,
+    *,
+    statuses: tuple[int, int] = (200, 200),
+    body_complete: bool = True,
+):
+    return [
+        _unavailable_attempt(1),
+        _unavailable_attempt(2),
+        _attempt(
+            body,
+            status=statuses[0],
+            attempt_number=1,
+            body_complete=body_complete,
+            request_path="/",
+        ),
+        _attempt(
+            body,
+            status=statuses[1],
+            attempt_number=2,
+            body_complete=body_complete,
+            request_path="/",
+        ),
+    ]
 
 
 def test_all_http_content_evaluators_match_positive_conditions():
@@ -124,6 +166,88 @@ def test_all_http_content_evaluators_have_deterministic_no_match():
     ])
     assert set(evaluated) == set(HTTP_CONTENT_ISSUE_KEYS)
     assert all(item["outcome"] == "NO_MATCH" for item in evaluated.values())
+
+
+def test_unavailable_http_does_not_poison_complete_negative_https_content():
+    safe = b"<html><body><a href='https://example.test/safe'>safe</a></body></html>"
+    evaluated = evaluate_http_content(_parallel_http_unavailable_with_https(safe))
+
+    for key in (
+        "insecure_ftp",
+        "contact_information_detected",
+        "local_file_path_exposed_via_url_scheme",
+        "links_to_insecure_website",
+    ):
+        assert evaluated[key]["outcome"] == "NO_MATCH"
+    assert evaluated["service_soap"]["outcome"] == "NO_MATCH"
+    assert evaluated["unsafe_sri_v2"]["outcome"] == "NO_MATCH"
+
+    unavailable = evaluated["contact_information_detected"]["evidence"][:2]
+    assert all(item["endpoint_responsive"] is False for item in unavailable)
+    assert all(item["content_evaluation_applicable"] is False for item in unavailable)
+    assert all(item["applicability_reason"] == "no_http_response" for item in unavailable)
+
+
+def test_unavailable_http_does_not_poison_unsafe_sri_match_on_https():
+    unsafe = b"<html><head><script src='/missing-sri.js'></script></head></html>"
+    evaluated = evaluate_http_content(_parallel_http_unavailable_with_https(unsafe))
+    assert evaluated["unsafe_sri_v2"]["outcome"] == "MATCH"
+
+
+@pytest.mark.parametrize(
+    ("statuses", "expected"),
+    [
+        ((200, 200), "NO_MATCH"),
+        ((500, 500), "MATCH"),
+        ((500, 200), "INDETERMINATE"),
+    ],
+)
+def test_server_error_ignores_fully_unavailable_parallel_transport(statuses, expected):
+    evaluated = evaluate_http_content(
+        _parallel_http_unavailable_with_https(b"<html></html>", statuses=statuses)
+    )
+    assert evaluated["server_error"]["outcome"] == expected
+    unavailable = evaluated["server_error"]["evidence"][0]
+    assert unavailable["endpoint_responsive"] is False
+    assert unavailable["server_error_evaluation_applicable"] is False
+    assert unavailable["applicability_reason"] == "no_http_response"
+
+
+def test_all_unavailable_transports_remain_indeterminate_for_wave3b():
+    attempts = [
+        _unavailable_attempt(1),
+        _unavailable_attempt(2),
+        _unavailable_attempt(1, request_scheme="https", request_port=443),
+        _unavailable_attempt(2, request_scheme="https", request_port=443),
+    ]
+    evaluated = evaluate_http_content(attempts)
+    assert all(item["outcome"] == "INDETERMINATE" for item in evaluated.values())
+
+
+def test_ambiguous_responsive_endpoint_still_prevents_content_false_no_match():
+    safe = b"<html><body><a href='https://example.test/safe'>safe</a></body></html>"
+    attempts = [
+        _attempt(
+            safe,
+            attempt_number=attempt_number,
+            request_scheme="http",
+            request_port=80,
+            request_path="/",
+        )
+        for attempt_number in (1, 2)
+    ] + [
+        _attempt(
+            safe,
+            attempt_number=attempt_number,
+            body_complete=False,
+            request_path="/",
+        )
+        for attempt_number in (1, 2)
+    ]
+    evaluated = evaluate_http_content(attempts)
+    for key in HTTP_CONTENT_ISSUE_KEYS:
+        if key != "server_error":
+            assert evaluated[key]["outcome"] == "INDETERMINATE"
 
 
 def test_missing_failed_malformed_and_unsupported_evidence_is_indeterminate():
