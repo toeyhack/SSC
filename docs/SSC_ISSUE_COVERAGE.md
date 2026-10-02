@@ -2,7 +2,7 @@
 
 Snapshot content hash: `0fe2bc8ffb7e3f734d4e88f70b11cffa6e8e9e47e722dc62107f6ff09694eca8`
 Source: immutable real `SSC_API` Golden Baseline
-Implementation state: Waves 1-2 plus Wave 3A first-batch `SERVICE_PROTOCOL_IDENTIFICATION`
+Implementation state: Waves 1-2, Wave 3A first-batch `SERVICE_PROTOCOL_IDENTIFICATION`, and Wave 3B `HTTP_CONTENT`
 Total mapped issues: **202**
 
 > This is an independent implementation mapped to SSC taxonomy. It does not reproduce or claim knowledge of SSC collection, aggregation, severity, scoring, or proprietary detection logic. `ssc_severity` remains source metadata and is not mapped to internal risk or score impact.
@@ -13,11 +13,11 @@ Total mapped issues: **202**
 
 ## Coverage summary
 
-| Coverage | Before Wave 3A | After Wave 3A | Percentage after |
+| Coverage | Before Wave 3B | After Wave 3B | Percentage after |
 |---|---:|---:|---:|
-| `SUPPORTED` | 21 | 27 | 13.4% |
-| `PARTIAL` | 101 | 95 | 47.0% |
-| `NOT_SUPPORTED` | 80 | 80 | 39.6% |
+| `SUPPORTED` | 27 | 34 | 16.8% |
+| `PARTIAL` | 95 | 93 | 46.0% |
+| `NOT_SUPPORTED` | 80 | 75 | 37.1% |
 | **Total** | **202** | **202** | **100.0%** |
 
 ### Feasibility (unchanged)
@@ -33,14 +33,14 @@ Total mapped issues: **202**
 
 | Factor | Total | Direct | Enrichment | External | Not reproducible | Supported | Partial | Not supported |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|
-| `application_security` | 61 | 25 | 35 | 0 | 1 | 10 | 30 | 21 |
+| `application_security` | 61 | 25 | 35 | 0 | 1 | 16 | 29 | 16 |
 | `cubit_score` | 3 | 0 | 1 | 0 | 2 | 0 | 1 | 2 |
 | `dns_health` | 10 | 7 | 3 | 0 | 0 | 6 | 4 | 0 |
 | `endpoint_security` | 2 | 0 | 0 | 2 | 0 | 0 | 0 | 2 |
 | `hacker_chatter` | 2 | 0 | 0 | 2 | 0 | 0 | 0 | 2 |
 | `ip_reputation` | 26 | 1 | 1 | 24 | 0 | 0 | 2 | 24 |
 | `leaked_information` | 8 | 0 | 0 | 8 | 0 | 0 | 0 | 8 |
-| `network_security` | 68 | 42 | 20 | 5 | 1 | 11 | 50 | 7 |
+| `network_security` | 68 | 42 | 20 | 5 | 1 | 12 | 49 | 7 |
 | `patching_cadence` | 21 | 0 | 21 | 0 | 0 | 0 | 8 | 13 |
 | `social_engineering` | 1 | 0 | 0 | 1 | 0 | 0 | 0 | 1 |
 
@@ -116,6 +116,20 @@ Every listed rule uses stable key `ssc.wave3a.<issue-key>`, method schema `ssc-w
 | `service_telnet` | `telnet` | `SERVICE_PROTOCOL_IDENTIFICATION` | MATCH only when a bounded IAC DO SUPPRESS-GO-AHEAD request receives the corresponding protocol-valid IAC WILL or IAC WONT response. | NO_MATCH only when the bounded exchange returns a complete, protocol-valid response identified as a different supported protocol; TCP-open or arbitrary bytes are not negative evidence. | Timeout, reset, acquisition error, malformed or truncated response, ambiguous banner, unsupported transport, or incomplete exchange is INDETERMINATE. | https://www.rfc-editor.org/rfc/rfc854.html |
 | `service_smb` | `smb2` | `SERVICE_PROTOCOL_IDENTIFICATION` | MATCH only when a minimal SMB2 negotiate request receives a correctly framed SMB2 negotiate or SMB2 error response with matching command semantics. | NO_MATCH only when the bounded exchange returns a complete, protocol-valid response identified as a different supported protocol; TCP-open or arbitrary bytes are not negative evidence. | Timeout, reset, acquisition error, malformed or truncated response, ambiguous banner, unsupported transport, or incomplete exchange is INDETERMINATE. | https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-smb2/ |
 
+## Active Wave 3B evaluator mappings
+
+Every listed rule uses stable key `ssc.wave3b.<issue-key>`, method schema `ssc-http-content-observation.v1`, policy `ssc-http-content-policy.v1`, source type `SSC_REFERENCE`, and an immutable link to the exact attested `SSC_API` issue version. Bodies and clear contact values are not persisted.
+
+| SSC issue key | Primitive | MATCH condition | NO_MATCH boundary | INDETERMINATE boundary | Authoritative reference |
+|---|---|---|---|---|---|
+| `unsafe_sri_v2` | `HTTP_CONTENT` | MATCH when a covered external script or stylesheet lacks SRI, has invalid or disallowed integrity metadata, or fetched bytes fail every digest using the strongest supported algorithm represented in its metadata. | NO_MATCH only when complete declared HTML contains no covered resources or every covered resource has valid permitted metadata and at least one digest using its strongest represented supported algorithm verifies. | Page/resource failure, truncation, cross-origin or otherwise out-of-scope resource, unsafe redirect, unsupported content, exhausted actual-GET budget, or incomplete digest evidence is INDETERMINATE. | https://www.w3.org/TR/SRI/ |
+| `insecure_ftp` | `HTTP_CONTENT` | MATCH when a covered static HTML URL uses the ftp: scheme. | NO_MATCH only when every declared response is fetched completely and parsed as HTML and none satisfies the condition. | Missing or failed response, blocked/non-2xx response, truncated body, unsupported content type or encoding, malformed content, undeclared path coverage, or an exceeded observation bound is INDETERMINATE. | https://www.rfc-editor.org/rfc/rfc959.html |
+| `contact_information_detected` | `HTTP_CONTENT` | MATCH when a covered href uses mailto:, tel:, sms:, whatsapp:, or viber: under the versioned policy. | NO_MATCH only when every declared response is fetched completely and parsed as HTML and none satisfies the condition. | Missing or failed response, blocked/non-2xx response, truncated body, unsupported content type or encoding, malformed content, undeclared path coverage, or an exceeded observation bound is INDETERMINATE. | https://www.rfc-editor.org/rfc/rfc6068.html |
+| `local_file_path_exposed_via_url_scheme` | `HTTP_CONTENT` | MATCH when a covered static HTML URL uses the file: scheme. | NO_MATCH only when every declared response is fetched completely and parsed as HTML and none satisfies the condition. | Missing or failed response, blocked/non-2xx response, truncated body, unsupported content type or encoding, malformed content, undeclared path coverage, or an exceeded observation bound is INDETERMINATE. | https://www.rfc-editor.org/rfc/rfc8089.html |
+| `server_error` | `HTTP_CONTENT` | MATCH when the same declared URL returns an HTTP 5xx status on both bounded attempts. | NO_MATCH only when every declared URL completes both attempts without a reproducible 5xx. | Any failed/incomplete attempt, an undeclared path set, or exactly one 5xx in a pair is INDETERMINATE. | https://www.rfc-editor.org/rfc/rfc9110.html#name-server-error-5xx |
+| `links_to_insecure_website` | `HTTP_CONTENT` | MATCH when a covered static HTML URL resolves to the http: scheme. | NO_MATCH only when every declared response is fetched completely and parsed as HTML and none satisfies the condition. | Missing or failed response, blocked/non-2xx response, truncated body, unsupported content type or encoding, malformed content, undeclared path coverage, or an exceeded observation bound is INDETERMINATE. | https://www.rfc-editor.org/rfc/rfc9110.html |
+| `service_soap` | `HTTP_CONTENT` | MATCH when an endpoint returns a parseable SOAP 1.1/1.2 Envelope or WSDL document containing a SOAP binding. | NO_MATCH only when every declared endpoint is fetched and completely parsed as supported HTML/XML content with no SOAP/WSDL semantic. | No declared path, failed/blocked response, truncation, unsupported content, malformed XML, or ambiguous namespace evidence is INDETERMINATE. | https://www.w3.org/TR/soap12-part1/; https://www.w3.org/TR/wsdl20/ |
+
 ## Per-issue index
 
 The CSV remains normative for exact evidence requirements, proposed logic, dependencies, references, and notes.
@@ -125,7 +139,7 @@ The CSV remains normative for exact evidence requirements, proposed logic, depen
 | `browser_logs_contain_debug_message` | Browser logs contain debug messages | `application_security` | `low` | `DIRECTLY_TESTABLE` | `BROWSER` | `NOT_SUPPORTED` |
 | `communication_server_with_expired_cert` | Server with Expired Certificate Contacted | `application_security` | `low` | `TESTABLE_WITH_ENRICHMENT` | `BROWSER+TLS+CERT_ENRICHMENT` | `PARTIAL` |
 | `communication_with_server_certificate_issued_by_blacklisted_country` | Server certificate issued by country on denylist | `application_security` | `low` | `TESTABLE_WITH_ENRICHMENT` | `TLS+POLICY_ENRICHMENT` | `PARTIAL` |
-| `contact_information_detected` | Non-standard links detected: Contact information displayed | `application_security` | `low` | `DIRECTLY_TESTABLE` | `HTTP_CRAWLER` | `NOT_SUPPORTED` |
+| `contact_information_detected` | Non-standard links detected: Contact information displayed | `application_security` | `low` | `DIRECTLY_TESTABLE` | `HTTP_CONTENT` | `SUPPORTED` |
 | `cookie_missing_http_only` | Session Cookie Missing 'HttpOnly' Attribute | `application_security` | `high` | `TESTABLE_WITH_ENRICHMENT` | `HTTP+AUTH_FLOW` | `PARTIAL` |
 | `cookie_missing_secure_attribute` | Session Cookie Missing 'Secure' Attribute | `application_security` | `high` | `TESTABLE_WITH_ENRICHMENT` | `HTTP+AUTH_FLOW` | `PARTIAL` |
 | `csp_no_policy_v2` | Content Security Policy (CSP) Missing | `application_security` | `low` | `DIRECTLY_TESTABLE` | `HTTP_HEADERS` | `SUPPORTED` |
@@ -137,12 +151,12 @@ The CSV remains normative for exact evidence requirements, proposed logic, depen
 | `fail_to_load_page_components` | Site fails to load page components | `application_security` | `low` | `DIRECTLY_TESTABLE` | `BROWSER` | `NOT_SUPPORTED` |
 | `hosted_on_object_storage_v2` | Website Hosted on Object Storage | `application_security` | `low` | `TESTABLE_WITH_ENRICHMENT` | `DNS+HTTP+TLS+FINGERPRINT` | `PARTIAL` |
 | `hsts_incorrect_v2` | Website Does Not Implement HSTS Best Practices | `application_security` | `low` | `DIRECTLY_TESTABLE` | `HTTP_HEADERS` | `SUPPORTED` |
-| `insecure_ftp` | Non-standard links detected: Unsafe File Transfer Protocol | `application_security` | `medium` | `DIRECTLY_TESTABLE` | `HTTP_CRAWLER` | `NOT_SUPPORTED` |
+| `insecure_ftp` | Non-standard links detected: Unsafe File Transfer Protocol | `application_security` | `medium` | `DIRECTLY_TESTABLE` | `HTTP_CONTENT` | `SUPPORTED` |
 | `insecure_https_redirect_pattern_v2` | Insecure HTTPS Redirect Pattern | `application_security` | `low` | `DIRECTLY_TESTABLE` | `HTTP_REDIRECT` | `SUPPORTED` |
 | `insecure_server_certificate_key_size` | Certificate key is smaller than recommended size | `application_security` | `low` | `DIRECTLY_TESTABLE` | `TLS_CERTIFICATE` | `SUPPORTED` |
 | `insecure_telnet` | Non-standard links detected: Unsafe Telnet protocol | `application_security` | `info` | `DIRECTLY_TESTABLE` | `HTTP_CRAWLER` | `NOT_SUPPORTED` |
-| `links_to_insecure_website` | Site links to insecure websites | `application_security` | `low` | `DIRECTLY_TESTABLE` | `HTTP_CRAWLER` | `NOT_SUPPORTED` |
-| `local_file_path_exposed_via_url_scheme` | Non-standard links detected: Local file path exposed | `application_security` | `low` | `DIRECTLY_TESTABLE` | `HTTP_CRAWLER` | `NOT_SUPPORTED` |
+| `links_to_insecure_website` | Site links to insecure websites | `application_security` | `low` | `DIRECTLY_TESTABLE` | `HTTP_CONTENT` | `SUPPORTED` |
+| `local_file_path_exposed_via_url_scheme` | Non-standard links detected: Local file path exposed | `application_security` | `low` | `DIRECTLY_TESTABLE` | `HTTP_CONTENT` | `SUPPORTED` |
 | `openssl_critical_vulnerability` | November 2022 OpenSSL 3.X vulnerability detected | `application_security` | `high` | `TESTABLE_WITH_ENRICHMENT` | `FINGERPRINT+SBOM+CVE` | `NOT_SUPPORTED` |
 | `payment_provider` | Website communicates with payment provider | `application_security` | `high` | `TESTABLE_WITH_ENRICHMENT` | `BROWSER+FINGERPRINT` | `NOT_SUPPORTED` |
 | `potentially_vulnerable` | Potential vulnerability detected | `application_security` | `info` | `NOT_REPRODUCIBLE` | `None` | `NOT_SUPPORTED` |
@@ -160,10 +174,10 @@ The CSV remains normative for exact evidence requirements, proposed logic, depen
 | `redirect_to_insecure_website` | Link redirects to insecure website | `application_security` | `low` | `TESTABLE_WITH_ENRICHMENT` | `HTTP_CRAWLER+REDIRECT_ENRICHMENT` | `PARTIAL` |
 | `references_object_storage_v2` | Website References Object Storage | `application_security` | `medium` | `TESTABLE_WITH_ENRICHMENT` | `DNS+HTTP+TLS+FINGERPRINT` | `PARTIAL` |
 | `sensitive_data_exposure_through_insecure_channel` | Insecure channel exposes sensitive information | `application_security` | `medium` | `TESTABLE_WITH_ENRICHMENT` | `BROWSER+AUTH_FLOW+DATA_POLICY` | `NOT_SUPPORTED` |
-| `server_error` | Server error detected | `application_security` | `low` | `DIRECTLY_TESTABLE` | `HTTP_CRAWLER` | `PARTIAL` |
+| `server_error` | Server error detected | `application_security` | `low` | `DIRECTLY_TESTABLE` | `HTTP_CONTENT` | `SUPPORTED` |
 | `site_emits_browser_log` | Site emits visible browser logs | `application_security` | `low` | `DIRECTLY_TESTABLE` | `BROWSER` | `NOT_SUPPORTED` |
 | `site_requests_data_over_insecure_channel` | Site requests data over insecure channel | `application_security` | `low` | `DIRECTLY_TESTABLE` | `BROWSER` | `NOT_SUPPORTED` |
-| `unsafe_sri_v2` | Unsafe Implementation Of Subresource Integrity | `application_security` | `high` | `DIRECTLY_TESTABLE` | `HTTP_CRAWLER` | `NOT_SUPPORTED` |
+| `unsafe_sri_v2` | Unsafe Implementation Of Subresource Integrity | `application_security` | `high` | `DIRECTLY_TESTABLE` | `HTTP_CONTENT` | `SUPPORTED` |
 | `uses_go_daddy_managed_wordpress` | Website Hosted by GoDaddy’s Wordpress | `application_security` | `info` | `TESTABLE_WITH_ENRICHMENT` | `DNS+HTTP+TLS+FINGERPRINT` | `PARTIAL` |
 | `waf_detected_v2` | Web Application Firewall (WAF) Detected | `application_security` | `info` | `TESTABLE_WITH_ENRICHMENT` | `HTTP+DNS+TLS_FINGERPRINT` | `PARTIAL` |
 | `web_vuln_host_high` | High Severity Content Management System vulnerabilities identified | `application_security` | `medium` | `TESTABLE_WITH_ENRICHMENT` | `HTTP_FINGERPRINT+SBOM+CVE` | `PARTIAL` |
@@ -280,7 +294,7 @@ The CSV remains normative for exact evidence requirements, proposed logic, depen
 | `service_redis` | Redis Service Observed | `network_security` | `medium` | `DIRECTLY_TESTABLE` | `SERVICE_PROTOCOL_IDENTIFICATION` | `SUPPORTED` |
 | `service_rsync` | rsync Service Observed | `network_security` | `medium` | `DIRECTLY_TESTABLE` | `SERVICE_PROTOCOL_IDENTIFICATION` | `SUPPORTED` |
 | `service_smb` | SMB Service Observed | `network_security` | `medium` | `DIRECTLY_TESTABLE` | `SERVICE_PROTOCOL_IDENTIFICATION` | `SUPPORTED` |
-| `service_soap` | SOAP Server Accessible | `network_security` | `medium` | `DIRECTLY_TESTABLE` | `PROTOCOL_PROBE+TCP` | `PARTIAL` |
+| `service_soap` | SOAP Server Accessible | `network_security` | `medium` | `DIRECTLY_TESTABLE` | `HTTP_CONTENT` | `SUPPORTED` |
 | `service_socks_proxy` | SOCKS Proxy Service Detected | `network_security` | `low` | `DIRECTLY_TESTABLE` | `SERVICE_PROTOCOL_IDENTIFICATION` | `SUPPORTED` |
 | `service_telnet` | Telnet Service Observed | `network_security` | `medium` | `DIRECTLY_TESTABLE` | `SERVICE_PROTOCOL_IDENTIFICATION` | `SUPPORTED` |
 | `service_vnc` | VNC Service Observed | `network_security` | `medium` | `DIRECTLY_TESTABLE` | `SERVICE_PROTOCOL_IDENTIFICATION` | `SUPPORTED` |

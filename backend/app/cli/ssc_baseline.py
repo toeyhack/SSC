@@ -35,6 +35,14 @@ def run(args) -> int:
                 result = activate_wave3a_rules(db)
             print(json.dumps(result, indent=2))
             return 0 if not result["unavailable"] else 3
+        if args.baseline_command == "activate-wave3b":
+            if not args.yes:
+                raise ValueError("Review the Wave 3B evaluator definitions, then pass --yes to activate")
+            from app.services.wave3b_rules import activate_wave3b_rules
+            with SessionLocal() as db:
+                result = activate_wave3b_rules(db)
+            print(json.dumps(result, indent=2))
+            return 0 if not result["unavailable"] else 3
         if args.baseline_command == "discover-details":
             result = discover_issue_details()
             print(json.dumps(result, indent=2))

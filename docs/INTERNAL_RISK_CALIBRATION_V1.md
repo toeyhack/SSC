@@ -1,6 +1,6 @@
 # Internal risk calibration V1
 
-**Status:** approved and implemented on 2026-10-02. **Scope:** the 27 `SUPPORTED` keys in [SSC issue coverage](SSC_ISSUE_COVERAGE.md) for the attested SSC API baseline `0fe2bc8ffb7e3f734d4e88f70b11cffa6e8e9e47e722dc62107f6ff09694eca8`. The companion [CSV](INTERNAL_RISK_CALIBRATION_V1.csv) is the row-level decision record, including rationale and conditions for every key. SSC severity remains vendor metadata; these are independent internal judgments and make no claim about SSC's scoring method.
+**Status:** approved and implemented on 2026-10-02. **Scope:** the 27 keys that were `SUPPORTED` when calibration v1.0 was approved, from the attested SSC API baseline `0fe2bc8ffb7e3f734d4e88f70b11cffa6e8e9e47e722dc62107f6ff09694eca8`. Wave 3B later raised support to 34 without changing this approved registry: its seven new keys intentionally fail closed to `UNKNOWN` and `affects_score=false` until separately calibrated. The companion [CSV](INTERNAL_RISK_CALIBRATION_V1.csv) is the row-level decision record. SSC severity remains vendor metadata; these are independent internal judgments and make no claim about SSC's scoring method.
 
 ## Decision basis
 
@@ -20,7 +20,7 @@ The current-state columns in the CSV reflect the `SSC_API` import path: it creat
 
 **Proposed score relevance:** `affects_score=true` for 23; `false` for 4. A scored occurrence assumes an OPEN finding backed by an exact-version deterministic MATCH for an in-scope V1 issue, with no prior deduplication of the same issue version and target and room under the factor's 100-point cap. `NO_MATCH` and `NOT_ASSESSED` deduct zero. A factor starts at 100 once rated; a single LOW or MEDIUM MATCH would yield 98 or 93 for that factor. The weighted overall effect depends on which factors are rated and their configured weights. No penalty values, formula, factor weights, or scoring profile are proposed to change.
 
-### All 27 supported keys
+### All 27 calibrated keys
 
 | Factor | Exact SSC issue key | SSC severity | Proposed risk | Score? | One MATCH |
 |---|---|---|---|---|---:|

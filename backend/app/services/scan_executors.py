@@ -27,6 +27,12 @@ from sqlalchemy.orm import Session, joinedload
 
 from app.models.models import Domain, Host, Organization
 from app.models.scan_models import EvidenceSourceEnum, ScanJobTarget, ScanTargetTypeEnum
+from app.services.http_content import (
+    complete_sri_candidate,
+    evaluate_http_content,
+    inspect_http_content,
+    public_content_observation,
+)
 from app.services.service_probes import (
     ADAPTERS as SERVICE_PROBE_ADAPTERS,
     MAX_SERVICE_PROBES,
@@ -44,6 +50,7 @@ MAX_HTTP_PORTS = 4
 MAX_TCP_PORTS = 10
 MAX_TLS_PORTS = 3
 MAX_HTTP_PATHS = 20
+MAX_HTTP_SRI_RESOURCE_REQUESTS = 20
 WAVE1_POLICY_VERSION = "ssc-wave1-security-policy.v1"
 WAVE2_TLS_POLICY_VERSION = "ssc-wave2-tls-policy.v1"
 WAVE2_EMAIL_POLICY_VERSION = "ssc-wave2-email-policy.v1"
@@ -91,19 +98,31 @@ class HTTPExecutor(BaseExecutor):
         paths = _http_paths_config(config)
         declared_scope = "http_paths" in config
 
-        attempts: list[dict[str, Any]] = []
+        raw_attempts: list[dict[str, Any]] = []
         selected: dict[str, Any] | None = None
         for scheme, ports in (("http", http_ports), ("https", https_ports)):
             for port in ports:
                 for path in paths:
-                    result = self._request_chain(
-                        target, scheme, port, path, timeout, redirect_limit,
-                        response_size_limit, set(http_ports), set(https_ports),
-                    )
-                    result["coverage_declared"] = declared_scope
-                    attempts.append(_compact_attempt(result))
-                    if result.get("endpoint_available") and (selected is None or (scheme == "https" and not result.get("error"))):
-                        selected = result
+                    for attempt_number in range(1, 3 if declared_scope else 2):
+                        result = self._request_chain(
+                            target, scheme, port, path, timeout, redirect_limit,
+                            response_size_limit, set(http_ports), set(https_ports),
+                        )
+                        result["coverage_declared"] = declared_scope
+                        result["attempt_number"] = attempt_number
+                        raw_attempts.append(result)
+                        if result.get("endpoint_available") and (selected is None or (scheme == "https" and not result.get("error"))):
+                            selected = result
+
+        resource_limit = _int_config(
+            config, "http_sri_resource_limit", MAX_HTTP_SRI_RESOURCE_REQUESTS,
+            minimum=0, maximum=MAX_HTTP_SRI_RESOURCE_REQUESTS,
+        )
+        self._complete_sri_observations(
+            target, raw_attempts, timeout, redirect_limit, response_size_limit,
+            set(http_ports), set(https_ports), resource_limit,
+        )
+        attempts = [_compact_attempt(result) for result in raw_attempts]
 
         if selected is None and attempts:
             selected = attempts[0]
@@ -112,7 +131,7 @@ class HTTPExecutor(BaseExecutor):
         cookies = selected.get("cookies") if isinstance(selected.get("cookies"), list) else []
         redirect_chain = selected.get("redirect_chain") if isinstance(selected.get("redirect_chain"), list) else []
 
-        evaluations = _evaluate_http_wave1(attempts)
+        evaluations = {**_evaluate_http_wave1(attempts), **evaluate_http_content(attempts)}
         evidence = {
             "executor": self.executor_name,
             "status": "success",
@@ -160,6 +179,72 @@ class HTTPExecutor(BaseExecutor):
             evidence["status"] = "error"
         return ExecutorObservation(self.evidence_source, evidence)
 
+    def _complete_sri_observations(
+        self,
+        target: InventoryScanTarget,
+        attempts: list[dict[str, Any]],
+        timeout: float,
+        redirect_limit: int,
+        response_size_limit: int,
+        http_ports: set[int],
+        https_ports: set[int],
+        resource_limit: int,
+    ) -> None:
+        cache: dict[str, dict[str, Any] | None] = {}
+        request_budget = {"remaining": resource_limit, "used": 0}
+        for attempt in attempts:
+            content = attempt.get("content")
+            if not isinstance(content, dict):
+                continue
+            for candidate in content.get("sri_candidates", []):
+                if not isinstance(candidate, dict) or candidate.get("outcome") != "PENDING":
+                    continue
+                resource_id = candidate.get("resource_id")
+                if not isinstance(resource_id, str):
+                    complete_sri_candidate(candidate, None)
+                    continue
+                if resource_id not in cache:
+                    if request_budget["remaining"] <= 0:
+                        cache[resource_id] = None
+                    else:
+                        parsed = urlparse(str(candidate.get("_fetch_url", "")))
+                        try:
+                            port = parsed.port or (443 if parsed.scheme == "https" else 80)
+                        except ValueError:
+                            cache[resource_id] = None
+                            complete_sri_candidate(candidate, None)
+                            continue
+                        allowed_ports = https_ports if parsed.scheme == "https" else http_ports
+                        if (
+                            parsed.scheme not in {"http", "https"}
+                            or not _same_target_host(parsed.hostname, target)
+                            or parsed.username is not None
+                            or parsed.password is not None
+                            or port not in allowed_ports
+                        ):
+                            cache[resource_id] = None
+                        else:
+                            request_path = parsed.path or "/"
+                            if parsed.query:
+                                request_path += "?" + parsed.query
+                            resource_result = self._request_chain(
+                                target, parsed.scheme, port, request_path, timeout,
+                                redirect_limit, response_size_limit, http_ports, https_ports,
+                                required_origin=_normalized_http_origin(parsed),
+                                request_budget=request_budget,
+                            )
+                            origin = (parsed.scheme, (parsed.hostname or "").casefold(), port)
+                            resource_result["_sri_cross_origin_redirect"] = any(
+                                (
+                                    hop.get("scheme"),
+                                    str(hop.get("host") or "").casefold(),
+                                    hop.get("port"),
+                                ) != origin
+                                for hop in resource_result.get("redirect_chain", [])
+                            ) or resource_result.get("stop_reason") == "sri_cross_origin_redirect_blocked"
+                            cache[resource_id] = resource_result
+                complete_sri_candidate(candidate, cache[resource_id])
+
     def _request_chain(
         self,
         target: InventoryScanTarget,
@@ -171,6 +256,9 @@ class HTTPExecutor(BaseExecutor):
         response_size_limit: int,
         http_ports: set[int],
         https_ports: set[int],
+        *,
+        required_origin: tuple[str, str, int] | None = None,
+        request_budget: dict[str, int] | None = None,
     ) -> dict[str, Any]:
         url_hostname = f"[{target.hostname}]" if ":" in target.hostname else target.hostname
         url = f"{scheme}://{url_hostname}:{port}{initial_path}"
@@ -214,6 +302,17 @@ class HTTPExecutor(BaseExecutor):
                 last_result["error"] = "redirect credentials are not allowed"
                 last_result["stop_reason"] = "redirect_credentials_rejected"
                 return last_result
+            if required_origin is not None and _normalized_http_origin(parsed) != required_origin:
+                last_result["error"] = "SRI resource redirect changed origin"
+                last_result["stop_reason"] = "sri_cross_origin_redirect_blocked"
+                return last_result
+            if request_budget is not None:
+                if request_budget["remaining"] <= 0:
+                    last_result["error"] = "SRI resource request budget exhausted"
+                    last_result["stop_reason"] = "sri_request_budget_exhausted"
+                    return last_result
+                request_budget["remaining"] -= 1
+                request_budget["used"] += 1
             try:
                 result = self._single_request(
                     target=target,
@@ -301,14 +400,31 @@ class HTTPExecutor(BaseExecutor):
                     "Host": (f"[{target.hostname}]" if ":" in target.hostname else target.hostname) + (f":{port}" if port not in {80, 443} else ""),
                     "User-Agent": USER_AGENT,
                     "Accept": "*/*",
+                    "Accept-Encoding": "identity",
                     "Range": f"bytes=0-{max(response_size_limit - 1, 0)}",
                 },
             )
             response = connection.getresponse()
-            body = response.read(response_size_limit)
+            captured = response.read(response_size_limit + 1)
+            body_truncated = len(captured) > response_size_limit or response.status == 206
+            body = captured[:response_size_limit]
             normalized_headers, cookies = _normalize_http_headers(response)
             content_type = _first_header(normalized_headers, "content-type")
-            meta_policies = _extract_csp_meta(body, content_type)
+            content_encodings = _header_values(normalized_headers, "content-encoding")
+            content_encoding = ",".join(content_encodings) if content_encodings else None
+            body_complete = not body_truncated
+            document_host = f"[{target.hostname}]" if ":" in target.hostname else target.hostname
+            document_url = f"{scheme}://{document_host}:{port}{path_and_query}"
+            content = inspect_http_content(
+                body, content_type, document_url,
+                body_complete=body_complete,
+                content_encoding=content_encoding,
+            )
+            meta_policies = _extract_csp_meta(body, content_type) if body_complete else []
+            header_fingerprint = "\n".join(
+                f"{name}:{value}" for name in sorted(normalized_headers)
+                for value in normalized_headers[name]
+            )
             return {
                 "endpoint_available": True,
                 "status_code": response.status,
@@ -317,7 +433,12 @@ class HTTPExecutor(BaseExecutor):
                 "content_type": content_type,
                 "body_sha256": hashlib.sha256(body).hexdigest(),
                 "body_bytes_captured": len(body),
+                "body_complete": body_complete,
+                "response_headers_sha256": hashlib.sha256(header_fingerprint.encode("utf-8")).hexdigest(),
+                "observed_at": datetime.now(timezone.utc).isoformat(),
                 "csp_meta_policies": meta_policies,
+                "content": content,
+                "_body": body,
                 "location": response.getheader("Location"),
             }
         finally:
@@ -713,6 +834,19 @@ def _same_target_host(hostname: str | None, target: InventoryScanTarget) -> bool
     return normalized in {target.hostname, target.connect_host}
 
 
+def _normalized_http_origin(parsed) -> tuple[str, str, int] | None:
+    """Return the normalized HTTP origin used by SRI redirect containment."""
+    scheme = parsed.scheme.casefold()
+    hostname = (parsed.hostname or "").casefold().rstrip(".")
+    if scheme not in {"http", "https"} or not hostname:
+        return None
+    try:
+        port = parsed.port or (443 if scheme == "https" else 80)
+    except ValueError:
+        return None
+    return scheme, hostname, port
+
+
 def _normalize_http_headers(response: http.client.HTTPResponse) -> tuple[dict[str, list[str]], list[dict[str, Any]]]:
     relevant = {
         "strict-transport-security",
@@ -722,6 +856,9 @@ def _normalize_http_headers(response: http.client.HTTPResponse) -> tuple[dict[st
         "x-frame-options",
         "x-xss-protection",
         "content-type",
+        "content-encoding",
+        "content-length",
+        "content-range",
         "location",
     }
     headers: dict[str, list[str]] = {}
@@ -770,7 +907,7 @@ def _compact_attempt(result: dict[str, Any]) -> dict[str, Any]:
         "redirect_chain": result.get("redirect_chain", []),
         "request_scheme": result.get("request_scheme"),
         "request_port": result.get("request_port"),
-        "request_path": result.get("request_path"),
+        "request_path": _redacted_request_path(result.get("request_path")),
         "terminal_scheme": result.get("terminal_scheme"),
         "stop_reason": result.get("stop_reason"),
         "headers": result.get("headers", {}),
@@ -778,11 +915,25 @@ def _compact_attempt(result: dict[str, Any]) -> dict[str, Any]:
         "content_type": result.get("content_type"),
         "body_sha256": result.get("body_sha256"),
         "body_bytes_captured": result.get("body_bytes_captured"),
+        "body_complete": result.get("body_complete"),
+        "response_headers_sha256": result.get("response_headers_sha256"),
+        "observed_at": result.get("observed_at"),
+        "attempt_number": result.get("attempt_number"),
+        "content": public_content_observation(result.get("content")),
         "csp_meta_policies": result.get("csp_meta_policies", []),
         "certificate_trusted": result.get("certificate_trusted"),
         "coverage_declared": bool(result.get("coverage_declared", False)),
     }
     return compact
+
+
+def _redacted_request_path(value: Any) -> Any:
+    if not isinstance(value, str):
+        return value
+    parsed = urlparse(value)
+    if not parsed.query:
+        return parsed.path or "/"
+    return f"{parsed.path or '/'}?query_sha256={hashlib.sha256(parsed.query.encode('utf-8')).hexdigest()}"
 
 
 def _http_to_https_redirect(redirect_chain: list[dict[str, Any]]) -> bool:
@@ -866,6 +1017,7 @@ def _http_paths_config(config: dict[str, Any]) -> list[str]:
             or any(ord(char) < 32 for char in path)
             or urlparse(path).scheme
             or urlparse(path).netloc
+            or urlparse(path).fragment
         ):
             raise ScanExecutorError("scan_config.http_paths contains an invalid same-target path")
         if path not in paths:
@@ -937,6 +1089,8 @@ def _csp_state(attempt: dict[str, Any]) -> dict[str, Any]:
     policies += [value for value in attempt.get("csp_meta_policies", []) if isinstance(value, str)]
     parsed = []
     errors = []
+    if is_html and attempt.get("body_complete") is False:
+        errors.append("response_body_truncated")
     for policy in policies:
         directives, error = _parse_csp(policy)
         parsed.append({
@@ -1984,6 +2138,10 @@ def validate_scan_config(config: dict[str, Any] | None) -> dict[str, Any]:
     _float_config(config, "service_probe_timeout_seconds", config.get("connect_timeout_seconds", 3.), .1, 15.)
     for key, default, low, high in (("redirect_limit", 5, 0, 10), ("response_size_limit_bytes", 65536, 1024, 262144), ("dns_server_port", 53, 1, 65535), ("tls_port", 443, 1, 65535)):
         _int_config(config, key, default, low, high)
+    _int_config(
+        config, "http_sri_resource_limit", MAX_HTTP_SRI_RESOURCE_REQUESTS,
+        0, MAX_HTTP_SRI_RESOURCE_REQUESTS,
+    )
     _int_config(config, "service_probe_response_limit_bytes", 4096, 64, MAX_SERVICE_PROBE_RESPONSE_BYTES)
     config["service_probes"] = _service_probes_config(config)
     return config

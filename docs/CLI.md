@@ -31,6 +31,7 @@ ssc baseline discover-details
 ssc baseline activate-wave1 --yes
 ssc baseline activate-wave2 --yes
 ssc baseline activate-wave3a --yes
+ssc baseline activate-wave3b --yes
 ```
 
 Without enrichment, `pull-ssc` uses only `GET https://api.securityscorecard.io/metadata/factors` and `GET https://api.securityscorecard.io/metadata/issue-types`; this is a complete minimum baseline and can establish taxonomy alignment after approval. `--enrich-details` optionally requests `/metadata/issue-types/{type}` with at most four workers, a 20-second request timeout and at most three attempts for safe transient transport failures or HTTP 408, 425, 429, 500, 502, 503 and 504 responses. Numeric or HTTP-date `Retry-After` is honored up to 60 seconds; longer or invalid delays fail that lookup instead of retrying early. Permanent failures are not retried. An individual detail failure is reported but retains that issue's list metadata and does not discard the baseline.
@@ -41,7 +42,7 @@ Without enrichment, `pull-ssc` uses only `GET https://api.securityscorecard.io/m
 
 `status` works offline. `INTERNAL_ONLY` means no real SSC baseline has been recorded; all existing runtime features remain available without claiming alignment. `SSC_ALIGNED` requires at least one real imported SSC baseline with provenance. It does not imply scoring calibration. For real licensed UI/manual canonical JSON, use `python -m app.cli.import_golden_baseline --input <capture.json> --attest-real-source --json` on its first import. Never attest synthetic fixtures. Previously unattested snapshots cannot be relabeled on reuse.
 
-`activate-wave1 --yes` idempotently creates or selects the reviewed `HTTP_HEADERS`, `HTTP_REDIRECT`, and `TLS_CERTIFICATE` evaluator versions. `activate-wave2 --yes` does the same for the evidence-complete `TLS_HANDSHAKE` and `EMAIL_SECURITY` definitions. `activate-wave3a --yes` activates only the reviewed six-protocol first batch. Activation succeeds only for exact current issue definitions contained in an attested real `SSC_API` snapshot. Each evaluator version stores a foreign key to that immutable issue version. Approved future SSC definition changes create a new linked rule version; they do not rewrite history. A newly approved `pull-ssc` import performs all three reconciliations automatically.
+`activate-wave1 --yes` idempotently creates or selects the reviewed `HTTP_HEADERS`, `HTTP_REDIRECT`, and `TLS_CERTIFICATE` evaluator versions. `activate-wave2 --yes` does the same for the evidence-complete `TLS_HANDSHAKE` and `EMAIL_SECURITY` definitions. `activate-wave3a --yes` activates only the reviewed six-protocol first batch. `activate-wave3b --yes` activates the seven bounded `HTTP_CONTENT` evaluators. Activation succeeds only for exact current issue definitions contained in an attested real `SSC_API` snapshot. Each evaluator version stores a foreign key to that immutable issue version. Approved future SSC definition changes create a new linked rule version; they do not rewrite history. A newly approved `pull-ssc` import performs all four reconciliations automatically.
 
 Service probes are declared explicitly in scan configuration; neither a port number nor TCP-open state selects or identifies a protocol:
 
@@ -98,15 +99,16 @@ ssc scan --target example.com --executors dns --output report
   "dns_timeout_seconds": 3,
   "redirect_limit": 5,
   "response_size_limit_bytes": 65536,
+  "http_sri_resource_limit": 20,
   "per_target_interval_seconds": 0.05
 }
 ```
 
 Save as `scan.json` and pass `--scan-config scan.json`. HTTP, TLS and DNS are enabled by default. TCP is added only when explicit TCP ports are configured, or selected with `--executors tcp`; it never selects a default range. Maximum distinct lists: 4 HTTP ports, 4 HTTPS ports, 20 explicit same-target HTTP paths, 3 TLS ports and 10 TCP ports. Redirects must remain on the authorized hostname and configured scheme/port.
 
-HTTP preserves every relevant header instance, redacted cookie attributes, CSP meta/header policies, a declared-path coverage manifest, and every normalized redirect hop/stop reason. It fetches only configured paths; it is not a general crawler. TLS preserves certificate evidence plus offered/negotiated TLS versions, actual accepted ciphers, alerts and policy/catalog versions. `trusted_self_signed_fingerprints` is an optional reviewed SHA-256 allowlist; it does not modify system trust. DNS preserves TXT response status, records, SPF/DMARC analysis and nonce wildcard queries. `email_subdomains` may contain at most 20 explicitly declared names strictly below the inventory domain; no subdomain discovery or organizational-domain inference is performed. An explicit `dns_server_host`/`dns_server_port` overrides the system resolver; sensitive resolver addresses require the target's sensitive-network permission.
+HTTP preserves every relevant header instance, redacted cookie attributes, CSP meta/header policies, a declared-path coverage manifest, and every normalized redirect hop/stop reason. Explicit `http_paths` are requested twice to distinguish repeatable 5xx responses; omitted paths retain the legacy single-root observation and cannot produce a deterministic content `NO_MATCH`. Bounded HTML/XML inspection stores hashes and redacted summaries rather than bodies or clear contact values. SRI may issue at most 20 actual same-origin resource GETs by default, with redirect GETs consuming the same budget; `http_sri_resource_limit` may lower that bound to zero. An SRI redirect that changes origin is stopped before the redirected GET, and budget exhaustion is indeterminate. SRI fetching is never recursive. HTTP otherwise fetches only configured paths and is not a general crawler. TLS preserves certificate evidence plus offered/negotiated TLS versions, actual accepted ciphers, alerts and policy/catalog versions. `trusted_self_signed_fingerprints` is an optional reviewed SHA-256 allowlist; it does not modify system trust. DNS preserves TXT response status, records, SPF/DMARC analysis and nonce wildcard queries. `email_subdomains` may contain at most 20 explicitly declared names strictly below the inventory domain; no subdomain discovery or organizational-domain inference is performed. An explicit `dns_server_host`/`dns_server_port` overrides the system resolver; sensitive resolver addresses require the target's sensitive-network permission.
 
-Wave 1 and Wave 2 findings use tri-state evaluators: positive evidence creates a finding, a deterministic non-match creates none, and insufficient/malformed evidence is skipped as indeterminate. Reports show SSC issue key and SSC source severity separately from internal risk and scoring.
+Wave 1, Wave 2, Wave 3A, and Wave 3B findings use tri-state evaluators: positive evidence creates a finding, a deterministic non-match creates none, and insufficient/malformed evidence is skipped as indeterminate. Reports show SSC issue key and SSC source severity separately from internal risk and scoring.
 
 ## Outputs and exits
 

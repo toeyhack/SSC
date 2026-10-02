@@ -68,6 +68,11 @@ def build_parser():
         help="Activate reviewed Wave 3A service-protocol evaluators against the attested SSC API baseline",
     )
     activate3a.add_argument("--yes", action="store_true", help="Confirm activation of the reviewed evaluator definitions")
+    activate3b = baseline_commands.add_parser(
+        "activate-wave3b",
+        help="Activate reviewed Wave 3B HTTP-content evaluators against the attested SSC API baseline",
+    )
+    activate3b.add_argument("--yes", action="store_true", help="Confirm activation of the reviewed evaluator definitions")
     return parser
 
 
