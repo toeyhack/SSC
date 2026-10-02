@@ -21,7 +21,8 @@ from app.services.http_content import (
     inspect_http_content,
 )
 from app.services.internal_risk_calibration import resolve_ssc_internal_risk
-from app.services.scan_executors import HTTPExecutor, InventoryScanTarget
+from app.services.scan_engine import _not_assessed_reason
+from app.services.scan_executors import HTTPExecutor, InventoryScanTarget, validate_scan_config
 from app.services.scoring_engine import ScoringDefinition
 from app.services.ssc_api_baseline import API_ORIGIN, FACTORS_ENDPOINT, ISSUES_ENDPOINT, normalize_api_payloads
 from app.services.wave3b_rules import WAVE3B_RULES, active_wave3b_mappings
@@ -176,6 +177,17 @@ def test_missing_failed_malformed_and_unsupported_evidence_is_indeterminate():
     assert one_error["server_error"]["outcome"] == "INDETERMINATE"
 
 
+def test_actual_malformed_content_maps_to_malformed_evidence():
+    malformed = [
+        _attempt(b"<html><body>\xff</body></html>", attempt_number=index)
+        for index in (1, 2)
+    ]
+    evaluation = evaluate_http_content(malformed)["contact_information_detected"]
+    assert evaluation["outcome"] == "INDETERMINATE"
+    assert all(item["parse_reason"] == "html_decode_error" for item in evaluation["evidence"])
+    assert _not_assessed_reason({"status": "success"}, evaluation) == "malformed_evidence"
+
+
 def test_sri_digest_match_mismatch_and_cross_origin_boundaries():
     resource = b"console.log('bounded');"
     encoded = base64.b64encode(hashlib.sha384(resource).digest()).decode()
@@ -290,6 +302,58 @@ def _local_target():
     return InventoryScanTarget(
         ScanTargetTypeEnum.HOST, "target", "localhost", "127.0.0.1", "example.test", True,
     )
+
+
+class DeclaredPathHandler(BaseHTTPRequestHandler):
+    body = b"<html><body><a href='https://example.test/safe'>safe</a></body></html>"
+    requested_paths: list[str] = []
+
+    def log_message(self, _format, *args):
+        return
+
+    def do_GET(self):
+        type(self).requested_paths.append(self.path)
+        self.send_response(200)
+        self.send_header("Content-Type", "text/html; charset=utf-8")
+        self.send_header("Content-Length", str(len(self.body)))
+        self.end_headers()
+        self.wfile.write(self.body)
+
+
+def test_default_http_content_scope_declares_only_root_and_collects_two_attempts():
+    config = validate_scan_config({})
+    assert config["http_paths"] == ["/"]
+
+    DeclaredPathHandler.requested_paths = []
+    with _http_server(DeclaredPathHandler) as port:
+        config = validate_scan_config({
+            "executors": ["http"], "http_ports": [port], "https_ports": [],
+        })
+        evidence = HTTPExecutor().collect(_local_target(), config).evidence
+
+    assert evidence["declared_paths"] == ["/"]
+    assert DeclaredPathHandler.requested_paths == ["/", "/"]
+    assert len(evidence["attempts"]) == 2
+    assert all(attempt["coverage_declared"] is True for attempt in evidence["attempts"])
+    assert [attempt["attempt_number"] for attempt in evidence["attempts"]] == [1, 2]
+    assert all(evidence["evaluations"][key]["outcome"] == "NO_MATCH" for key in HTTP_CONTENT_ISSUE_KEYS)
+
+
+def test_explicit_http_paths_replace_the_default_declared_root_scope():
+    DeclaredPathHandler.requested_paths = []
+    with _http_server(DeclaredPathHandler) as port:
+        config = validate_scan_config({
+            "executors": ["http"],
+            "http_ports": [port],
+            "https_ports": [],
+            "http_paths": ["/login", "/health"],
+        })
+        evidence = HTTPExecutor().collect(_local_target(), config).evidence
+
+    assert config["http_paths"] == ["/login", "/health"]
+    assert evidence["declared_paths"] == ["/login", "/health"]
+    assert DeclaredPathHandler.requested_paths == ["/login", "/login", "/health", "/health"]
+    assert all(attempt["coverage_declared"] is True for attempt in evidence["attempts"])
 
 
 def test_http_body_limit_is_enforced_and_cannot_create_false_no_match():
@@ -509,10 +573,13 @@ def _wave3b_baseline():
 
 
 class FTPLinkHandler(BaseHTTPRequestHandler):
+    request_count = 0
+
     def log_message(self, _format, *args):
         return
 
     def do_GET(self):
+        type(self).request_count += 1
         body = b"<html><a href='ftp://files.example.test/archive'>archive</a></html>"
         self.send_response(200)
         self.send_header("Content-Type", "text/html; charset=utf-8")
@@ -521,7 +588,7 @@ class FTPLinkHandler(BaseHTTPRequestHandler):
         self.wfile.write(body)
 
 
-def test_exact_mapping_scan_assessment_and_uncalibrated_finding_fail_closed(db):
+def test_default_cli_scan_scope_exact_mapping_and_uncalibrated_finding_fail_closed(db):
     import_golden_baseline(db, _wave3b_baseline(), attest_real_source=True)
     mappings = active_wave3b_mappings(db)
     assert len(mappings) == len(WAVE3B_RULES) == 7
@@ -545,15 +612,20 @@ def test_exact_mapping_scan_assessment_and_uncalibrated_finding_fail_closed(db):
         allow_sensitive=True,
         approval_notes="Local deterministic Wave 3B fixture",
     )
+    FTPLinkHandler.request_count = 0
     with _http_server(FTPLinkHandler) as port:
         result = scan_inventory_target(
             db,
             name="localhost",
             organization_id=UUID(target["organization_id"]),
-            scan_config={"executors": ["http"], "http_ports": [port], "https_ports": [], "http_paths": ["/"]},
+            scan_config={"executors": ["http"], "http_ports": [port], "https_ports": []},
             model=ScoringDefinition(),
             rule_keys=[rule.stable_key],
         )
+    assert FTPLinkHandler.request_count == 2
+    assert result.evidence[0].summary["declared_paths"] == ["/"]
+    assert len(result.evidence[0].summary["attempts"]) == 2
+    assert all(attempt["coverage_declared"] is True for attempt in result.evidence[0].summary["attempts"])
     assert result.evidence[0].summary["evaluations"]["insecure_ftp"]["outcome"] == "MATCH"
     assert len(result.findings) == 1
     finding = result.findings[0]

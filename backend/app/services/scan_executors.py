@@ -2121,7 +2121,10 @@ def validate_scan_config(config: dict[str, Any] | None) -> dict[str, Any]:
     if "http" in config["executors"] and not (_ports_config(config, "http_ports", [80], MAX_HTTP_PORTS) or _ports_config(config, "https_ports", [443], MAX_HTTP_PORTS)):
         raise ScanExecutorError("HTTP execution requires at least one configured HTTP or HTTPS port")
     if "http" in config["executors"]:
-        _http_paths_config(config)
+        # The bounded root request is the default declared HTTP-content scope.
+        # Persist the normalized value so downstream collectors do not mistake
+        # the default for legacy, undeclared evidence.
+        config["http_paths"] = _http_paths_config(config)
     if "tls" in config["executors"]:
         _fingerprint_allowlist(config)
     if "dns" in config["executors"]:

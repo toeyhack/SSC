@@ -221,7 +221,34 @@ def test_indeterminate_execution_states_are_not_assessed(reason):
     ({"status": "success"}, {"reason": "required scope was not declared"}, "insufficient_evidence"),
     ({"status": "error", "error": "TimeoutError"}, None, "timed_out"),
     ({"status": "error", "error": "connection_failed"}, None, "evidence_error"),
-    ({"status": "success"}, {"reason": "malformed policy could not be parsed"}, "malformed_evidence"),
+    (
+        {"status": "success"},
+        {"reason": "evaluated URL schemes in completely parsed declared HTML responses"},
+        "insufficient_evidence",
+    ),
+    (
+        {"status": "success"},
+        {
+            "reason": "evaluated URL schemes in completely parsed declared HTML responses",
+            "evidence": [{"path": "/invalid", "parse_status": None}],
+        },
+        "insufficient_evidence",
+    ),
+    (
+        {"status": "success"},
+        {"reason": "generic evaluator description", "evidence": [{"parse_reason": "html_parse_error"}]},
+        "malformed_evidence",
+    ),
+    (
+        {"status": "success"},
+        {"reason": "generic evaluator description", "evidence": [{"soap": {"parse_status": "MALFORMED"}}]},
+        "malformed_evidence",
+    ),
+    (
+        {"status": "success"},
+        {"reason": "generic evaluator description", "evidence": [{"stop_reason": "timed_out"}]},
+        "timed_out",
+    ),
 ])
 def test_scan_failures_map_to_explicit_not_assessed_reasons(source, evaluation, expected):
     assert _not_assessed_reason(source, evaluation) == expected

@@ -287,17 +287,68 @@ def _not_assessed_reason(
     source_evidence: Any,
     evaluation: dict[str, Any] | None,
 ) -> str:
-    details = " ".join(str(value) for value in (
-        source_evidence.get("error") if isinstance(source_evidence, dict) else None,
-        evaluation.get("reason") if evaluation else None,
-    ) if value).casefold()
-    if "timeout" in details or "timed out" in details:
+    source_error = source_evidence.get("error") if isinstance(source_evidence, dict) else None
+    structured_values: list[tuple[str, Any]] = [("source_error", source_error)]
+    if isinstance(evaluation, dict):
+        # Evaluator `reason` is explanatory prose, not a machine-readable cause.
+        # Only inspect the structured evidence emitted by the collector/evaluator.
+        for key in ("evidence", "attempts"):
+            if key in evaluation:
+                structured_values.extend(_structured_evidence_values(evaluation[key], key))
+
+    reason_values = [
+        (key, value) for key, value in structured_values
+        if value is not None and _is_structured_reason_field(key)
+    ]
+    normalized = [str(value).casefold() for _key, value in reason_values]
+    if any("timeout" in value or "timed out" in value or "timed_out" in value for value in normalized):
         return "timed_out"
-    if any(token in details for token in ("malformed", "parse", "invalid")):
+    malformed_markers = (
+        "malformed",
+        "invalid",
+        "parse_error",
+        "decode_error",
+        "contains_null",
+        "incomplete_html_token",
+        "empty_policy",
+    )
+    if any(any(marker in value for marker in malformed_markers) for value in normalized):
+        return "malformed_evidence"
+    if any(
+        key.casefold().endswith("parse_error") and value is True
+        for key, value in reason_values
+    ):
         return "malformed_evidence"
     if isinstance(source_evidence, dict) and source_evidence.get("status") == "error":
         return "evidence_error"
     return "insufficient_evidence"
+
+
+def _structured_evidence_values(value: Any, path: str) -> list[tuple[str, Any]]:
+    if isinstance(value, dict):
+        values: list[tuple[str, Any]] = []
+        for key, item in value.items():
+            values.extend(_structured_evidence_values(item, f"{path}.{key}"))
+        return values
+    if isinstance(value, list):
+        values = []
+        for index, item in enumerate(value):
+            values.extend(_structured_evidence_values(item, f"{path}.{index}"))
+        return values
+    return [(path, value)]
+
+
+def _is_structured_reason_field(path: str) -> bool:
+    parts = path.casefold().split(".")
+    leaf = parts[-1]
+    return (
+        path == "source_error"
+        or leaf in {
+            "error", "error_class", "error_reason", "inspection_status",
+            "parse_error", "parse_reason", "parse_status", "reason", "stop_reason",
+        }
+        or "errors" in parts
+    )
 
 
 def _matched_evidence(expression: dict[str, Any], evidence: dict[str, Any]) -> dict[str, Any]:
