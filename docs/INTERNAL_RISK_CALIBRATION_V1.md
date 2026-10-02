@@ -1,28 +1,28 @@
 # Internal risk calibration V1
 
-**Status:** approved and implemented on 2026-10-02. **Scope:** the 27 keys that were `SUPPORTED` when calibration v1.0 was approved, from the attested SSC API baseline `0fe2bc8ffb7e3f734d4e88f70b11cffa6e8e9e47e722dc62107f6ff09694eca8`. Wave 3B later raised support to 34 without changing this approved registry: its seven new keys intentionally fail closed to `UNKNOWN` and `affects_score=false` until separately calibrated. The companion [CSV](INTERNAL_RISK_CALIBRATION_V1.csv) is the row-level decision record. SSC severity remains vendor metadata; these are independent internal judgments and make no claim about SSC's scoring method.
+**Status:** approved and implemented on 2026-10-02. **Scope:** calibration v1.1 contains 34 `SUPPORTED` keys from the attested SSC API baseline `0fe2bc8ffb7e3f734d4e88f70b11cffa6e8e9e47e722dc62107f6ff09694eca8`. It preserves the original 27 v1.0 decisions unchanged and adds the seven separately reviewed Wave 3B decisions. The companion [CSV](INTERNAL_RISK_CALIBRATION_V1.csv) is the row-level decision record. SSC severity remains vendor metadata; these are independent internal judgments and make no claim about SSC's scoring method.
 
 ## Decision basis
 
-A deterministic `MATCH` proves only the exact observation described by its versioned evaluator. It does not prove an exploit, weak authentication, sensitive data, or a vulnerable product version unless that condition is part of the evaluator. LOW denotes a credible but generally indirect security exposure or hardening gap; MEDIUM denotes a direct transport or authentication weakness with plausible confidentiality or integrity impact; HIGH would require stronger evidence of serious compromise than any of these 27 MATCH conditions supplies. UNKNOWN is retained when the observation alone does not justify a stable penalty. A proposed `affects_score=false` keeps the finding visible without an invented risk penalty.
+A deterministic `MATCH` proves only the exact observation described by its versioned evaluator. It does not prove an exploit, weak authentication, sensitive data, or a vulnerable product version unless that condition is part of the evaluator. LOW denotes a credible but generally indirect security exposure or hardening gap; MEDIUM denotes a direct transport or authentication weakness with plausible confidentiality or integrity impact; HIGH would require stronger evidence of serious compromise than any of these 34 MATCH conditions supplies. UNKNOWN is retained when the observation alone does not justify a stable penalty. An approved `affects_score=false` keeps the finding visible without an invented risk penalty.
 
-The current-state columns in the CSV reflect the `SSC_API` import path: it creates issue versions with `breach_risk=UNKNOWN` and `affects_score=true` independently of SSC severity. This is also consistent with the reported `csp_unsafe_policy_v2` E2E result. A live catalog was not modified or queried for per-version overrides; any locally reviewed versions should be reconciled by exact version ID before implementation. The proposal uses the documented 27 supported keys and their current SSC factor/severity values, not new taxonomy keys.
+For the original 27 rows, the current-state columns in the CSV preserve the pre-v1.0 `SSC_API` import state: issue versions had `breach_risk=UNKNOWN` and `affects_score=true` independently of SSC severity. For the seven Wave 3B rows, they preserve the pre-v1.1 fail-closed runtime state of `UNKNOWN` and `affects_score=false`. The approved columns contain the internal decisions now resolved by the registry. Imported taxonomy rows remain unchanged; internal calibration is applied separately by exact SSC issue key.
 
 ## Calibration summary
 
-| Proposed internal risk | Count | One scored MATCH: factor deduction |
+| Internal risk | Count | One scored MATCH: factor deduction |
 |---|---:|---:|
 | HIGH | 0 | 15 |
 | MEDIUM | 6 | 7 |
-| LOW | 17 | 2 |
-| UNKNOWN | 4 | 0 |
-| **Total** | **27** | — |
+| LOW | 21 | 2 |
+| UNKNOWN | 7 | 0 |
+| **Total** | **34** | — |
 
-**Proposed score relevance:** `affects_score=true` for 23; `false` for 4. A scored occurrence assumes an OPEN finding backed by an exact-version deterministic MATCH for an in-scope V1 issue, with no prior deduplication of the same issue version and target and room under the factor's 100-point cap. `NO_MATCH` and `NOT_ASSESSED` deduct zero. A factor starts at 100 once rated; a single LOW or MEDIUM MATCH would yield 98 or 93 for that factor. The weighted overall effect depends on which factors are rated and their configured weights. No penalty values, formula, factor weights, or scoring profile are proposed to change.
+**Approved score relevance:** `affects_score=true` for 27; `false` for 7. A scored occurrence assumes an OPEN finding backed by an exact-version deterministic MATCH for an in-scope V1 issue, with no prior deduplication of the same issue version and target and room under the factor's 100-point cap. `NO_MATCH` and `NOT_ASSESSED` deduct zero. A factor starts at 100 once rated; a single LOW or MEDIUM MATCH yields 98 or 93 for that factor. The weighted overall effect depends on which factors are rated and their configured weights. No penalty values, formula, factor weights, or scoring profile changed.
 
-### All 27 calibrated keys
+### Original 27 calibrated keys (unchanged)
 
-| Factor | Exact SSC issue key | SSC severity | Proposed risk | Score? | One MATCH |
+| Factor | Exact SSC issue key | SSC severity | Internal risk | Score? | One MATCH |
 |---|---|---|---|---|---:|
 | application_security | `csp_no_policy_v2` | low | LOW | yes | 2 |
 | application_security | `csp_too_broad_v2` | low | LOW | yes | 2 |
@@ -52,13 +52,25 @@ The current-state columns in the CSV reflect the `SSC_API` import path: it creat
 | network_security | `tlscert_self_signed` | low | LOW | yes | 2 |
 | network_security | `tlscert_weak_signature` | low | MEDIUM | yes | 7 |
 
+### Wave 3B extension
+
+| Factor | Exact SSC issue key | SSC severity | Internal risk | Score? | One MATCH |
+|---|---|---|---|---|---:|
+| application_security | `unsafe_sri_v2` | high | LOW | yes | 2 |
+| application_security | `insecure_ftp` | medium | LOW | yes | 2 |
+| application_security | `contact_information_detected` | low | UNKNOWN | no | 0 |
+| application_security | `local_file_path_exposed_via_url_scheme` | low | LOW | yes | 2 |
+| application_security | `server_error` | low | UNKNOWN | no | 0 |
+| application_security | `links_to_insecure_website` | low | LOW | yes | 2 |
+| network_security | `service_soap` | medium | UNKNOWN | no | 0 |
+
 ### Differences from SSC severity
 
-The following **17** keys have a proposed internal risk label different from the SSC severity label: `domain_missing_https_v2`, `insecure_https_redirect_pattern_v2`, `insecure_server_certificate_key_size`, `dmarc_contains_none`, `dmarc_record_missing`, `spf_record_softfail`, `spf_record_wildcard`, `subdomain_dmarc_contains_none`, `service_redis`, `service_rsync`, `service_smb`, `service_socks_proxy`, `service_telnet`, `service_vnc`, `tls_weak_protocol`, `tlscert_no_revocation`, and `tlscert_weak_signature`. This comparison includes SSC `info` and internal `UNKNOWN`, which are not numeric severity levels. The agreement on the other ten labels is an independent judgment, not a severity mapping.
+The following **22** keys have an internal risk label different from the SSC severity label: `domain_missing_https_v2`, `insecure_https_redirect_pattern_v2`, `insecure_server_certificate_key_size`, `dmarc_contains_none`, `dmarc_record_missing`, `spf_record_softfail`, `spf_record_wildcard`, `subdomain_dmarc_contains_none`, `service_redis`, `service_rsync`, `service_smb`, `service_socks_proxy`, `service_telnet`, `service_vnc`, `tls_weak_protocol`, `tlscert_no_revocation`, `tlscert_weak_signature`, `unsafe_sri_v2`, `insecure_ftp`, `contact_information_detected`, `server_error`, and `service_soap`. This comparison includes SSC `info` and internal `UNKNOWN`, which are not numeric severity levels. Agreement on the other labels is an independent judgment, not a severity mapping.
 
 ### UNKNOWN and unscored
 
-The same **four** keys should remain `UNKNOWN` and `affects_score=false`:
+The following **seven** keys are `UNKNOWN` and `affects_score=false`:
 
 | Key | Why the MATCH is insufficient | Needed context |
 |---|---|---|
@@ -66,16 +78,23 @@ The same **four** keys should remain `UNKNOWN` and `affects_score=false`:
 | `service_rsync` | A daemon greeting does not show accessible modules or file contents. | Module exposure and access controls. |
 | `service_socks_proxy` | Method selection does not show that relay succeeds or can be abused. | Selected authentication method and authorized relay test or configuration. |
 | `tlscert_no_revocation` | Missing OCSP/CRL URI does not establish compromise or the issuer's complete status strategy. | Issuer strategy, lifetime, and client validation behavior. |
+| `contact_information_detected` | A contact URI can be intentional public functionality and does not establish sensitive-data exposure. | Sensitivity, publication intent, and a concrete abuse scenario. |
+| `server_error` | Two HTTP 5xx responses establish failure, not a security-relevant cause or consequence. | Sensitive error leakage, attacker-controlled trigger, exhaustion, or an exploitable defect. |
+| `service_soap` | SOAP/WSDL semantics establish a service surface, not weak authorization or vulnerable operations. | Callable operations, access controls, data sensitivity, and implementation vulnerabilities. |
 
-The current scoring engine only treats `UNKNOWN` as an unresolved scoring risk when `affects_score=true`. With the implemented decisions, the four observations remain assessed findings but have no penalty. Their unscored status is a deliberate review decision; it must not be represented as proof that the services or configurations are safe.
+The current scoring engine only treats `UNKNOWN` as an unresolved scoring risk when `affects_score=true`. With the implemented decisions, the seven observations remain assessed findings but have no penalty. Their unscored status is a deliberate review decision; it must not be represented as proof that the services or configurations are safe.
 
 ### `csp_unsafe_policy_v2`
 
 Implemented as `LOW`, `affects_score=true`, **2 factor points for one qualifying MATCH**. The evaluator's MATCH means the effective active-content policy permits `unsafe-eval` or permits `unsafe-inline` without nonce/hash control. This weakens a browser defense against script injection; it does not establish an actual injection path or compromise. Its observed SSC severity is `low` metadata and is not the basis for the internal rating. A sensitive session plus a demonstrated injection path would justify a separate impact review based on additional evidence, not an automatic upgrade of this issue type.
 
+### `unsafe_sri_v2`
+
+Implemented as `LOW`, `affects_score=true`, **2 factor points for one qualifying MATCH**. Missing, invalid, disallowed, or mismatching integrity metadata establishes an SRI control weakness or inconsistency, not actual third-party compromise or successful malicious resource substitution. Its SSC severity is `high` metadata and is not the basis for the internal rating. A higher risk requires separate evidence of unauthorized resource modification and security-relevant delivery or execution.
+
 ## Implementation
 
-The versioned internal registry is [internal_risk_calibration.py](../backend/app/services/internal_risk_calibration.py). The [finding loader](../backend/app/services/finding_results.py) applies it only to findings pinned to imported `SSC_API` issue versions. Imported taxonomy rows keep their original SSC metadata and are not rewritten with internal risk. Missing SSC calibration entries fail closed to `UNKNOWN` and `affects_score=false`; SSC severity is never used as a fallback. Manual and other non-SSC catalog versions continue to use their explicit catalog risk metadata. Persisted normalized score results retain the internal risk, score relevance, exact catalog issue version, SSC severity, and allocated score impact used for that result. No schema migration is required.
+The versioned v1.1 internal registry is [internal_risk_calibration.py](../backend/app/services/internal_risk_calibration.py). The [finding loader](../backend/app/services/finding_results.py) applies it only to findings pinned to imported `SSC_API` issue versions. Imported taxonomy rows keep their original SSC metadata and are not rewritten with internal risk. Missing SSC calibration entries fail closed to `UNKNOWN` and `affects_score=false`; SSC severity is never used as a fallback. Manual and other non-SSC catalog versions continue to use their explicit catalog risk metadata. Persisted normalized score results retain the internal risk, score relevance, exact catalog issue version, SSC severity, and allocated score impact used for that result. No schema migration is required.
 
 ## Supporting security references
 

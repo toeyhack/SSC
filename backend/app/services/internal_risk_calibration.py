@@ -7,7 +7,7 @@ from dataclasses import dataclass
 
 
 CALIBRATION_NAME = "ssc-supported-internal-risk"
-CALIBRATION_VERSION = "1.0"
+CALIBRATION_VERSION = "1.1"
 
 
 @dataclass(frozen=True)
@@ -49,6 +49,13 @@ SSC_SUPPORTED_INTERNAL_RISK_V1 = {
     "tlscert_no_revocation": _decision("UNKNOWN", False),
     "tlscert_self_signed": _decision("LOW"),
     "tlscert_weak_signature": _decision("MEDIUM"),
+    "unsafe_sri_v2": _decision("LOW"),
+    "insecure_ftp": _decision("LOW"),
+    "contact_information_detected": _decision("UNKNOWN", False),
+    "local_file_path_exposed_via_url_scheme": _decision("LOW"),
+    "server_error": _decision("UNKNOWN", False),
+    "links_to_insecure_website": _decision("LOW"),
+    "service_soap": _decision("UNKNOWN", False),
 }
 
 

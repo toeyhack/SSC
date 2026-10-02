@@ -680,7 +680,11 @@ def _wave3b_baseline():
     }
     rows = [{
         "key": spec.issue_key,
-        "severity": "medium" if spec.issue_key in {"insecure_ftp", "service_soap"} else "low",
+        "severity": (
+            "high" if spec.issue_key == "unsafe_sri_v2"
+            else "medium" if spec.issue_key in {"insecure_ftp", "service_soap"}
+            else "low"
+        ),
         "factor": "network_security" if spec.issue_key == "service_soap" else "application_security",
         "title": spec.title,
     } for spec in WAVE3B_RULES]
@@ -712,17 +716,25 @@ class FTPLinkHandler(BaseHTTPRequestHandler):
         self.wfile.write(body)
 
 
-def test_default_cli_scan_scope_exact_mapping_and_uncalibrated_finding_fail_closed(db):
+def test_default_cli_scan_scope_exact_mapping_and_calibrated_finding_scores(db):
     import_golden_baseline(db, _wave3b_baseline(), attest_real_source=True)
     mappings = active_wave3b_mappings(db)
     assert len(mappings) == len(WAVE3B_RULES) == 7
     assert {item["issue_key"] for item in mappings} == set(HTTP_CONTENT_ISSUE_KEYS)
+    expected_risks = {
+        "unsafe_sri_v2": ("LOW", True),
+        "insecure_ftp": ("LOW", True),
+        "contact_information_detected": ("UNKNOWN", False),
+        "local_file_path_exposed_via_url_scheme": ("LOW", True),
+        "server_error": ("UNKNOWN", False),
+        "links_to_insecure_website": ("LOW", True),
+        "service_soap": ("UNKNOWN", False),
+    }
     for mapping in mappings:
         issue_version = db.get(CatalogIssueTypeVersion, UUID(mapping["issue_version_id"]))
         assert issue_version.source_type == SourceTypeEnum.SSC_API
         risk = resolve_ssc_internal_risk(mapping["issue_key"])
-        assert risk.breach_risk == "UNKNOWN"
-        assert risk.affects_score is False
+        assert (risk.breach_risk, risk.affects_score) == expected_risks[mapping["issue_key"]]
 
     rule = db.scalar(select(RuleEngineRule).where(RuleEngineRule.stable_key == "ssc.wave3b.insecure_ftp"))
     suffix = uuid4().hex[:12]
@@ -754,6 +766,6 @@ def test_default_cli_scan_scope_exact_mapping_and_uncalibrated_finding_fail_clos
     assert len(result.findings) == 1
     finding = result.findings[0]
     assert finding.ssc_issue_key == "insecure_ftp"
-    assert finding.breach_risk == "UNKNOWN"
-    assert finding.affects_score is False
-    assert finding.score_impact == 0
+    assert finding.breach_risk == "LOW"
+    assert finding.affects_score is True
+    assert finding.score_impact == 2
