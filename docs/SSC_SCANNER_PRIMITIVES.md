@@ -1,17 +1,17 @@
 # SSC Scanner Primitive Review
 
 Baseline content hash: `0fe2bc8ffb7e3f734d4e88f70b11cffa6e8e9e47e722dc62107f6ff09694eca8`  
-Review date: 2026-10-02
+Review date: 2026-10-03
 Scope: the 156 issues classified `DIRECTLY_TESTABLE` or `TESTABLE_WITH_ENRICHMENT` after the quality gate.
 
 This is a design and implementation-status catalog. A primitive supports a finding only when it records the exact observation, preserves scope and provenance, distinguishes negative results from errors/unknowns, and has a versioned evaluator linked to the SSC-aligned issue. It does not reproduce SSC collection methods or scoring.
 
 ## Current implementation boundary
 
-The platform has HTTP, TLS, DNS, and TCP collectors. Wave 1 added declared-path HTTP and certificate evidence. Wave 2 added version-pinned TLS negotiation and deterministic email-security evidence. Wave 3A added one bounded service-probe adapter framework and six non-authenticating protocol adapters. Wave 3B adds bounded declared-path HTML/XML inspection, redacted URL observations, two-attempt 5xx evidence, and an actual-GET budget of up to 20 same-origin nonrecursive SRI resource requests including redirects. It still does not have a general or recursive crawler, browser runtime, WebSocket capture, later service-protocol adapters, SSH negotiation, complete legacy-cipher client coverage, stapled-OCSP capture, complete RFC 7208 evaluation, DKIM selector provenance, revocation client, product fingerprint engine, CVE/lifecycle feeds, or longitudinal patching model. Therefore:
+The platform has HTTP, TLS, DNS, and TCP collectors. Wave 1 added declared-path HTTP and certificate evidence. Wave 2 added version-pinned TLS negotiation and deterministic email-security evidence. Wave 3A added one bounded service-probe adapter framework and six non-authenticating protocol adapters. Wave 3B added bounded declared-path HTML/XML inspection, redacted URL observations, two-attempt 5xx evidence, and an actual-GET budget of up to 20 same-origin nonrecursive SRI resource requests including redirects. Wave 4A adds bounded pre-authentication SSH identification and SSH2 KEXINIT parsing on explicitly declared TCP ports. It still does not have a general or recursive crawler, browser runtime, WebSocket capture, later service-protocol adapters, complete legacy-TLS-cipher client coverage, stapled-OCSP capture, complete RFC 7208 evaluation, DKIM selector provenance, revocation client, product fingerprint engine, CVE/lifecycle feeds, or longitudinal patching model. Therefore:
 
-- fully `SUPPORTED` today: **34**;
-- `PARTIAL` among the 156 primitive-addressable issues: **93**;
+- fully `SUPPORTED` today: **37**;
+- `PARTIAL` among the 156 primitive-addressable issues: **90**;
 - `NOT_SUPPORTED` among the 156: **29**;
 - every supported issue has an active evaluator pinned to an exact attested `SSC_API` issue version; other primitives still require issue-specific evidence and evaluators.
 
@@ -35,12 +35,12 @@ The platform has HTTP, TLS, DNS, and TCP collectors. Wave 1 added declared-path 
 | `PRODUCT_FINGERPRINT` | 16 | 0/16 | 0 | 15 | 1 | HIGH | versioned multi-signal fingerprints, provenance, ambiguity/confidence model, inventory corroboration |
 | `PROXY_VALIDATION` | 2 | 2/0 | 1 | 1 | 0 | MEDIUM | SOCKS5 identification is supported without relaying traffic; HTTP proxy validation still needs an organization-owned canary and strict egress target |
 | `SERVICE_PROTOCOL_IDENTIFICATION` | 32 | 30/2 | 6 | 26 | 0 | MEDIUM–HIGH | common bounded adapter is active for five original-group issues and declared-path SOAP/WSDL evidence supports `service_soap`; later adapters, UDP where needed, and per-protocol strict boundaries remain |
-| `SSH_NEGOTIATION` | 3 | 3/0 | 0 | 3 | 0 | MEDIUM | SSH identification/KEX parser, versioned cryptographic policy, no authentication |
+| `SSH_NEGOTIATION` | 3 | 3/0 | 3 | 0 | 0 | MEDIUM | bounded identification/KEXINIT parser, exact versioned cryptographic policy, no authentication |
 | `TCP_SERVICE_DISCOVERY` | 1 | 1/0 | 0 | 1 | 0 | LOW | approved port manifest and TCP connect evidence |
 | `TLS_CERTIFICATE` | 9 | 5/4 | 5 | 4 | 0 | MEDIUM–HIGH | CA policy history, authoritative revocation, jurisdiction, and CA registry enrichment |
 | `TLS_HANDSHAKE` | 3 | 3/0 | 1 | 1 | 1 | MEDIUM | complete prohibited-suite client coverage and OCSP-staple capture/validation |
 | `WEBSOCKET_RUNTIME` | 3 | 2/1 | 0 | 0 | 3 | HIGH | browser runtime, bounded frame metadata, synthetic markers, application data schema |
-| **Total** | **156** | **75/81** | **34** | **93** | **29** |  |  |
+| **Total** | **156** | **75/81** | **37** | **90** | **29** |  |  |
 
 ## Issue grouping
 
@@ -121,6 +121,10 @@ Wave 3A supports `service_vnc`, `service_rsync`, `service_redis`, `service_telne
 ### `SSH_NEGOTIATION` (3)
 
 `ssh_weak_cipher`, `ssh_weak_mac`, `ssh_weak_protocol`
+
+Wave 4A supports all three through the existing TCP executor and explicitly configured `ssh_ports`. Each endpoint receives one bounded TCP connection; the collector validates the SSH identification, sends only its SSH-2.0 identification, reads at most four packets and stops immediately after a complete valid server `SSH_MSG_KEXINIT`. It sends no credentials or application commands and persists only the identification hash, normalized algorithm lists, limits, versions, and structured stop/error state.
+
+Cipher and MAC matches require exact names in the pinned `ssc-wave4a-ssh-crypto-policy.v1`; an advertisement is protocol evidence that the server supports the algorithm, not evidence that a downgrade or exploit succeeded. The independently versioned exact-name `ssc-wave4a-ssh-aead-policy.v2` assigns each recognized AEAD cipher a MAC mode. OpenSSH GCM and both ChaCha20-Poly1305 names are `MAC_IGNORED`, so an exclusive direction is clean with an empty MAC list and advertised standalone MAC names are not selectable. RFC 5647 `AEAD_AES_128_GCM` and `AEAD_AES_256_GCM` are `PAIRED_AEAD_MAC`: every advertised paired cipher must also appear in that direction's complete MAC list, otherwise the direction is indeterminate. A known non-AEAD cipher makes the standalone MAC list applicable; exact prohibited names then match, a complete clean list is negative, and an empty list is indeterminate. Mixed AEAD modes require complete RFC 5647 pairing, and unclassified applicability fails closed. Both directions must be conclusive for `NO_MATCH`, and names in non-MAC fields never trigger `ssh_weak_mac`. Valid SSH-1.x below 2 matches `ssh_weak_protocol`; SSH-2.0 requires complete KEXINIT for `NO_MATCH`; SSH-1.99 remains `INDETERMINATE` because this wave does not safely confirm SSH1 compatibility.
 
 ### `TCP_SERVICE_DISCOVERY` (1)
 

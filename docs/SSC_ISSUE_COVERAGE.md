@@ -2,7 +2,7 @@
 
 Snapshot content hash: `0fe2bc8ffb7e3f734d4e88f70b11cffa6e8e9e47e722dc62107f6ff09694eca8`
 Source: immutable real `SSC_API` Golden Baseline
-Implementation state: Waves 1-2, Wave 3A first-batch `SERVICE_PROTOCOL_IDENTIFICATION`, and Wave 3B `HTTP_CONTENT`
+Implementation state: Waves 1-2, Wave 3A first-batch `SERVICE_PROTOCOL_IDENTIFICATION`, Wave 3B `HTTP_CONTENT`, and Wave 4A `SSH_NEGOTIATION`
 Total mapped issues: **202**
 
 > This is an independent implementation mapped to SSC taxonomy. It does not reproduce or claim knowledge of SSC collection, aggregation, severity, scoring, or proprietary detection logic. `ssc_severity` remains source metadata and is not mapped to internal risk or score impact.
@@ -13,11 +13,11 @@ Total mapped issues: **202**
 
 ## Coverage summary
 
-| Coverage | Before Wave 3B | After Wave 3B | Percentage after |
+| Coverage | Before Wave 4A | After Wave 4A | Percentage after |
 |---|---:|---:|---:|
-| `SUPPORTED` | 27 | 34 | 16.8% |
-| `PARTIAL` | 95 | 93 | 46.0% |
-| `NOT_SUPPORTED` | 80 | 75 | 37.1% |
+| `SUPPORTED` | 34 | 37 | 18.3% |
+| `PARTIAL` | 93 | 90 | 44.6% |
+| `NOT_SUPPORTED` | 75 | 75 | 37.1% |
 | **Total** | **202** | **202** | **100.0%** |
 
 ### Feasibility (unchanged)
@@ -40,7 +40,7 @@ Total mapped issues: **202**
 | `hacker_chatter` | 2 | 0 | 0 | 2 | 0 | 0 | 0 | 2 |
 | `ip_reputation` | 26 | 1 | 1 | 24 | 0 | 0 | 2 | 24 |
 | `leaked_information` | 8 | 0 | 0 | 8 | 0 | 0 | 0 | 8 |
-| `network_security` | 68 | 42 | 20 | 5 | 1 | 12 | 49 | 7 |
+| `network_security` | 68 | 42 | 20 | 5 | 1 | 15 | 46 | 7 |
 | `patching_cadence` | 21 | 0 | 21 | 0 | 0 | 0 | 8 | 13 |
 | `social_engineering` | 1 | 0 | 0 | 1 | 0 | 0 | 0 | 1 |
 
@@ -129,6 +129,16 @@ Every listed rule uses stable key `ssc.wave3b.<issue-key>`, method schema `ssc-h
 | `server_error` | `HTTP_CONTENT` | MATCH when the same declared URL returns an HTTP 5xx status on both bounded attempts. | NO_MATCH only when every declared URL completes both attempts without a reproducible 5xx. | Any failed/incomplete attempt, an undeclared path set, or exactly one 5xx in a pair is INDETERMINATE. | https://www.rfc-editor.org/rfc/rfc9110.html#name-server-error-5xx |
 | `links_to_insecure_website` | `HTTP_CONTENT` | MATCH when a covered static HTML URL resolves to the http: scheme. | NO_MATCH only when every declared response is fetched completely and parsed as HTML and none satisfies the condition. | Missing or failed response, blocked/non-2xx response, truncated body, unsupported content type or encoding, malformed content, undeclared path coverage, or an exceeded observation bound is INDETERMINATE. | https://www.rfc-editor.org/rfc/rfc9110.html |
 | `service_soap` | `HTTP_CONTENT` | MATCH when an endpoint returns a parseable SOAP 1.1/1.2 Envelope or WSDL document containing a SOAP binding. | NO_MATCH only when every declared endpoint is fetched and completely parsed as supported HTML/XML content with no SOAP/WSDL semantic. | No declared path, failed/blocked response, truncation, unsupported content, malformed XML, or ambiguous namespace evidence is INDETERMINATE. | https://www.w3.org/TR/soap12-part1/; https://www.w3.org/TR/wsdl20/ |
+
+## Active Wave 4A evaluator mappings
+
+Every listed rule uses stable key `ssc.wave4a.<issue-key>`, method schema `ssc-wave4a-ssh-observation.v1`, policy `ssc-wave4a-ssh-crypto-policy.v1`, source type `SSC_REFERENCE`, and an immutable link to the exact attested `SSC_API` issue version. The bounded collector stops after server KEXINIT and never authenticates or sends application commands.
+
+| SSC issue key | Primitive | MATCH condition | NO_MATCH boundary | INDETERMINATE boundary | Authoritative reference |
+|---|---|---|---|---|---|
+| `ssh_weak_protocol` | `SSH_NEGOTIATION` | MATCH for valid deterministic SSH-1.x identification below 2, excluding ambiguous SSH-1.99. | NO_MATCH only for valid SSH-2.0 identification plus a complete valid SSH2 KEXINIT. | SSH-1.99 without safe SSH1 confirmation, malformed/foreign/incomplete exchanges, transport failure, or unsupported protocol is INDETERMINATE. | https://api.securityscorecard.io/metadata/issue-types/ssh_weak_protocol; https://www.rfc-editor.org/rfc/rfc4253.html; https://www.iana.org/assignments/ssh-parameters |
+| `ssh_weak_cipher` | `SSH_NEGOTIATION` | MATCH when either complete KEXINIT encryption direction advertises an exact policy-prohibited Arcfour or CBC cipher. | NO_MATCH only when both complete directional lists contain no exact prohibited cipher. | Missing/malformed/truncated KEXINIT, a missing direction, unknown policy, transport failure, non-SSH service, or non-SSH2 state is INDETERMINATE. | https://api.securityscorecard.io/metadata/issue-types/ssh_weak_cipher; https://www.rfc-editor.org/rfc/rfc4253.html; https://www.iana.org/assignments/ssh-parameters |
+| `ssh_weak_mac` | `SSH_NEGOTIATION` | MATCH when an exact prohibited MD5 MAC is advertised in a direction containing at least one known non-AEAD cipher, making the standalone MAC selectable. | NO_MATCH only when both directions are conclusive: each has only MAC-ignored AEAD ciphers, has complete consistent RFC 5647 paired AEAD evidence, or has a complete clean MAC list applicable to a known non-AEAD cipher. | Missing/malformed evidence, an empty applicable MAC list, incomplete RFC 5647 pairing, unknown cipher applicability or policy, transport failure, or a non-SSH/non-SSH2 state is INDETERMINATE. | https://api.securityscorecard.io/metadata/issue-types/ssh_weak_mac; https://www.rfc-editor.org/rfc/rfc4253.html; https://www.iana.org/assignments/ssh-parameters |
 
 ## Per-issue index
 
@@ -299,9 +309,9 @@ The CSV remains normative for exact evidence requirements, proposed logic, depen
 | `service_telnet` | Telnet Service Observed | `network_security` | `medium` | `DIRECTLY_TESTABLE` | `SERVICE_PROTOCOL_IDENTIFICATION` | `SUPPORTED` |
 | `service_vnc` | VNC Service Observed | `network_security` | `medium` | `DIRECTLY_TESTABLE` | `SERVICE_PROTOCOL_IDENTIFICATION` | `SUPPORTED` |
 | `sql_payload_using_tor_proxy_detected` | SQL Payload Using Tor proxy Detected | `network_security` | `info` | `EXTERNAL_DATA_REQUIRED` | `EXTERNAL_INTEL_INGEST` | `NOT_SUPPORTED` |
-| `ssh_weak_cipher` | SSH Supports Weak Cipher | `network_security` | `medium` | `DIRECTLY_TESTABLE` | `SSH` | `PARTIAL` |
-| `ssh_weak_mac` | SSH Supports Weak MAC | `network_security` | `medium` | `DIRECTLY_TESTABLE` | `SSH` | `PARTIAL` |
-| `ssh_weak_protocol` | SSH Software Supports Vulnerable Protocol | `network_security` | `medium` | `DIRECTLY_TESTABLE` | `SSH` | `PARTIAL` |
+| `ssh_weak_cipher` | SSH Supports Weak Cipher | `network_security` | `medium` | `DIRECTLY_TESTABLE` | `SSH_NEGOTIATION` | `SUPPORTED` |
+| `ssh_weak_mac` | SSH Supports Weak MAC | `network_security` | `medium` | `DIRECTLY_TESTABLE` | `SSH_NEGOTIATION` | `SUPPORTED` |
+| `ssh_weak_protocol` | SSH Software Supports Vulnerable Protocol | `network_security` | `medium` | `DIRECTLY_TESTABLE` | `SSH_NEGOTIATION` | `SUPPORTED` |
 | `telephony` | Telephony/VoIP Device Accessible | `network_security` | `info` | `DIRECTLY_TESTABLE` | `PROTOCOL_PROBE` | `PARTIAL` |
 | `tls_ocsp_stapling` | TLS Certificate Status Request ("OCSP Stapling") Detected | `network_security` | `info` | `DIRECTLY_TESTABLE` | `TLS` | `PARTIAL` |
 | `tls_weak_cipher` | TLS Service Supports Weak Cipher Suite | `network_security` | `medium` | `DIRECTLY_TESTABLE` | `TLS` | `PARTIAL` |

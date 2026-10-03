@@ -30,6 +30,7 @@ from app.services.wave1_rules import WAVE1_BY_KEY
 from app.services.wave2_rules import WAVE2_BY_KEY
 from app.services.wave3a_rules import WAVE3A_BY_KEY
 from app.services.wave3b_rules import WAVE3B_BY_KEY
+from app.services.wave4a_rules import WAVE4A_BY_KEY
 
 
 def _profile() -> ResolvedAssessmentProfile:
@@ -290,7 +291,7 @@ def test_versioned_v1_profile_resolves_exact_baseline_scope_and_capabilities(db)
     supported = sorted(set(WAVE1_BY_KEY) | set(WAVE2_BY_KEY))
     supported_by_factor = {
         "application_security": supported[:10] + sorted(set(WAVE3B_BY_KEY) - {"service_soap"}),
-        "network_security": supported[10:15] + sorted(WAVE3A_BY_KEY) + ["service_soap"],
+        "network_security": supported[10:15] + sorted(WAVE3A_BY_KEY) + ["service_soap"] + sorted(WAVE4A_BY_KEY),
         "dns_health": supported[15:21],
         "patching_cadence": [],
     }
@@ -351,13 +352,13 @@ def test_versioned_v1_profile_resolves_exact_baseline_scope_and_capabilities(db)
     out_of_scope = [item for item in profile.issues if item.factor_code not in profile.definition.in_scope_factor_codes]
     assert len(in_scope) == 160
     assert len(out_of_scope) == 42
-    assert sum(item.supported_capability for item in in_scope) == 34
+    assert sum(item.supported_capability for item in in_scope) == 37
     assert {
         code: sum(item.supported_capability for item in in_scope if item.factor_code == code)
         for code in profile.definition.in_scope_factor_codes
     } == {
         "application_security": 16,
-        "network_security": 12,
+        "network_security": 15,
         "dns_health": 6,
         "patching_cadence": 0,
     }

@@ -29,8 +29,9 @@ def main() -> int:
     from app.services.wave2_rules import WAVE2_BY_KEY, WAVE2_PARTIAL_REASONS, WAVE2_RULES
     from app.services.wave3a_rules import WAVE3A_BY_KEY, WAVE3A_RULES
     from app.services.wave3b_rules import WAVE3B_BY_KEY, WAVE3B_RULES
+    from app.services.wave4a_rules import WAVE4A_BY_KEY, WAVE4A_RULES
 
-    all_by_key = {**WAVE1_BY_KEY, **WAVE2_BY_KEY, **WAVE3A_BY_KEY, **WAVE3B_BY_KEY}
+    all_by_key = {**WAVE1_BY_KEY, **WAVE2_BY_KEY, **WAVE3A_BY_KEY, **WAVE3B_BY_KEY, **WAVE4A_BY_KEY}
     all_partial_reasons = {**WAVE1_PARTIAL_REASONS, **WAVE2_PARTIAL_REASONS}
 
     mappings = []
@@ -40,17 +41,18 @@ def main() -> int:
         from app.services.wave2_rules import active_wave2_mappings
         from app.services.wave3a_rules import active_wave3a_mappings
         from app.services.wave3b_rules import active_wave3b_mappings
+        from app.services.wave4a_rules import active_wave4a_mappings
         with SessionLocal() as db:
             mappings = (
                 active_wave1_mappings(db) + active_wave2_mappings(db)
-                + active_wave3a_mappings(db) + active_wave3b_mappings(db)
+                + active_wave3a_mappings(db) + active_wave3b_mappings(db) + active_wave4a_mappings(db)
             )
         active_keys = {item["issue_key"] for item in mappings}
         expected = set(all_by_key)
         if active_keys != expected:
             missing = sorted(expected - active_keys)
             extra = sorted(active_keys - expected)
-            raise SystemExit(f"active Wave 1/2/3A/3B mappings differ: missing={missing} extra={extra}")
+            raise SystemExit(f"active Wave 1/2/3A/3B/4A mappings differ: missing={missing} extra={extra}")
     else:
         active_keys = set(all_by_key)
 
@@ -66,7 +68,8 @@ def main() -> int:
                 "Wave 1" if row["ssc_issue_key"] in WAVE1_BY_KEY else
                 "Wave 2" if row["ssc_issue_key"] in WAVE2_BY_KEY else
                 "Wave 3A" if row["ssc_issue_key"] in WAVE3A_BY_KEY else
-                "Wave 3B"
+                "Wave 3B" if row["ssc_issue_key"] in WAVE3B_BY_KEY else
+                "Wave 4A"
             )
             row["current_platform_support"] = "SUPPORTED"
             row["required_executor"] = spec.primitive
@@ -90,9 +93,9 @@ def main() -> int:
         row["current_platform_support"] for row in rows if row["factor"] in V1_FACTORS
     )
     feasibility = Counter(row["feasibility_category"] for row in rows)
-    if coverage != {"SUPPORTED": 34, "PARTIAL": 93, "NOT_SUPPORTED": 75}:
+    if coverage != {"SUPPORTED": 37, "PARTIAL": 90, "NOT_SUPPORTED": 75}:
         raise SystemExit(f"unexpected coverage totals: {dict(coverage)}")
-    if v1_coverage != {"SUPPORTED": 34, "PARTIAL": 90, "NOT_SUPPORTED": 36}:
+    if v1_coverage != {"SUPPORTED": 37, "PARTIAL": 87, "NOT_SUPPORTED": 36}:
         raise SystemExit(f"unexpected V1 coverage totals: {dict(v1_coverage)}")
 
     if args.write:
@@ -107,6 +110,7 @@ def main() -> int:
                 WAVE2_RULES, WAVE2_PARTIAL_REASONS,
                 WAVE3A_RULES,
                 WAVE3B_RULES,
+                WAVE4A_RULES,
             ),
             encoding="utf-8",
         )
@@ -127,7 +131,7 @@ def main() -> int:
     return 0
 
 
-def render_markdown(rows, feasibility, coverage, wave1_rules, wave1_partial, wave2_rules, wave2_partial, wave3a_rules, wave3b_rules) -> str:
+def render_markdown(rows, feasibility, coverage, wave1_rules, wave1_partial, wave2_rules, wave2_partial, wave3a_rules, wave3b_rules, wave4a_rules) -> str:
     factors = defaultdict(Counter)
     for row in rows:
         factor = factors[row["factor"]]
@@ -140,7 +144,7 @@ def render_markdown(rows, feasibility, coverage, wave1_rules, wave1_partial, wav
         "",
         f"Snapshot content hash: `{BASELINE_HASH}`",
         "Source: immutable real `SSC_API` Golden Baseline",
-        "Implementation state: Waves 1-2, Wave 3A first-batch `SERVICE_PROTOCOL_IDENTIFICATION`, and Wave 3B `HTTP_CONTENT`",
+        "Implementation state: Waves 1-2, Wave 3A first-batch `SERVICE_PROTOCOL_IDENTIFICATION`, Wave 3B `HTTP_CONTENT`, and Wave 4A `SSH_NEGOTIATION`",
         "Total mapped issues: **202**",
         "",
         "> This is an independent implementation mapped to SSC taxonomy. It does not reproduce or claim knowledge of SSC collection, aggregation, severity, scoring, or proprietary detection logic. `ssc_severity` remains source metadata and is not mapped to internal risk or score impact.",
@@ -151,11 +155,11 @@ def render_markdown(rows, feasibility, coverage, wave1_rules, wave1_partial, wav
         "",
         "## Coverage summary",
         "",
-        "| Coverage | Before Wave 3B | After Wave 3B | Percentage after |",
+        "| Coverage | Before Wave 4A | After Wave 4A | Percentage after |",
         "|---|---:|---:|---:|",
-        f"| `SUPPORTED` | 27 | {coverage['SUPPORTED']} | {coverage['SUPPORTED']/202:.1%} |",
-        f"| `PARTIAL` | 95 | {coverage['PARTIAL']} | {coverage['PARTIAL']/202:.1%} |",
-        f"| `NOT_SUPPORTED` | 80 | {coverage['NOT_SUPPORTED']} | {coverage['NOT_SUPPORTED']/202:.1%} |",
+        f"| `SUPPORTED` | 34 | {coverage['SUPPORTED']} | {coverage['SUPPORTED']/202:.1%} |",
+        f"| `PARTIAL` | 93 | {coverage['PARTIAL']} | {coverage['PARTIAL']/202:.1%} |",
+        f"| `NOT_SUPPORTED` | 75 | {coverage['NOT_SUPPORTED']} | {coverage['NOT_SUPPORTED']/202:.1%} |",
         "| **Total** | **202** | **202** | **100.0%** |",
         "",
         "### Feasibility (unchanged)",
@@ -249,6 +253,21 @@ def render_markdown(rows, feasibility, coverage, wave1_rules, wave1_partial, wav
         "|---|---|---|---|---|---|",
     ]
     for spec in wave3b_rules:
+        lines.append(
+            f"| `{spec.issue_key}` | `{spec.primitive}` | {spec.match_condition} | "
+            f"{spec.no_match_boundary} | {spec.indeterminate_boundary} | {spec.reference} |"
+        )
+
+    lines += [
+        "",
+        "## Active Wave 4A evaluator mappings",
+        "",
+        "Every listed rule uses stable key `ssc.wave4a.<issue-key>`, method schema `ssc-wave4a-ssh-observation.v1`, policy `ssc-wave4a-ssh-crypto-policy.v1`, source type `SSC_REFERENCE`, and an immutable link to the exact attested `SSC_API` issue version. The bounded collector stops after server KEXINIT and never authenticates or sends application commands.",
+        "",
+        "| SSC issue key | Primitive | MATCH condition | NO_MATCH boundary | INDETERMINATE boundary | Authoritative reference |",
+        "|---|---|---|---|---|---|",
+    ]
+    for spec in wave4a_rules:
         lines.append(
             f"| `{spec.issue_key}` | `{spec.primitive}` | {spec.match_condition} | "
             f"{spec.no_match_boundary} | {spec.indeterminate_boundary} | {spec.reference} |"

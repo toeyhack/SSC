@@ -42,6 +42,12 @@ from app.services.service_probes import (
     evaluate_service_probe_response,
     run_service_probe,
 )
+from app.services.ssh_negotiation import (
+    MAX_SSH_ENDPOINTS,
+    SSH_COLLECTOR_VERSION,
+    aggregate_ssh_evaluations,
+    collect_ssh_negotiation,
+)
 
 
 USER_AGENT = "InternalSecurityRatingScanner/Phase4B"
@@ -576,6 +582,8 @@ class TCPExecutor(BaseExecutor):
             minimum=64, maximum=MAX_SERVICE_PROBE_RESPONSE_BYTES,
         )
         configured_probes = _service_probes_config(config)
+        ssh_ports = _ports_config(config, "ssh_ports", [], MAX_SSH_ENDPOINTS)
+        ssh_timeout = _float_config(config, "ssh_timeout_seconds", timeout, minimum=0.1, maximum=15.0)
         evidence = {
             "executor": self.executor_name,
             "status": "success",
@@ -588,6 +596,8 @@ class TCPExecutor(BaseExecutor):
             "ports": {},
             "service_probes": [],
             "probe_framework_version": SERVICE_PROBE_FRAMEWORK_VERSION,
+            "ssh_negotiations": [],
+            "ssh_collector_version": SSH_COLLECTOR_VERSION,
         }
         for port in ports:
             started = time.monotonic()
@@ -634,9 +644,19 @@ class TCPExecutor(BaseExecutor):
                     **evaluate_service_probe_response(protocol, b"", transport=transport),
                 }
             evidence["service_probes"].append(attempt)
-        evidence["evaluations"] = aggregate_service_probe_evaluations(evidence["service_probes"])
-        if not ports and not configured_probes:
-            evidence["skipped"] = "no tcp_ports or service_probes configured"
+        for port in ssh_ports:
+            evidence["ssh_negotiations"].append(collect_ssh_negotiation(
+                target.connect_host,
+                target.hostname,
+                port,
+                timeout=ssh_timeout,
+            ))
+        evidence["evaluations"] = {
+            **aggregate_service_probe_evaluations(evidence["service_probes"]),
+            **aggregate_ssh_evaluations(evidence["ssh_negotiations"]),
+        }
+        if not ports and not configured_probes and not ssh_ports:
+            evidence["skipped"] = "no tcp_ports, service_probes, or ssh_ports configured"
             evidence["status"] = "skipped"
         return ExecutorObservation(self.evidence_source, evidence)
 
@@ -654,7 +674,7 @@ def collect_scanner_observations(target: InventoryScanTarget, config: dict[str, 
     executor_names = normalized_config.get("executors")
     if executor_names is None:
         executor_names = ["http", "tls", "dns"]
-        if normalized_config.get("tcp_ports") or normalized_config.get("service_probes"):
+        if normalized_config.get("tcp_ports") or normalized_config.get("service_probes") or normalized_config.get("ssh_ports"):
             executor_names.append("tcp")
     if not isinstance(executor_names, list) or not all(isinstance(name, str) for name in executor_names):
         raise ScanExecutorError("scan_config.executors must be a list of executor names")
@@ -2105,7 +2125,7 @@ def validate_scan_config(config: dict[str, Any] | None) -> dict[str, Any]:
     config = dict(config or {})
     names = config.get(
         "executors",
-        ["http", "tls", "dns"] + (["tcp"] if config.get("tcp_ports") or config.get("service_probes") else []),
+        ["http", "tls", "dns"] + (["tcp"] if config.get("tcp_ports") or config.get("service_probes") or config.get("ssh_ports") else []),
     )
     if not isinstance(names, list) or not names or not all(isinstance(name, str) and name.lower() in EXECUTOR_BY_NAME for name in names):
         raise ScanExecutorError("scan_config.executors must contain supported executor names")
@@ -2139,6 +2159,7 @@ def validate_scan_config(config: dict[str, Any] | None) -> dict[str, Any]:
     for key, default, low, high in (("request_timeout_seconds", 5., .1, 30.), ("connect_timeout_seconds", 3., .1, 15.), ("dns_timeout_seconds", 3., .1, 15.), ("per_target_interval_seconds", .05, 0., 2.)):
         _float_config(config, key, default, low, high)
     _float_config(config, "service_probe_timeout_seconds", config.get("connect_timeout_seconds", 3.), .1, 15.)
+    _float_config(config, "ssh_timeout_seconds", config.get("connect_timeout_seconds", 3.), .1, 15.)
     for key, default, low, high in (("redirect_limit", 5, 0, 10), ("response_size_limit_bytes", 65536, 1024, 262144), ("dns_server_port", 53, 1, 65535), ("tls_port", 443, 1, 65535)):
         _int_config(config, key, default, low, high)
     _int_config(
@@ -2147,6 +2168,7 @@ def validate_scan_config(config: dict[str, Any] | None) -> dict[str, Any]:
     )
     _int_config(config, "service_probe_response_limit_bytes", 4096, 64, MAX_SERVICE_PROBE_RESPONSE_BYTES)
     config["service_probes"] = _service_probes_config(config)
+    config["ssh_ports"] = _ports_config(config, "ssh_ports", [], MAX_SSH_ENDPOINTS)
     return config
 
 

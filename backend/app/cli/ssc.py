@@ -23,6 +23,7 @@ def build_parser():
     scan.add_argument("--scoring-model", help="JSON internal scoring definition")
     scan.add_argument("--executors", help="Comma-separated executor names: http,tls,dns,tcp")
     scan.add_argument("--tcp-ports", help="Comma-separated explicit TCP ports; no range scanning")
+    scan.add_argument("--ssh-ports", help="Comma-separated explicit SSH TCP ports for bounded pre-authentication negotiation")
     scan.add_argument("--organization-id", type=UUID, help="Disambiguate inventory targets")
     scan.add_argument("--rule-key", action="append", help="Select an active rule by stable key; repeat for multiple rules")
     report = commands.add_parser("report", help="Render a persisted run without rescanning")
@@ -73,6 +74,11 @@ def build_parser():
         help="Activate reviewed Wave 3B HTTP-content evaluators against the attested SSC API baseline",
     )
     activate3b.add_argument("--yes", action="store_true", help="Confirm activation of the reviewed evaluator definitions")
+    activate4a = baseline_commands.add_parser(
+        "activate-wave4a",
+        help="Activate reviewed Wave 4A SSH-negotiation evaluators against the attested SSC API baseline",
+    )
+    activate4a.add_argument("--yes", action="store_true", help="Confirm activation of the reviewed evaluator definitions")
     return parser
 
 
@@ -110,6 +116,8 @@ def main(argv=None) -> int:
                     config["executors"] = [name.strip().lower() for name in args.executors.split(",")]
                 if args.tcp_ports:
                     config["tcp_ports"] = [int(port.strip()) for port in args.tcp_ports.split(",")]
+                if args.ssh_ports:
+                    config["ssh_ports"] = [int(port.strip()) for port in args.ssh_ports.split(",")]
                 result = scan_inventory_target(db, name=args.target, scan_config=config, model=model,
                                                organization_id=args.organization_id, rule_keys=args.rule_key)
             else:
