@@ -5,6 +5,8 @@ import pytest
 
 from app.schemas.results import ResultFinding
 from app.services.internal_risk_calibration import (
+    CALIBRATION_NAME,
+    CALIBRATION_VERSION,
     SSC_SUPPORTED_INTERNAL_RISK_V1,
     resolve_ssc_internal_risk,
 )
@@ -51,6 +53,14 @@ WAVE3B_DECISIONS = {
     "service_soap": ("UNKNOWN", False),
 }
 
+V1_1_DECISIONS = {**ORIGINAL_27_DECISIONS, **WAVE3B_DECISIONS}
+
+WAVE4A_DECISIONS = {
+    "ssh_weak_protocol": ("MEDIUM", True),
+    "ssh_weak_cipher": ("LOW", True),
+    "ssh_weak_mac": ("LOW", True),
+}
+
 
 def _finding(issue_key: str, ssc_severity: str) -> ResultFinding:
     decision = resolve_ssc_internal_risk(issue_key)
@@ -95,24 +105,26 @@ def _score(*findings: ResultFinding):
 
 
 def test_calibration_has_all_approved_decisions_and_counts():
-    assert len(SSC_SUPPORTED_INTERNAL_RISK_V1) == 34
+    assert CALIBRATION_NAME == "ssc-supported-internal-risk"
+    assert CALIBRATION_VERSION == "1.2"
+    assert len(SSC_SUPPORTED_INTERNAL_RISK_V1) == 37
     counts = Counter(item.breach_risk for item in SSC_SUPPORTED_INTERNAL_RISK_V1.values())
     assert {risk: counts[risk] for risk in ("HIGH", "MEDIUM", "LOW", "UNKNOWN")} == {
-        "HIGH": 0, "MEDIUM": 6, "LOW": 21, "UNKNOWN": 7,
+        "HIGH": 0, "MEDIUM": 7, "LOW": 23, "UNKNOWN": 7,
     }
     assert Counter(item.affects_score for item in SSC_SUPPORTED_INTERNAL_RISK_V1.values()) == {
-        True: 27,
+        True: 30,
         False: 7,
     }
 
 
-def test_original_27_approved_mappings_remain_unchanged():
+def test_all_34_v1_1_approved_mappings_remain_unchanged():
     actual = {
         key: (decision.breach_risk, decision.affects_score)
         for key, decision in SSC_SUPPORTED_INTERNAL_RISK_V1.items()
-        if key in ORIGINAL_27_DECISIONS
+        if key in V1_1_DECISIONS
     }
-    assert actual == ORIGINAL_27_DECISIONS
+    assert actual == V1_1_DECISIONS
 
 
 def test_wave3b_approved_counts():
@@ -146,6 +158,27 @@ def test_wave3b_approved_mappings_and_penalties(
     finding = _finding(issue_key, ssc_severity)
     result = _score(finding)
     assert finding.ssc_severity == ssc_severity
+    assert result.findings[0].score_impact == expected_impact
+
+
+@pytest.mark.parametrize(
+    ("issue_key", "ssc_severity", "expected_risk", "expected_impact"),
+    [
+        ("ssh_weak_protocol", "info", "MEDIUM", 7),
+        ("ssh_weak_cipher", "high", "LOW", 2),
+        ("ssh_weak_mac", "low", "LOW", 2),
+    ],
+)
+def test_wave4a_approved_mappings_derive_penalties_independently_of_ssc_severity(
+    issue_key, ssc_severity, expected_risk, expected_impact,
+):
+    decision = resolve_ssc_internal_risk(issue_key)
+    assert (decision.breach_risk, decision.affects_score) == WAVE4A_DECISIONS[issue_key]
+    finding = _finding(issue_key, ssc_severity)
+    result = _score(finding)
+    assert finding.ssc_severity == ssc_severity
+    assert finding.breach_risk == expected_risk
+    assert finding.affects_score is True
     assert result.findings[0].score_impact == expected_impact
 
 

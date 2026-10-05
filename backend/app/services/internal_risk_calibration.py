@@ -7,7 +7,7 @@ from dataclasses import dataclass
 
 
 CALIBRATION_NAME = "ssc-supported-internal-risk"
-CALIBRATION_VERSION = "1.1"
+CALIBRATION_VERSION = "1.2"
 
 
 @dataclass(frozen=True)
@@ -56,6 +56,9 @@ SSC_SUPPORTED_INTERNAL_RISK_V1 = {
     "server_error": _decision("UNKNOWN", False),
     "links_to_insecure_website": _decision("LOW"),
     "service_soap": _decision("UNKNOWN", False),
+    "ssh_weak_protocol": _decision("MEDIUM"),
+    "ssh_weak_cipher": _decision("LOW"),
+    "ssh_weak_mac": _decision("LOW"),
 }
 
 

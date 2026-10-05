@@ -560,7 +560,29 @@ def _wave4a_baseline():
     return normalize_api_payloads(raw)
 
 
-def test_wave4a_exact_version_activation_and_uncalibrated_e2e_finding(db):
+@pytest.mark.parametrize(
+    ("issue_key", "identification", "packets", "expected_risk", "expected_impact"),
+    [
+        ("ssh_weak_protocol", b"SSH-1.5-TestServer\r\n", [], "MEDIUM", 7),
+        (
+            "ssh_weak_cipher",
+            b"SSH-2.0-TestServer\r\n",
+            [_packet(_kexinit_payload(encryption_algorithms_client_to_server=["aes128-cbc"]))],
+            "LOW",
+            2,
+        ),
+        (
+            "ssh_weak_mac",
+            b"SSH-2.0-TestServer\r\n",
+            [_packet(_kexinit_payload(mac_algorithms_client_to_server=["hmac-md5"]))],
+            "LOW",
+            2,
+        ),
+    ],
+)
+def test_wave4a_exact_version_match_normalizes_calibrated_finding(
+    db, issue_key, identification, packets, expected_risk, expected_impact,
+):
     import_golden_baseline(db, _wave4a_baseline(), attest_real_source=True)
     mappings = active_wave4a_mappings(db)
     assert len(mappings) == len(WAVE4A_RULES) == 3
@@ -569,14 +591,14 @@ def test_wave4a_exact_version_activation_and_uncalibrated_e2e_finding(db):
         version = db.get(CatalogIssueTypeVersion, UUID(mapping["issue_version_id"]))
         assert version.source_type == SourceTypeEnum.SSC_API and mapping["primitive"] == "SSH_NEGOTIATION"
 
-    rule = db.scalar(select(RuleEngineRule).where(RuleEngineRule.stable_key == "ssc.wave4a.ssh_weak_cipher"))
+    rule = db.scalar(select(RuleEngineRule).where(RuleEngineRule.stable_key == f"ssc.wave4a.{issue_key}"))
     assert rule.current_version.catalog_issue_type_version_id == rule.catalog_issue_type.current_version_id
     suffix = uuid4().hex[:12]
     target = add_inventory_target(
         db, organization="Wave 4A " + suffix, domain_name=suffix + ".test", hostname="localhost",
         ip="127.0.0.1", approved=True, allow_sensitive=True, approval_notes="Local SSH KEXINIT fixture",
     )
-    with _ssh_server(packets=[_packet(_kexinit_payload(encryption_algorithms_client_to_server=["aes128-cbc"]))]) as port:
+    with _ssh_server(identification=identification, packets=packets) as port:
         result = scan_inventory_target(
             db, name="localhost", organization_id=UUID(target["organization_id"]),
             scan_config={"executors": ["tcp"], "ssh_ports": [port], "ssh_timeout_seconds": 1},
@@ -584,12 +606,34 @@ def test_wave4a_exact_version_activation_and_uncalibrated_e2e_finding(db):
         )
     assert len(result.findings) == 1
     finding = result.findings[0]
-    assert finding.ssc_issue_key == "ssh_weak_cipher" and finding.ssc_severity == "medium"
-    assert finding.breach_risk == "UNKNOWN" and finding.affects_score is False and finding.score_impact == 0
+    assert finding.ssc_issue_key == issue_key and finding.ssc_severity == "medium"
+    assert finding.breach_risk == expected_risk
+    assert finding.affects_score is True and finding.score_impact == expected_impact
     evidence = result.evidence[0].summary
-    assert evidence["evaluations"]["ssh_weak_cipher"]["outcome"] == "MATCH"
+    assert evidence["evaluations"][issue_key]["outcome"] == "MATCH"
     assert evidence["ssh_negotiations"][0]["identification_sha256"]
     assert "TestServer" not in json.dumps(evidence)
+
+
+def test_wave4a_exact_version_no_match_produces_no_finding(db):
+    import_golden_baseline(db, _wave4a_baseline(), attest_real_source=True)
+    rule_keys = [f"ssc.wave4a.{spec.issue_key}" for spec in WAVE4A_RULES]
+    suffix = uuid4().hex[:12]
+    target = add_inventory_target(
+        db, organization="Wave 4A clean " + suffix, domain_name=suffix + ".test", hostname="localhost",
+        ip="127.0.0.1", approved=True, allow_sensitive=True, approval_notes="Local clean SSH KEXINIT fixture",
+    )
+    with _ssh_server(packets=[_packet(_kexinit_payload())]) as port:
+        result = scan_inventory_target(
+            db, name="localhost", organization_id=UUID(target["organization_id"]),
+            scan_config={"executors": ["tcp"], "ssh_ports": [port], "ssh_timeout_seconds": 1},
+            model=ScoringDefinition(), rule_keys=rule_keys,
+        )
+    assert result.findings == []
+    assert all(
+        result.evidence[0].summary["evaluations"][issue_key]["outcome"] == "NO_MATCH"
+        for issue_key in ("ssh_weak_protocol", "ssh_weak_cipher", "ssh_weak_mac")
+    )
 
 
 def test_wave4a_is_exactly_three_and_prior_wave_registries_remain_intact():
