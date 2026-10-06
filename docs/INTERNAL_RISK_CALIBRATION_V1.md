@@ -1,12 +1,12 @@
 # Internal risk calibration V1
 
-**Status:** approved and implemented through 2026-10-05. **Scope:** calibration v1.2 contains 37 `SUPPORTED` keys from the attested SSC API baseline `0fe2bc8ffb7e3f734d4e88f70b11cffa6e8e9e47e722dc62107f6ff09694eca8`. It preserves all 34 v1.1 decisions unchanged and adds the three separately reviewed Wave 4A decisions. The companion [CSV](INTERNAL_RISK_CALIBRATION_V1.csv) is the row-level decision record. SSC severity remains vendor metadata; these are independent internal judgments and make no claim about SSC's scoring method.
+**Status:** approved and implemented through 2026-10-06. **Scope:** calibration v1.3 contains 38 `SUPPORTED` keys from the attested SSC API baseline `0fe2bc8ffb7e3f734d4e88f70b11cffa6e8e9e47e722dc62107f6ff09694eca8`. It preserves all 37 v1.2 decisions unchanged and adds the separately reviewed Wave 4B decision. The companion [CSV](INTERNAL_RISK_CALIBRATION_V1.csv) is the row-level decision record. SSC severity remains vendor metadata; these are independent internal judgments and make no claim about SSC's scoring method.
 
 ## Decision basis
 
-A deterministic `MATCH` proves only the exact observation described by its versioned evaluator. It does not prove an exploit, weak authentication, sensitive data, or a vulnerable product version unless that condition is part of the evaluator. LOW denotes a credible but generally indirect security exposure or hardening gap; MEDIUM denotes a direct transport or authentication weakness with plausible confidentiality or integrity impact; HIGH would require stronger evidence of serious compromise than any of these 37 MATCH conditions supplies. UNKNOWN is retained when the observation alone does not justify a stable penalty. An approved `affects_score=false` keeps the finding visible without an invented risk penalty.
+A deterministic `MATCH` proves only the exact observation described by its versioned evaluator. It does not prove an exploit, weak authentication, sensitive data, or a vulnerable product version unless that condition is part of the evaluator. LOW denotes a credible but generally indirect security exposure or hardening gap; MEDIUM denotes a direct transport or authentication weakness with plausible confidentiality or integrity impact; HIGH would require stronger evidence of serious compromise than any of these 38 MATCH conditions supplies. UNKNOWN is retained when the observation alone does not justify a stable penalty. An approved `affects_score=false` keeps the finding visible without an invented risk penalty.
 
-For the original 27 rows, the current-state columns in the CSV preserve the pre-v1.0 `SSC_API` import state: issue versions had `breach_risk=UNKNOWN` and `affects_score=true` independently of SSC severity. The Wave 3B and Wave 4A rows preserve their pre-calibration fail-closed runtime state of `UNKNOWN` and `affects_score=false`. The approved columns contain the internal decisions now resolved by the registry. Imported taxonomy rows remain unchanged; internal calibration is applied separately by exact SSC issue key.
+For the original 27 rows, the current-state columns in the CSV preserve the pre-v1.0 `SSC_API` import state: issue versions had `breach_risk=UNKNOWN` and `affects_score=true` independently of SSC severity. The Wave 3B, Wave 4A, and Wave 4B rows preserve their pre-calibration fail-closed runtime state of `UNKNOWN` and `affects_score=false`. The approved columns contain the internal decisions now resolved by the registry. Imported taxonomy rows remain unchanged; internal calibration is applied separately by exact SSC issue key.
 
 ## Calibration summary
 
@@ -14,11 +14,11 @@ For the original 27 rows, the current-state columns in the CSV preserve the pre-
 |---|---:|---:|
 | HIGH | 0 | 15 |
 | MEDIUM | 7 | 7 |
-| LOW | 23 | 2 |
+| LOW | 24 | 2 |
 | UNKNOWN | 7 | 0 |
-| **Total** | **37** | — |
+| **Total** | **38** | — |
 
-**Approved score relevance:** `affects_score=true` for 30; `false` for 7. A scored occurrence assumes an OPEN finding backed by an exact-version deterministic MATCH for an in-scope V1 issue, with no prior deduplication of the same issue version and target and room under the factor's 100-point cap. `NO_MATCH` and `NOT_ASSESSED` deduct zero. A factor starts at 100 once rated; a single LOW or MEDIUM MATCH yields 98 or 93 for that factor. The weighted overall effect depends on which factors are rated and their configured weights. No penalty values, formula, factor weights, or scoring profile changed.
+**Approved score relevance:** `affects_score=true` for 31; `false` for 7. A scored occurrence assumes an OPEN finding backed by an exact-version deterministic MATCH for an in-scope V1 issue, with no prior deduplication of the same issue version and target and room under the factor's 100-point cap. `NO_MATCH` and `NOT_ASSESSED` deduct zero. A factor starts at 100 once rated; a single LOW or MEDIUM MATCH yields 98 or 93 for that factor. The weighted overall effect depends on which factors are rated and their configured weights. No penalty values, formula, factor weights, or scoring profile changed.
 
 ### Original 27 calibrated keys (unchanged)
 
@@ -72,9 +72,15 @@ For the original 27 rows, the current-state columns in the CSV preserve the pre-
 | network_security | `ssh_weak_cipher` | medium | LOW | yes | 2 |
 | network_security | `ssh_weak_mac` | medium | LOW | yes | 2 |
 
+### Wave 4B extension
+
+| Factor | Exact SSC issue key | SSC severity | Internal risk | Score? | One MATCH |
+|---|---|---|---|---|---:|
+| dns_health | `spf_record_malformed` | medium | LOW | yes | 2 |
+
 ### Differences from SSC severity
 
-The following **24** keys have an internal risk label different from the SSC severity label: `domain_missing_https_v2`, `insecure_https_redirect_pattern_v2`, `insecure_server_certificate_key_size`, `dmarc_contains_none`, `dmarc_record_missing`, `spf_record_softfail`, `spf_record_wildcard`, `subdomain_dmarc_contains_none`, `service_redis`, `service_rsync`, `service_smb`, `service_socks_proxy`, `service_telnet`, `service_vnc`, `tls_weak_protocol`, `tlscert_no_revocation`, `tlscert_weak_signature`, `unsafe_sri_v2`, `insecure_ftp`, `contact_information_detected`, `server_error`, `service_soap`, `ssh_weak_cipher`, and `ssh_weak_mac`. This comparison includes SSC `info` and internal `UNKNOWN`, which are not numeric severity levels. Agreement on the other labels, including `ssh_weak_protocol`, is an independent judgment, not a severity mapping.
+The following **25** keys have an internal risk label different from the SSC severity label: `domain_missing_https_v2`, `insecure_https_redirect_pattern_v2`, `insecure_server_certificate_key_size`, `dmarc_contains_none`, `dmarc_record_missing`, `spf_record_softfail`, `spf_record_wildcard`, `spf_record_malformed`, `subdomain_dmarc_contains_none`, `service_redis`, `service_rsync`, `service_smb`, `service_socks_proxy`, `service_telnet`, `service_vnc`, `tls_weak_protocol`, `tlscert_no_revocation`, `tlscert_weak_signature`, `unsafe_sri_v2`, `insecure_ftp`, `contact_information_detected`, `server_error`, `service_soap`, `ssh_weak_cipher`, and `ssh_weak_mac`. This comparison includes SSC `info` and internal `UNKNOWN`, which are not numeric severity levels. Agreement on the other labels, including `ssh_weak_protocol`, is an independent judgment, not a severity mapping.
 
 ### UNKNOWN and unscored
 
@@ -100,9 +106,13 @@ Implemented as `LOW`, `affects_score=true`, **2 factor points for one qualifying
 
 Implemented as `LOW`, `affects_score=true`, **2 factor points for one qualifying MATCH**. Missing, invalid, disallowed, or mismatching integrity metadata establishes an SRI control weakness or inconsistency, not actual third-party compromise or successful malicious resource substitution. Its SSC severity is `high` metadata and is not the basis for the internal rating. A higher risk requires separate evidence of unauthorized resource modification and security-relevant delivery or execution.
 
+### `spf_record_malformed`
+
+Implemented as `LOW`, `affects_score=true`, **2 factor points for one qualifying MATCH**. The evaluator's MATCH establishes a deterministic RFC 7208 permanent error under its bounded analysis, so SPF cannot provide a usable authorization result for the affected evaluation. It does not prove sender spoofing, message acceptance, DMARC bypass, phishing, or compromise. Impact depends on mail use, aligned DKIM, effective DMARC, receiver disposition, and third-party SPF dependencies. Its SSC severity is `medium` metadata and is not the basis for the internal rating.
+
 ## Implementation
 
-The versioned v1.2 internal registry is [internal_risk_calibration.py](../backend/app/services/internal_risk_calibration.py). The [finding loader](../backend/app/services/finding_results.py) applies it only to findings pinned to imported `SSC_API` issue versions. Imported taxonomy rows keep their original SSC metadata and are not rewritten with internal risk. Missing SSC calibration entries fail closed to `UNKNOWN` and `affects_score=false`; SSC severity is never used as a fallback. Manual and other non-SSC catalog versions continue to use their explicit catalog risk metadata. Persisted normalized score results retain the internal risk, score relevance, exact catalog issue version, SSC severity, and allocated score impact used for that result. No schema migration is required.
+The versioned v1.3 internal registry is [internal_risk_calibration.py](../backend/app/services/internal_risk_calibration.py). The [finding loader](../backend/app/services/finding_results.py) applies it only to findings pinned to imported `SSC_API` issue versions. Imported taxonomy rows keep their original SSC metadata and are not rewritten with internal risk. Missing SSC calibration entries fail closed to `UNKNOWN` and `affects_score=false`; SSC severity is never used as a fallback. Manual and other non-SSC catalog versions continue to use their explicit catalog risk metadata. Persisted normalized score results retain the internal risk, score relevance, exact catalog issue version, SSC severity, and allocated score impact used for that result. No schema migration is required.
 
 ## Supporting security references
 

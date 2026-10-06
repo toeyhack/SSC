@@ -61,6 +61,50 @@ WAVE4A_DECISIONS = {
     "ssh_weak_mac": ("LOW", True),
 }
 
+V1_2_DECISIONS = {
+    "csp_no_policy_v2": ("LOW", True),
+    "csp_too_broad_v2": ("LOW", True),
+    "csp_unsafe_policy_v2": ("LOW", True),
+    "domain_missing_https_v2": ("MEDIUM", True),
+    "hsts_incorrect_v2": ("LOW", True),
+    "insecure_https_redirect_pattern_v2": ("MEDIUM", True),
+    "insecure_server_certificate_key_size": ("MEDIUM", True),
+    "redirect_chain_contains_http_v2": ("MEDIUM", True),
+    "x_content_type_options_incorrect_v2": ("LOW", True),
+    "x_frame_options_incorrect_v2": ("LOW", True),
+    "dmarc_contains_none": ("LOW", True),
+    "dmarc_record_missing": ("LOW", True),
+    "spf_record_missing": ("LOW", True),
+    "spf_record_softfail": ("LOW", True),
+    "spf_record_wildcard": ("UNKNOWN", False),
+    "subdomain_dmarc_contains_none": ("LOW", True),
+    "service_redis": ("LOW", True),
+    "service_rsync": ("UNKNOWN", False),
+    "service_smb": ("LOW", True),
+    "service_socks_proxy": ("UNKNOWN", False),
+    "service_telnet": ("LOW", True),
+    "service_vnc": ("LOW", True),
+    "tls_weak_protocol": ("MEDIUM", True),
+    "tlscert_expired": ("LOW", True),
+    "tlscert_no_revocation": ("UNKNOWN", False),
+    "tlscert_self_signed": ("LOW", True),
+    "tlscert_weak_signature": ("MEDIUM", True),
+    "unsafe_sri_v2": ("LOW", True),
+    "insecure_ftp": ("LOW", True),
+    "contact_information_detected": ("UNKNOWN", False),
+    "local_file_path_exposed_via_url_scheme": ("LOW", True),
+    "server_error": ("UNKNOWN", False),
+    "links_to_insecure_website": ("LOW", True),
+    "service_soap": ("UNKNOWN", False),
+    "ssh_weak_protocol": ("MEDIUM", True),
+    "ssh_weak_cipher": ("LOW", True),
+    "ssh_weak_mac": ("LOW", True),
+}
+
+WAVE4B_DECISIONS = {
+    "spf_record_malformed": ("LOW", True),
+}
+
 
 def _finding(issue_key: str, ssc_severity: str) -> ResultFinding:
     decision = resolve_ssc_internal_risk(issue_key)
@@ -106,14 +150,14 @@ def _score(*findings: ResultFinding):
 
 def test_calibration_has_all_approved_decisions_and_counts():
     assert CALIBRATION_NAME == "ssc-supported-internal-risk"
-    assert CALIBRATION_VERSION == "1.2"
-    assert len(SSC_SUPPORTED_INTERNAL_RISK_V1) == 37
+    assert CALIBRATION_VERSION == "1.3"
+    assert len(SSC_SUPPORTED_INTERNAL_RISK_V1) == 38
     counts = Counter(item.breach_risk for item in SSC_SUPPORTED_INTERNAL_RISK_V1.values())
     assert {risk: counts[risk] for risk in ("HIGH", "MEDIUM", "LOW", "UNKNOWN")} == {
-        "HIGH": 0, "MEDIUM": 7, "LOW": 23, "UNKNOWN": 7,
+        "HIGH": 0, "MEDIUM": 7, "LOW": 24, "UNKNOWN": 7,
     }
     assert Counter(item.affects_score for item in SSC_SUPPORTED_INTERNAL_RISK_V1.values()) == {
-        True: 30,
+        True: 31,
         False: 7,
     }
 
@@ -125,6 +169,18 @@ def test_all_34_v1_1_approved_mappings_remain_unchanged():
         if key in V1_1_DECISIONS
     }
     assert actual == V1_1_DECISIONS
+
+
+def test_all_37_v1_2_approved_mappings_remain_semantically_unchanged():
+    assert len(V1_2_DECISIONS) == 37
+    actual = {
+        key: (
+            SSC_SUPPORTED_INTERNAL_RISK_V1[key].breach_risk,
+            SSC_SUPPORTED_INTERNAL_RISK_V1[key].affects_score,
+        )
+        for key in V1_2_DECISIONS
+    }
+    assert actual == V1_2_DECISIONS
 
 
 def test_wave3b_approved_counts():
@@ -180,6 +236,19 @@ def test_wave4a_approved_mappings_derive_penalties_independently_of_ssc_severity
     assert finding.breach_risk == expected_risk
     assert finding.affects_score is True
     assert result.findings[0].score_impact == expected_impact
+
+
+def test_wave4b_malformed_spf_is_low_scoring_independently_of_ssc_severity():
+    decision = resolve_ssc_internal_risk("spf_record_malformed")
+    assert (decision.breach_risk, decision.affects_score) == WAVE4B_DECISIONS["spf_record_malformed"]
+    finding = _finding("spf_record_malformed", "deliberately-unrelated")
+    result = _score(finding)
+    assert finding.ssc_severity == "deliberately-unrelated"
+    assert finding.breach_risk == "LOW"
+    assert finding.affects_score is True
+    assert ScoringDefinition().penalties["LOW"] == 2
+    assert result.findings[0].score_impact == 2
+    assert result.factor_scores[0].score == 98
 
 
 def test_csp_unsafe_policy_match_is_low_and_deducts_two_factor_points():

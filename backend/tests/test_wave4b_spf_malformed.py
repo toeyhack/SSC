@@ -1,12 +1,20 @@
 import hashlib
 import json
+from uuid import UUID, uuid4
 
 import pytest
+from sqlalchemy import select
+from sqlalchemy.orm import Session
 
 from app.cli.ssc import build_parser
 from app.db.session import engine
+from app.models.catalog_models import CatalogIssueTypeVersion, SourceTypeEnum
+from app.models.rule_models import RuleEngineRule
+from app.services.cli_scan import scan_inventory_target
+from app.services.cli_setup import add_inventory_target
 from app.services.golden_baseline_importer import import_golden_baseline
 from app.services.internal_risk_calibration import resolve_ssc_internal_risk
+from app.services.scoring_engine import ScoringDefinition
 from app.services.spf import (
     SPFAnalysisLimits,
     SPF_PARSER_VERSION,
@@ -23,7 +31,15 @@ from app.services.wave3a_rules import WAVE3A_RULES
 from app.services.wave3b_rules import WAVE3B_RULES
 from app.services.wave4a_rules import WAVE4A_RULES
 from app.services.wave4b_rules import WAVE4B_RULES, active_wave4b_mappings
-from sqlalchemy.orm import Session
+
+
+@pytest.fixture
+def db():
+    with engine.connect() as connection:
+        transaction = connection.begin()
+        with Session(bind=connection, join_transaction_mode="create_savepoint") as session:
+            yield session
+        transaction.rollback()
 
 
 def _dns(name, record_type="TXT", status="ANSWER", records=None, *, response_size=128):
@@ -293,7 +309,7 @@ def test_macro_support_and_context_boundaries():
     assert result["outcome"] == "NO_MATCH" and fixture.calls == []
 
 
-def test_versions_registry_cli_and_uncalibrated_risk_contract():
+def test_versions_registry_cli_and_calibrated_risk_contract():
     assert SPF_PARSER_VERSION == "ssc-wave4b-spf-parser.v1"
     assert SPF_POLICY_VERSION == "ssc-wave4b-spf-malformed-policy.v1"
     assert [spec.issue_key for spec in WAVE4B_RULES] == ["spf_record_malformed"]
@@ -305,7 +321,7 @@ def test_versions_registry_cli_and_uncalibrated_risk_contract():
     args = build_parser().parse_args(["baseline", "activate-wave4b", "--yes"])
     assert args.baseline_command == "activate-wave4b" and args.yes is True
     decision = resolve_ssc_internal_risk("spf_record_malformed")
-    assert decision.breach_risk == "UNKNOWN" and decision.affects_score is False
+    assert decision.breach_risk == "LOW" and decision.affects_score is True
 
 
 def _wave4b_baseline():
@@ -334,3 +350,77 @@ def test_wave4b_exact_version_activation_during_attested_baseline_import():
             assert mappings[0]["issue_key"] == "spf_record_malformed"
             assert mappings[0]["rule_key"] == "ssc.wave4b.spf_record_malformed"
         transaction.rollback()
+
+
+def test_wave4b_exact_ssc_api_match_and_no_match_scoring_integration(db, monkeypatch):
+    import_golden_baseline(db, _wave4b_baseline(), attest_real_source=True)
+    mappings = active_wave4b_mappings(db)
+    assert len(mappings) == 1
+    mapping = mappings[0]
+    issue_version = db.get(CatalogIssueTypeVersion, UUID(mapping["issue_version_id"]))
+    assert issue_version.source_type == SourceTypeEnum.SSC_API
+
+    rule = db.scalar(select(RuleEngineRule).where(
+        RuleEngineRule.stable_key == "ssc.wave4b.spf_record_malformed",
+    ))
+    assert rule.current_version.catalog_issue_type_version_id == rule.catalog_issue_type.current_version_id
+    suffix = uuid4().hex[:12]
+    target = add_inventory_target(
+        db,
+        organization="Wave 4B calibration " + suffix,
+        domain_name=suffix + ".test",
+        hostname=None,
+        ip=None,
+        approved=True,
+        allow_sensitive=False,
+        approval_notes="Deterministic Wave 4B calibration fixture",
+    )
+
+    monkeypatch.setattr(
+        "app.services.scan_executors._query_spf_txt_evidence",
+        lambda name, *_: _dns(
+            name,
+            status="NXDOMAIN" if name.startswith("_ssc-spf-") else "ANSWER",
+            records=[] if name.startswith("_ssc-spf-") else ["v=spf1 badmechanism -all"],
+        ),
+    )
+    monkeypatch.setattr(
+        "app.services.scan_executors._query_txt_evidence",
+        lambda name, *_: _dns(name, status="NODATA"),
+    )
+    matched = scan_inventory_target(
+        db,
+        name=target["name"],
+        organization_id=UUID(target["organization_id"]),
+        scan_config={"executors": ["dns"]},
+        model=ScoringDefinition(),
+        rule_keys=[rule.stable_key],
+    )
+    assert matched.evidence[0].summary["evaluations"]["spf_record_malformed"]["outcome"] == "MATCH"
+    assert len(matched.findings) == 1
+    finding = matched.findings[0]
+    assert finding.ssc_issue_key == "spf_record_malformed"
+    assert finding.catalog_issue_type_version_id == str(rule.current_version.catalog_issue_type_version_id)
+    assert finding.breach_risk == "LOW"
+    assert finding.affects_score is True
+    assert finding.score_impact == 2
+
+    monkeypatch.setattr(
+        "app.services.scan_executors._query_spf_txt_evidence",
+        lambda name, *_: _dns(
+            name,
+            status="NXDOMAIN" if name.startswith("_ssc-spf-") else "ANSWER",
+            records=[] if name.startswith("_ssc-spf-") else ["v=spf1 -all"],
+        ),
+    )
+    no_match = scan_inventory_target(
+        db,
+        name=target["name"],
+        organization_id=UUID(target["organization_id"]),
+        scan_config={"executors": ["dns"]},
+        model=ScoringDefinition(),
+        rule_keys=[rule.stable_key],
+    )
+    assert no_match.evidence[0].summary["evaluations"]["spf_record_malformed"]["outcome"] == "NO_MATCH"
+    assert no_match.findings == []
+    assert sum(item.score_impact for item in no_match.findings) == 0

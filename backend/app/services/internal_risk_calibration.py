@@ -7,7 +7,7 @@ from dataclasses import dataclass
 
 
 CALIBRATION_NAME = "ssc-supported-internal-risk"
-CALIBRATION_VERSION = "1.2"
+CALIBRATION_VERSION = "1.3"
 
 
 @dataclass(frozen=True)
@@ -37,6 +37,7 @@ SSC_SUPPORTED_INTERNAL_RISK_V1 = {
     "spf_record_missing": _decision("LOW"),
     "spf_record_softfail": _decision("LOW"),
     "spf_record_wildcard": _decision("UNKNOWN", False),
+    "spf_record_malformed": _decision("LOW"),
     "subdomain_dmarc_contains_none": _decision("LOW"),
     "service_redis": _decision("LOW"),
     "service_rsync": _decision("UNKNOWN", False),
