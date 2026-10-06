@@ -4,7 +4,7 @@ Review date: 2026-09-23
 
 Golden Baseline: immutable real `SSC_API` snapshot `0fe2bc8ffb7e3f734d4e88f70b11cffa6e8e9e47e722dc62107f6ff09694eca8`
 
-Implementation state updated 2026-10-06: Waves 1–5A, 42 active exact SSC evaluator mappings; 38 have separately approved internal-risk calibration
+Implementation state updated 2026-10-06: Waves 1–5A, 42 active exact SSC evaluator mappings; all 42 have separately approved internal-risk calibration
 
 This review originally changed product scope documentation only. The V1 Assessment Completeness Fix implemented on 2026-09-23 applies the correction specified here without changing the Golden Baseline, scanner primitives, rule activation, penalty arithmetic, factor weights, or SSC severity.
 
@@ -93,7 +93,7 @@ Wave 4A promotes only `ssh_weak_protocol`, `ssh_weak_cipher`, and `ssh_weak_mac`
 
 Wave 4B promotes only `spf_record_malformed`. It strictly selects records beginning with case-insensitive `v=spf1` followed by ASCII space or end-of-record, validates the complete selected policy before evaluation, and uses bounded path-sensitive include/redirect/A/AAAA/MX/exists traversal only to identify deterministic RFC permanent errors. It does not calculate or expose sender authorization. Reachable PTR and sender/IP/HELO-dependent macros, mixed safe/permanent-error paths, DNS uncertainty, and operational exhaustion remain `INDETERMINATE`. Calibration v1.3 assigns LOW/scoring to the deterministic authentication-control failure; the unchanged global LOW penalty derives a 2-point factor deduction for one qualifying OPEN MATCH.
 
-Wave 5A promotes `service_ftp`, `service_imap`, `service_pop3`, and `mail_server_unusual_port`. Each explicitly declared endpoint receives one bounded plaintext TCP connection with a server greeting, one fixed non-authenticating command, and one completion read under a shared deadline and byte/line budgets. FTP requires NOOP/200, IMAP requires untagged CAPABILITY plus matching A001 OK, POP3 requires a dot-terminated CAPA result, and SMTP requires EHLO/250 before applying `smtp-standard-ports.v1` `{25,465,587}`. Greeting-only, malformed, truncated, timed-out, reset, TLS-only, or budget-exhausted evidence remains `INDETERMINATE`; verified SMTP on a standard policy port is the only new issue-specific `NO_MATCH`. The four keys are intentionally uncalibrated and fail closed to UNKNOWN/non-scoring.
+Wave 5A promotes `service_ftp`, `service_imap`, `service_pop3`, and `mail_server_unusual_port`. Each explicitly declared endpoint receives one bounded plaintext TCP connection with a server greeting, one fixed non-authenticating command, and one completion read under a shared deadline and byte/line budgets. FTP requires NOOP/200, IMAP requires untagged CAPABILITY plus matching A001 OK, POP3 requires a dot-terminated CAPA result, and SMTP requires EHLO/250 before applying `smtp-standard-ports.v1` `{25,465,587}`. Greeting-only, malformed, truncated, timed-out, reset, TLS-only, or budget-exhausted evidence remains `INDETERMINATE`; verified SMTP on a standard policy port is the only new issue-specific `NO_MATCH`. Calibration v1.4 explicitly assigns all four keys UNKNOWN/non-scoring: deterministic service identity supports inventory, attack-surface visibility, and follow-up assessment, but does not establish a demonstrated vulnerability, unsafe authentication or transport, public exposure, unauthorized access, relay abuse, or compromise.
 
 ## Recommended next primitives
 

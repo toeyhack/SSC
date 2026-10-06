@@ -7,7 +7,7 @@ import threading
 import time
 from contextlib import contextmanager
 from dataclasses import replace
-from uuid import UUID
+from uuid import UUID, uuid4
 
 import pytest
 from sqlalchemy import select
@@ -17,9 +17,15 @@ from app.cli.ssc import build_parser
 from app.db.session import engine
 from app.models.catalog_models import CatalogIssueTypeVersion, SourceTypeEnum
 from app.models.rule_models import RuleEngineRule
+from app.services.cli_scan import scan_inventory_target
+from app.services.cli_setup import add_inventory_target
 from app.services.golden_baseline_importer import import_golden_baseline
-from app.services.internal_risk_calibration import resolve_ssc_internal_risk
+from app.services.internal_risk_calibration import (
+    SSC_SUPPORTED_INTERNAL_RISK_V1,
+    resolve_ssc_internal_risk,
+)
 from app.services.scan_executors import validate_scan_config
+from app.services.scoring_engine import ScoringDefinition
 from app.services.service_probe_text import (
     SMTP_STANDARD_PORT_POLICY_VERSION,
     SMTP_STANDARD_PORTS,
@@ -319,7 +325,7 @@ def _wave5a_baseline():
     return normalize_api_payloads(raw)
 
 
-def test_wave5a_registry_cli_exact_activation_idempotence_and_fail_closed_risk(db):
+def test_wave5a_registry_cli_exact_activation_idempotence_and_approved_risk(db):
     assert SERVICE_PROBE_FRAMEWORK_VERSION == "service-probe-adapter.v2"
     assert MAX_SERVICE_PROBE_RESPONSE_BYTES == 4096
     assert [spec.issue_key for spec in WAVE5A_RULES] == [
@@ -338,6 +344,7 @@ def test_wave5a_registry_cli_exact_activation_idempotence_and_fail_closed_risk(d
     for mapping in mappings:
         version = db.get(CatalogIssueTypeVersion, UUID(mapping["issue_version_id"]))
         assert version.source_type == SourceTypeEnum.SSC_API
+        assert mapping["issue_key"] in SSC_SUPPORTED_INTERNAL_RISK_V1
         assert resolve_ssc_internal_risk(mapping["issue_key"]).breach_risk == "UNKNOWN"
         assert resolve_ssc_internal_risk(mapping["issue_key"]).affects_score is False
 
@@ -346,3 +353,92 @@ def test_wave5a_registry_cli_exact_activation_idempotence_and_fail_closed_risk(d
     assert repeated["rules_reused"] == 4 and repeated["unavailable"] == {}
     assert len(active_wave5a_mappings(db)) == 4
     assert db.scalar(select(RuleEngineRule).where(RuleEngineRule.stable_key == "ssc.wave3a.service_vnc")) is None
+
+
+@pytest.mark.parametrize("protocol", ["ftp", "imap", "pop3", "smtp"])
+def test_wave5a_match_findings_are_visible_and_non_scoring(db, protocol):
+    import_golden_baseline(db, _wave5a_baseline(), attest_real_source=True)
+    issue_key = ADAPTERS[protocol].issue_key
+    rule = db.scalar(select(RuleEngineRule).where(
+        RuleEngineRule.stable_key == f"ssc.wave5a.{issue_key}",
+    ))
+    assert rule.current_version.catalog_issue_type_version_id == rule.catalog_issue_type.current_version_id
+    suffix = uuid4().hex[:12]
+    target = add_inventory_target(
+        db,
+        organization="Wave 5A calibration " + suffix,
+        domain_name=suffix + ".test",
+        hostname="localhost",
+        ip="127.0.0.1",
+        approved=True,
+        allow_sensitive=True,
+        approval_notes="Local staged service calibration fixture",
+    )
+    greeting, request, response = EXCHANGES[protocol]
+    with _staged_server(greeting, request, response) as (port, received):
+        result = scan_inventory_target(
+            db,
+            name="localhost",
+            organization_id=UUID(target["organization_id"]),
+            scan_config={
+                "executors": ["tcp"],
+                "service_probes": [{"protocol": protocol, "port": port}],
+                "service_probe_timeout_seconds": 1,
+            },
+            model=ScoringDefinition(),
+            rule_keys=[rule.stable_key],
+        )
+    assert received == [request]
+    assert result.evidence[0].summary["evaluations"][issue_key]["outcome"] == "MATCH"
+    assert len(result.findings) == 1
+    finding = result.findings[0]
+    assert finding.ssc_issue_key == issue_key
+    assert finding.catalog_issue_type_version_id == str(rule.current_version.catalog_issue_type_version_id)
+    assert finding.breach_risk == "UNKNOWN"
+    assert finding.affects_score is False
+    assert finding.score_impact == 0
+
+
+def test_wave5a_smtp_587_positive_identity_remains_no_match_and_no_finding(db, monkeypatch):
+    import_golden_baseline(db, _wave5a_baseline(), attest_real_source=True)
+    rule = db.scalar(select(RuleEngineRule).where(
+        RuleEngineRule.stable_key == "ssc.wave5a.mail_server_unusual_port",
+    ))
+    suffix = uuid4().hex[:12]
+    target = add_inventory_target(
+        db,
+        organization="Wave 5A SMTP standard port " + suffix,
+        domain_name=suffix + ".test",
+        hostname="localhost",
+        ip="127.0.0.1",
+        approved=True,
+        allow_sensitive=True,
+        approval_notes="Deterministic SMTP standard-port fixture",
+    )
+
+    def identified_smtp(_host, port, protocol, **_kwargs):
+        assert port == 587 and protocol == "smtp"
+        greeting, _, response = EXCHANGES["smtp"]
+        return {
+            "protocol": protocol,
+            "issue_key": "mail_server_unusual_port",
+            "transport": "tcp",
+            "port": port,
+            "framework_version": SERVICE_PROBE_FRAMEWORK_VERSION,
+            **evaluate_staged_service_probe_responses(protocol, [greeting, response], port=port),
+        }
+
+    monkeypatch.setattr("app.services.scan_executors.run_service_probe", identified_smtp)
+    result = scan_inventory_target(
+        db,
+        name="localhost",
+        organization_id=UUID(target["organization_id"]),
+        scan_config={"executors": ["tcp"], "service_probes": [{"protocol": "smtp", "port": 587}]},
+        model=ScoringDefinition(),
+        rule_keys=[rule.stable_key],
+    )
+    evidence = result.evidence[0].summary
+    evaluation = evidence["evaluations"]["mail_server_unusual_port"]
+    assert evaluation["outcome"] == "NO_MATCH"
+    assert evidence["service_probes"][0]["port_policy_version"] == "smtp-standard-ports.v1"
+    assert result.findings == []

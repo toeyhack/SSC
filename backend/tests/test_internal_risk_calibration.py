@@ -105,6 +105,15 @@ WAVE4B_DECISIONS = {
     "spf_record_malformed": ("LOW", True),
 }
 
+V1_3_DECISIONS = {**V1_2_DECISIONS, **WAVE4B_DECISIONS}
+
+WAVE5A_DECISIONS = {
+    "service_ftp": ("UNKNOWN", False),
+    "service_imap": ("UNKNOWN", False),
+    "service_pop3": ("UNKNOWN", False),
+    "mail_server_unusual_port": ("UNKNOWN", False),
+}
+
 
 def _finding(issue_key: str, ssc_severity: str) -> ResultFinding:
     decision = resolve_ssc_internal_risk(issue_key)
@@ -150,15 +159,15 @@ def _score(*findings: ResultFinding):
 
 def test_calibration_has_all_approved_decisions_and_counts():
     assert CALIBRATION_NAME == "ssc-supported-internal-risk"
-    assert CALIBRATION_VERSION == "1.3"
-    assert len(SSC_SUPPORTED_INTERNAL_RISK_V1) == 38
+    assert CALIBRATION_VERSION == "1.4"
+    assert len(SSC_SUPPORTED_INTERNAL_RISK_V1) == 42
     counts = Counter(item.breach_risk for item in SSC_SUPPORTED_INTERNAL_RISK_V1.values())
     assert {risk: counts[risk] for risk in ("HIGH", "MEDIUM", "LOW", "UNKNOWN")} == {
-        "HIGH": 0, "MEDIUM": 7, "LOW": 24, "UNKNOWN": 7,
+        "HIGH": 0, "MEDIUM": 7, "LOW": 24, "UNKNOWN": 11,
     }
     assert Counter(item.affects_score for item in SSC_SUPPORTED_INTERNAL_RISK_V1.values()) == {
         True: 31,
-        False: 7,
+        False: 11,
     }
 
 
@@ -181,6 +190,18 @@ def test_all_37_v1_2_approved_mappings_remain_semantically_unchanged():
         for key in V1_2_DECISIONS
     }
     assert actual == V1_2_DECISIONS
+
+
+def test_all_38_v1_3_approved_mappings_remain_semantically_unchanged():
+    assert len(V1_3_DECISIONS) == 38
+    actual = {
+        key: (
+            SSC_SUPPORTED_INTERNAL_RISK_V1[key].breach_risk,
+            SSC_SUPPORTED_INTERNAL_RISK_V1[key].affects_score,
+        )
+        for key in V1_3_DECISIONS
+    }
+    assert actual == V1_3_DECISIONS
 
 
 def test_wave3b_approved_counts():
@@ -251,6 +272,36 @@ def test_wave4b_malformed_spf_is_low_scoring_independently_of_ssc_severity():
     assert result.factor_scores[0].score == 98
 
 
+@pytest.mark.parametrize(
+    ("issue_key", "ssc_severity"),
+    [
+        ("service_ftp", "critical-source-metadata"),
+        ("service_imap", "high-source-metadata"),
+        ("service_pop3", "low-source-metadata"),
+        ("mail_server_unusual_port", "info-source-metadata"),
+    ],
+)
+def test_wave5a_approved_mappings_are_explicit_non_scoring_and_severity_independent(
+    issue_key, ssc_severity,
+):
+    assert issue_key in SSC_SUPPORTED_INTERNAL_RISK_V1
+    decision = SSC_SUPPORTED_INTERNAL_RISK_V1[issue_key]
+    assert (decision.breach_risk, decision.affects_score) == WAVE5A_DECISIONS[issue_key]
+    finding = _finding(issue_key, ssc_severity)
+    result = _score(finding)
+    assert finding.ssc_severity == ssc_severity
+    assert [item.ssc_issue_key for item in result.findings] == [issue_key]
+    assert result.findings[0].breach_risk == "UNKNOWN"
+    assert result.findings[0].affects_score is False
+    assert result.findings[0].score_impact == 0
+    assert result.factor_scores[0].score == 100
+
+
+def test_global_penalties_remain_unchanged_and_unknown_has_no_penalty():
+    assert ScoringDefinition().penalties == {"HIGH": 15, "MEDIUM": 7, "LOW": 2}
+    assert "UNKNOWN" not in ScoringDefinition().penalties
+
+
 def test_csp_unsafe_policy_match_is_low_and_deducts_two_factor_points():
     finding = _finding("csp_unsafe_policy_v2", "low")
     result = _score(finding)
@@ -299,6 +350,7 @@ def test_ssc_severity_difference_does_not_control_internal_score():
 
 
 def test_missing_calibration_fails_closed_without_ssc_severity_fallback():
+    assert "future_ssc_high_issue" not in SSC_SUPPORTED_INTERNAL_RISK_V1
     decision = resolve_ssc_internal_risk("future_ssc_high_issue")
     assert decision.breach_risk == "UNKNOWN"
     assert decision.affects_score is False
