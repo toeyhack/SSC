@@ -1,17 +1,17 @@
 # SSC Scanner Primitive Review
 
 Baseline content hash: `0fe2bc8ffb7e3f734d4e88f70b11cffa6e8e9e47e722dc62107f6ff09694eca8`  
-Review date: 2026-10-03
+Review date: 2026-10-05
 Scope: the 156 issues classified `DIRECTLY_TESTABLE` or `TESTABLE_WITH_ENRICHMENT` after the quality gate.
 
 This is a design and implementation-status catalog. A primitive supports a finding only when it records the exact observation, preserves scope and provenance, distinguishes negative results from errors/unknowns, and has a versioned evaluator linked to the SSC-aligned issue. It does not reproduce SSC collection methods or scoring.
 
 ## Current implementation boundary
 
-The platform has HTTP, TLS, DNS, and TCP collectors. Wave 1 added declared-path HTTP and certificate evidence. Wave 2 added version-pinned TLS negotiation and deterministic email-security evidence. Wave 3A added one bounded service-probe adapter framework and six non-authenticating protocol adapters. Wave 3B added bounded declared-path HTML/XML inspection, redacted URL observations, two-attempt 5xx evidence, and an actual-GET budget of up to 20 same-origin nonrecursive SRI resource requests including redirects. Wave 4A adds bounded pre-authentication SSH identification and SSH2 KEXINIT parsing on explicitly declared TCP ports. It still does not have a general or recursive crawler, browser runtime, WebSocket capture, later service-protocol adapters, complete legacy-TLS-cipher client coverage, stapled-OCSP capture, complete RFC 7208 evaluation, DKIM selector provenance, revocation client, product fingerprint engine, CVE/lifecycle feeds, or longitudinal patching model. Therefore:
+The platform has HTTP, TLS, DNS, and TCP collectors. Wave 1 added declared-path HTTP and certificate evidence. Wave 2 added version-pinned TLS negotiation and deterministic email-security evidence. Wave 3A added one bounded service-probe adapter framework and six non-authenticating protocol adapters. Wave 3B added bounded declared-path HTML/XML inspection, redacted URL observations, two-attempt 5xx evidence, and an actual-GET budget of up to 20 same-origin nonrecursive SRI resource requests including redirects. Wave 4A adds bounded pre-authentication SSH identification and SSH2 KEXINIT parsing on explicitly declared TCP ports. Wave 4B adds a bounded, path-sensitive SPF permanent-error analyzer; it is not a sender-authorization engine and does not invent SMTP client context. It still does not have a general or recursive crawler, browser runtime, WebSocket capture, later service-protocol adapters, complete legacy-TLS-cipher client coverage, stapled-OCSP capture, DKIM selector provenance, revocation client, product fingerprint engine, CVE/lifecycle feeds, or longitudinal patching model. Therefore:
 
-- fully `SUPPORTED` today: **37**;
-- `PARTIAL` among the 156 primitive-addressable issues: **90**;
+- fully `SUPPORTED` today: **38**;
+- `PARTIAL` among the 156 primitive-addressable issues: **89**;
 - `NOT_SUPPORTED` among the 156: **29**;
 - every supported issue has an active evaluator pinned to an exact attested `SSC_API` issue version; other primitives still require issue-specific evidence and evaluators.
 
@@ -26,7 +26,7 @@ The platform has HTTP, TLS, DNS, and TCP collectors. Wave 1 added declared-path 
 | `CONTENT_BASELINE` | 1 | 0/1 | 0 | 0 | 1 | HIGH | approved clean snapshots, signed history, similarity model, analyst review |
 | `CVE_CORRELATION` | 33 | 0/33 | 0 | 31 | 2 | HIGH | product/version or SBOM evidence, CPE/package normalization, NVD/vendor advisories, optional KEV |
 | `DOMAIN_PUBLIC_DATA` | 1 | 0/1 | 0 | 1 | 0 | LOW | versioned browser HSTS preload dataset |
-| `EMAIL_SECURITY` | 10 | 7/3 | 6 | 4 | 0 | MEDIUM | complete RFC 7208 permanent-error evaluation and approved mail samples/selectors for DKIM |
+| `EMAIL_SECURITY` | 10 | 7/3 | 7 | 3 | 0 | MEDIUM | bounded SPF permanent-error analysis is active; approved mail samples/selectors remain required for DKIM |
 | `EOL_EOS_CORRELATION` | 2 | 0/2 | 0 | 0 | 2 | HIGH | verified product/version and versioned vendor lifecycle records |
 | `HTTP_CONTENT` | 9 | 9/0 | 6 | 0 | 3 | MEDIUM | declared-path HTML parser, body-size limits, redaction; recursive discovery remains out of scope |
 | `HTTP_HEADERS` | 9 | 6/3 | 6 | 3 | 0 | MEDIUM | optional synthetic auth flow and versioned legacy-browser policy for the remaining rows |
@@ -40,7 +40,7 @@ The platform has HTTP, TLS, DNS, and TCP collectors. Wave 1 added declared-path 
 | `TLS_CERTIFICATE` | 9 | 5/4 | 5 | 4 | 0 | MEDIUM–HIGH | CA policy history, authoritative revocation, jurisdiction, and CA registry enrichment |
 | `TLS_HANDSHAKE` | 3 | 3/0 | 1 | 1 | 1 | MEDIUM | complete prohibited-suite client coverage and OCSP-staple capture/validation |
 | `WEBSOCKET_RUNTIME` | 3 | 2/1 | 0 | 0 | 3 | HIGH | browser runtime, bounded frame metadata, synthetic markers, application data schema |
-| **Total** | **156** | **75/81** | **37** | **90** | **29** |  |  |
+| **Total** | **156** | **75/81** | **38** | **89** | **29** |  |  |
 
 ## Issue grouping
 
@@ -74,7 +74,7 @@ A match requires a defensible product/version range or authoritative SBOM/packag
 
 `dkim_insufficient_key_length`, `dkim_record_detected`, `dkim_weak_signature`, `dmarc_contains_none`, `dmarc_record_missing`, `spf_record_malformed`, `spf_record_missing`, `spf_record_softfail`, `spf_record_wildcard`, `subdomain_dmarc_contains_none`
 
-Six SPF/DMARC rows now have exact active Wave 2 evaluators. `spf_record_malformed` remains partial because complete RFC 7208 macro, void-lookup, and nested A/MX permanent-error evaluation is not yet implemented. DKIM rows require an approved message sample or selector inventory; blind selector guessing is not a reliable negative test.
+Six SPF/DMARC rows retain their exact active Wave 2 evaluators. Wave 4B separately supports `spf_record_malformed` with strict record selection, complete selected-record syntax validation, deterministic `%{d}`-family expansion, bounded include/redirect/A/AAAA/MX/exists traversal, and path-sensitive permanent-error aggregation. Reachable PTR or sender/IP/HELO-dependent macros remain `INDETERMINATE`; sender authorization outcomes are not exposed. DKIM rows require an approved message sample or selector inventory; blind selector guessing is not a reliable negative test.
 
 ### `EOL_EOS_CORRELATION` (2)
 

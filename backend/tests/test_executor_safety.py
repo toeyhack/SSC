@@ -109,6 +109,7 @@ def test_dns_failure_is_unknown_not_missing(monkeypatch):
     def fail(name, *_args):
         return {"name": name, "record_type": "TXT", "status": "ERROR", "records": [], "error": "LifetimeTimeout"}
     monkeypatch.setattr(executors, "_query_txt_evidence", fail)
+    monkeypatch.setattr(executors, "_query_spf_txt_evidence", fail)
     evidence = executors.DNSExecutor().collect(local_target(), {}).evidence
     assert evidence["status"] == "error"
     assert evidence["spf_present"] is None

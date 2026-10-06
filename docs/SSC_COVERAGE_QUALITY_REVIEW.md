@@ -44,6 +44,21 @@ Wave 3A implemented one bounded, non-authenticating service-probe adapter framew
 
 Each adapter requires an exact protocol-valid greeting or negotiation response. A complete recognized foreign-protocol response is the only `NO_MATCH` boundary; an open port, suggestive banner, timeout, reset, malformed/truncated response, unsupported transport, or incomplete exchange is `INDETERMINATE`. The probes use fixed byte/time/request budgets and do not authenticate, enumerate data, relay traffic, or issue state-changing commands. All other service-identification issues remain `PARTIAL`; this update does not claim the full primitive ceiling or change the Golden Baseline, scoring weights, penalties, SSC severity, or V1/V2 scope.
 
+## Wave 4B implementation update (2026-10-05)
+
+Wave 4B implements exactly `spf_record_malformed` in a distinct rule tranche. It reuses the DNS executor and persisted observation model while moving SPF parsing and bounded permanent-error analysis into a dedicated service. It is not a general SPF sender-authorization engine and does not implement PTR evaluation without real client-IP context.
+
+| Coverage | Before Wave 4B | After Wave 4B |
+|---|---:|---:|
+| `SUPPORTED` | 37 | 38 |
+| `PARTIAL` | 90 | 89 |
+| `NOT_SUPPORTED` | 75 | 75 |
+| **Total** | **202** | **202** |
+
+Record selection requires case-insensitive `v=spf1` followed by ASCII space or end-of-record; tabs, `v=spf10`, and embedded prefixes are not selected. The complete selected record is syntax-validated before path analysis. Deterministic selection/grammar errors match immediately; otherwise `MATCH` requires every feasible branch to end in RFC permanent error. Definitive policy absence and complete safe traversal are `NO_MATCH`. Mixed branches, runtime-context-dependent macros or PTR, DNS uncertainty, undefined expansion behavior, unsupported states, or operational exhaustion are `INDETERMINATE`.
+
+RFC permanent-error limits are 10 reached DNS-causing terms, 2 void lookups under `ssc-wave4b-spf-malformed-policy.v1`, and 10 MX exchange hosts per applicable path. Separate operational limits are 256 logical DNS queries, 20 seconds total, 16 KiB per DNS response representation, 8 KiB per selected SPF record, 64 abstract states, 512 evaluator steps, and 256 compact trace entries. Operational limits never become `MATCH`. The issue remains absent from internal-risk calibration and therefore resolves to `UNKNOWN` with `affects_score=false`.
+
 ## Pre-Wave 1 outcome
 
 The original 87 `DIRECTLY_TESTABLE` rows were re-reviewed against the imported issue descriptions, current executor evidence, authorization boundaries, and public standards. Twelve were over-optimistic and have been downgraded to `TESTABLE_WITH_ENRICHMENT`. No issue was upgraded.

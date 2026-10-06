@@ -2,7 +2,7 @@
 
 Snapshot content hash: `0fe2bc8ffb7e3f734d4e88f70b11cffa6e8e9e47e722dc62107f6ff09694eca8`
 Source: immutable real `SSC_API` Golden Baseline
-Implementation state: Waves 1-2, Wave 3A first-batch `SERVICE_PROTOCOL_IDENTIFICATION`, Wave 3B `HTTP_CONTENT`, and Wave 4A `SSH_NEGOTIATION`
+Implementation state: Waves 1-2, Wave 3A first-batch `SERVICE_PROTOCOL_IDENTIFICATION`, Wave 3B `HTTP_CONTENT`, Wave 4A `SSH_NEGOTIATION`, and Wave 4B bounded SPF permanent-error analysis
 Total mapped issues: **202**
 
 > This is an independent implementation mapped to SSC taxonomy. It does not reproduce or claim knowledge of SSC collection, aggregation, severity, scoring, or proprietary detection logic. `ssc_severity` remains source metadata and is not mapped to internal risk or score impact.
@@ -13,10 +13,10 @@ Total mapped issues: **202**
 
 ## Coverage summary
 
-| Coverage | Before Wave 4A | After Wave 4A | Percentage after |
+| Coverage | Before Wave 4B | After Wave 4B | Percentage after |
 |---|---:|---:|---:|
-| `SUPPORTED` | 34 | 37 | 18.3% |
-| `PARTIAL` | 93 | 90 | 44.6% |
+| `SUPPORTED` | 37 | 38 | 18.8% |
+| `PARTIAL` | 90 | 89 | 44.1% |
 | `NOT_SUPPORTED` | 75 | 75 | 37.1% |
 | **Total** | **202** | **202** | **100.0%** |
 
@@ -35,7 +35,7 @@ Total mapped issues: **202**
 |---|---:|---:|---:|---:|---:|---:|---:|---:|
 | `application_security` | 61 | 25 | 35 | 0 | 1 | 16 | 29 | 16 |
 | `cubit_score` | 3 | 0 | 1 | 0 | 2 | 0 | 1 | 2 |
-| `dns_health` | 10 | 7 | 3 | 0 | 0 | 6 | 4 | 0 |
+| `dns_health` | 10 | 7 | 3 | 0 | 0 | 7 | 3 | 0 |
 | `endpoint_security` | 2 | 0 | 0 | 2 | 0 | 0 | 0 | 2 |
 | `hacker_chatter` | 2 | 0 | 0 | 2 | 0 | 0 | 0 | 2 |
 | `ip_reputation` | 26 | 1 | 1 | 24 | 0 | 0 | 2 | 24 |
@@ -98,7 +98,6 @@ Every listed rule uses stable key `ssc.wave2.<issue-key>`, method schema `ssc-wa
 |---|---|
 | `tls_ocsp_stapling` | Python's current TLS socket interface does not expose the server's stapled OCSP bytes for cryptographic parsing and freshness/signature validation. |
 | `tls_weak_cipher` | The runtime can positively prove acceptance from constrained handshakes, but its OpenSSL provider cannot offer every prohibited legacy suite; a conclusive negative would be a weak proxy. |
-| `spf_record_malformed` | The collector parses syntax, multiple records, include/redirect loops and lookup overflow, but does not yet implement every RFC 7208 macro, void-lookup and nested A/MX permanent-error path. |
 | `dkim_record_detected` | Selector discovery requires an approved selector inventory or authorized message sample; selectors are not safely enumerable from DNS. |
 | `dkim_weak_signature` | The platform has no authorized message/selector evidence from which to verify the signature algorithm and selected key. |
 | `dkim_insufficient_key_length` | The platform has no approved selector inventory or authorized message sample, so an exhaustive key-size observation cannot be made. |
@@ -122,7 +121,7 @@ Every listed rule uses stable key `ssc.wave3b.<issue-key>`, method schema `ssc-h
 
 | SSC issue key | Primitive | MATCH condition | NO_MATCH boundary | INDETERMINATE boundary | Authoritative reference |
 |---|---|---|---|---|---|
-| `unsafe_sri_v2` | `HTTP_CONTENT` | MATCH when a covered external script or stylesheet lacks SRI, has invalid or disallowed integrity metadata, or fetched bytes fail every digest using the strongest supported algorithm represented in its metadata. | NO_MATCH only when complete declared HTML contains no covered resources or every covered resource has valid permitted metadata and at least one digest using its strongest represented supported algorithm verifies. | Page/resource failure, truncation, cross-origin or otherwise out-of-scope resource, unsafe redirect, unsupported content, exhausted actual-GET budget, or incomplete digest evidence is INDETERMINATE. | https://www.w3.org/TR/SRI/ |
+| `unsafe_sri_v2` | `HTTP_CONTENT` | MATCH when a covered external script or stylesheet lacks SRI, has invalid or disallowed integrity metadata, or fetched bytes fail every digest using the strongest supported algorithm represented in its metadata. | NO_MATCH only when complete declared HTML contains no covered resources or every covered resource has valid permitted metadata and at least one digest using its strongest represented supported algorithm verifies. | Page/resource failure, truncation, cross-origin or otherwise out-of-scope resource, unsafe redirect, unsupported content, exhausted fetch budget, or incomplete digest evidence is INDETERMINATE. | https://www.w3.org/TR/SRI/ |
 | `insecure_ftp` | `HTTP_CONTENT` | MATCH when a covered static HTML URL uses the ftp: scheme. | NO_MATCH only when every declared response is fetched completely and parsed as HTML and none satisfies the condition. | Missing or failed response, blocked/non-2xx response, truncated body, unsupported content type or encoding, malformed content, undeclared path coverage, or an exceeded observation bound is INDETERMINATE. | https://www.rfc-editor.org/rfc/rfc959.html |
 | `contact_information_detected` | `HTTP_CONTENT` | MATCH when a covered href uses mailto:, tel:, sms:, whatsapp:, or viber: under the versioned policy. | NO_MATCH only when every declared response is fetched completely and parsed as HTML and none satisfies the condition. | Missing or failed response, blocked/non-2xx response, truncated body, unsupported content type or encoding, malformed content, undeclared path coverage, or an exceeded observation bound is INDETERMINATE. | https://www.rfc-editor.org/rfc/rfc6068.html |
 | `local_file_path_exposed_via_url_scheme` | `HTTP_CONTENT` | MATCH when a covered static HTML URL uses the file: scheme. | NO_MATCH only when every declared response is fetched completely and parsed as HTML and none satisfies the condition. | Missing or failed response, blocked/non-2xx response, truncated body, unsupported content type or encoding, malformed content, undeclared path coverage, or an exceeded observation bound is INDETERMINATE. | https://www.rfc-editor.org/rfc/rfc8089.html |
@@ -139,6 +138,14 @@ Every listed rule uses stable key `ssc.wave4a.<issue-key>`, method schema `ssc-w
 | `ssh_weak_protocol` | `SSH_NEGOTIATION` | MATCH for valid deterministic SSH-1.x identification below 2, excluding ambiguous SSH-1.99. | NO_MATCH only for valid SSH-2.0 identification plus a complete valid SSH2 KEXINIT. | SSH-1.99 without safe SSH1 confirmation, malformed/foreign/incomplete exchanges, transport failure, or unsupported protocol is INDETERMINATE. | https://api.securityscorecard.io/metadata/issue-types/ssh_weak_protocol; https://www.rfc-editor.org/rfc/rfc4253.html; https://www.iana.org/assignments/ssh-parameters |
 | `ssh_weak_cipher` | `SSH_NEGOTIATION` | MATCH when either complete KEXINIT encryption direction advertises an exact policy-prohibited Arcfour or CBC cipher. | NO_MATCH only when both complete directional lists contain no exact prohibited cipher. | Missing/malformed/truncated KEXINIT, a missing direction, unknown policy, transport failure, non-SSH service, or non-SSH2 state is INDETERMINATE. | https://api.securityscorecard.io/metadata/issue-types/ssh_weak_cipher; https://www.rfc-editor.org/rfc/rfc4253.html; https://www.iana.org/assignments/ssh-parameters |
 | `ssh_weak_mac` | `SSH_NEGOTIATION` | MATCH when an exact prohibited MD5 MAC is advertised in a direction containing at least one known non-AEAD cipher, making the standalone MAC selectable. | NO_MATCH only when both directions are conclusive: each has only MAC-ignored AEAD ciphers, has complete consistent RFC 5647 paired AEAD evidence, or has a complete clean MAC list applicable to a known non-AEAD cipher. | Missing/malformed evidence, an empty applicable MAC list, incomplete RFC 5647 pairing, unknown cipher applicability or policy, transport failure, or a non-SSH/non-SSH2 state is INDETERMINATE. | https://api.securityscorecard.io/metadata/issue-types/ssh_weak_mac; https://www.rfc-editor.org/rfc/rfc4253.html; https://www.iana.org/assignments/ssh-parameters |
+
+## Active Wave 4B evaluator mappings
+
+The single Wave 4B rule uses stable key `ssc.wave4b.spf_record_malformed`, method schema `ssc-wave4b-spf-observation.v1`, policy `ssc-wave4b-spf-malformed-policy.v1`, source type `SSC_REFERENCE`, and an immutable link to the exact attested `SSC_API` issue version. It analyzes only deterministic RFC 7208 permanent errors and does not expose sender authorization results.
+
+| SSC issue key | Primitive | Exact logic | Authoritative reference |
+|---|---|---|---|
+| `spf_record_malformed` | `EMAIL_SECURITY` | MATCH only for an unconditional RFC 7208 selection/grammar permanent error or when every feasible runtime branch deterministically ends in permerror. NO_MATCH requires definitive SPF absence or complete bounded evidence with no permanent-error branch. Missing runtime context, mixed branches, DNS uncertainty, undefined expansion, unsupported state, or operational exhaustion is INDETERMINATE. | https://www.rfc-editor.org/rfc/rfc7208.html |
 
 ## Per-issue index
 
@@ -215,7 +222,7 @@ The CSV remains normative for exact evidence requirements, proposed logic, depen
 | `dkim_weak_signature` | DKIM Record Using Non-Secure Public Key Algorithm | `dns_health` | `info` | `TESTABLE_WITH_ENRICHMENT` | `MAIL_SAMPLE+DNS` | `PARTIAL` |
 | `dmarc_contains_none` | DMARC Record Contains None Policy | `dns_health` | `info` | `DIRECTLY_TESTABLE` | `EMAIL_SECURITY` | `SUPPORTED` |
 | `dmarc_record_missing` | DMARC Record Missing | `dns_health` | `info` | `DIRECTLY_TESTABLE` | `EMAIL_SECURITY` | `SUPPORTED` |
-| `spf_record_malformed` | Malformed SPF Record | `dns_health` | `medium` | `DIRECTLY_TESTABLE` | `DNS` | `PARTIAL` |
+| `spf_record_malformed` | Malformed SPF Record | `dns_health` | `medium` | `DIRECTLY_TESTABLE` | `EMAIL_SECURITY` | `SUPPORTED` |
 | `spf_record_missing` | SPF Record Missing | `dns_health` | `low` | `DIRECTLY_TESTABLE` | `EMAIL_SECURITY` | `SUPPORTED` |
 | `spf_record_softfail` | SPF Record Contains a Softfail without DMARC | `dns_health` | `info` | `DIRECTLY_TESTABLE` | `EMAIL_SECURITY` | `SUPPORTED` |
 | `spf_record_wildcard` | SPF Record Found Ineffective | `dns_health` | `medium` | `DIRECTLY_TESTABLE` | `EMAIL_SECURITY` | `SUPPORTED` |

@@ -135,7 +135,6 @@ WAVE2_BY_KEY = {spec.issue_key: spec for spec in WAVE2_RULES}
 WAVE2_PARTIAL_REASONS = {
     "tls_ocsp_stapling": "Python's current TLS socket interface does not expose the server's stapled OCSP bytes for cryptographic parsing and freshness/signature validation.",
     "tls_weak_cipher": "The runtime can positively prove acceptance from constrained handshakes, but its OpenSSL provider cannot offer every prohibited legacy suite; a conclusive negative would be a weak proxy.",
-    "spf_record_malformed": "The collector parses syntax, multiple records, include/redirect loops and lookup overflow, but does not yet implement every RFC 7208 macro, void-lookup and nested A/MX permanent-error path.",
     "dkim_record_detected": "Selector discovery requires an approved selector inventory or authorized message sample; selectors are not safely enumerable from DNS.",
     "dkim_weak_signature": "The platform has no authorized message/selector evidence from which to verify the signature algorithm and selected key.",
     "dkim_insufficient_key_length": "The platform has no approved selector inventory or authorized message sample, so an exhaustive key-size observation cannot be made.",

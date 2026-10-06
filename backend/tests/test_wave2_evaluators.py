@@ -223,6 +223,7 @@ def test_real_baseline_exact_linkage_observation_finding_and_report(db, monkeypa
         return _dns(name, records=["v=spf1 -all"])
 
     monkeypatch.setattr("app.services.scan_executors._query_txt_evidence", fake_query)
+    monkeypatch.setattr("app.services.scan_executors._query_spf_txt_evidence", fake_query)
     result = scan_inventory_target(
         db, name=target["name"], organization_id=UUID(target["organization_id"]),
         scan_config={"executors": ["dns"]}, model=ScoringDefinition(), rule_keys=[rule.stable_key],
@@ -243,6 +244,9 @@ def test_real_baseline_exact_linkage_observation_finding_and_report(db, monkeypa
         _dns(name, "NXDOMAIN") if name.startswith("_ssc-spf-") else
         _dns(name, records=["v=DMARC1; p=reject"]) if name.startswith("_dmarc.") else
         _dns(name, records=["v=spf1 -all"])
+    ))
+    monkeypatch.setattr("app.services.scan_executors._query_spf_txt_evidence", lambda name, *_: (
+        _dns(name, "NXDOMAIN") if name.startswith("_ssc-spf-") else _dns(name, records=["v=spf1 -all"])
     ))
     negative = scan_inventory_target(
         db, name=target["name"], organization_id=UUID(target["organization_id"]),

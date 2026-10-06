@@ -51,6 +51,14 @@ def run(args) -> int:
                 result = activate_wave4a_rules(db)
             print(json.dumps(result, indent=2))
             return 0 if not result["unavailable"] else 3
+        if args.baseline_command == "activate-wave4b":
+            if not args.yes:
+                raise ValueError("Review the Wave 4B evaluator definition, then pass --yes to activate")
+            from app.services.wave4b_rules import activate_wave4b_rules
+            with SessionLocal() as db:
+                result = activate_wave4b_rules(db)
+            print(json.dumps(result, indent=2))
+            return 0 if not result["unavailable"] else 3
         if args.baseline_command == "discover-details":
             result = discover_issue_details()
             print(json.dumps(result, indent=2))

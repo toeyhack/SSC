@@ -10,6 +10,8 @@ import secrets
 import warnings
 
 import dns.resolver
+import dns.flags
+import dns.rcode
 from cryptography import x509
 from cryptography.exceptions import UnsupportedAlgorithm
 from cryptography.hazmat.primitives import hashes, serialization
@@ -47,6 +49,15 @@ from app.services.ssh_negotiation import (
     SSH_COLLECTOR_VERSION,
     aggregate_ssh_evaluations,
     collect_ssh_negotiation,
+)
+from app.services.spf import (
+    MAX_DNS_RESPONSE_BYTES,
+    MAX_ELAPSED_SECONDS,
+    SPF_PARSER_VERSION,
+    SPF_POLICY_VERSION,
+    analyze_spf,
+    parse_spf_record,
+    selected_spf_records,
 )
 
 
@@ -515,10 +526,19 @@ class DNSExecutor(BaseExecutor):
         server_port = _int_config(config, "dns_server_port", 53, minimum=1, maximum=65535)
         domain = target.domain_name
 
-        root_txt = _query_txt_evidence(domain, server_host, server_port, timeout)
+        spf_started = time.monotonic()
+        root_txt = _query_spf_txt_evidence(domain, server_host, server_port, min(timeout, MAX_ELAPSED_SECONDS))
+        spf_analysis = analyze_spf(
+            domain,
+            root_txt,
+            lambda name, record_type, remaining: _query_dns_evidence(
+                name, record_type, server_host, server_port, min(timeout, remaining), strict_txt=True,
+            ),
+            started_at=spf_started,
+        )
         dmarc_txt = _query_txt_evidence(f"_dmarc.{domain}", server_host, server_port, timeout)
         nonce_queries = [
-            _query_txt_evidence(f"_ssc-spf-{secrets.token_hex(8)}.{domain}", server_host, server_port, timeout)
+            _query_spf_txt_evidence(f"_ssc-spf-{secrets.token_hex(8)}.{domain}", server_host, server_port, timeout)
             for _ in range(2)
         ]
         subdomains = _email_subdomains_config(config, domain)
@@ -529,15 +549,14 @@ class DNSExecutor(BaseExecutor):
             }
             for subdomain in subdomains
         ]
-        spf_analysis = _analyze_spf(domain, root_txt, server_host, server_port, timeout)
         dmarc_analysis = _analyze_dmarc(dmarc_txt)
         evaluations = _evaluate_email_security(
             domain, root_txt, spf_analysis, dmarc_txt, dmarc_analysis,
             nonce_queries, subdomain_dmarc,
         )
-        spf_records = root_txt["records"]
+        spf_records = _spf_records(root_txt)
         dmarc_records = dmarc_txt["records"]
-        error = root_txt.get("error") or dmarc_txt.get("error")
+        error = root_txt.get("error_class") or root_txt.get("error") or dmarc_txt.get("error")
         evidence = {
             "executor": self.executor_name,
             "status": "success",
@@ -546,14 +565,14 @@ class DNSExecutor(BaseExecutor):
                 "target_type": target.target_type.value,
                 "inventory_id": target.inventory_id,
             },
-            "spf_present": None if error else any(record.lower().startswith("v=spf1") for record in spf_records),
+            "spf_present": None if not _definitive_dns(root_txt) else bool(spf_records),
             "spf_records": spf_records,
             "dmarc_present": None if error else any(record.lower().startswith("v=dmarc1") for record in dmarc_records),
             "dmarc_records": dmarc_records,
             "queries": {
-                "domain_txt": root_txt,
+                "domain_txt": _compact_spf_txt_evidence(root_txt),
                 "dmarc_txt": dmarc_txt,
-                "spf_wildcard_nonce_txt": nonce_queries,
+                "spf_wildcard_nonce_txt": [_compact_spf_txt_evidence(item) for item in nonce_queries],
                 "subdomain_dmarc_txt": subdomain_dmarc,
             },
             "spf_analysis": spf_analysis,
@@ -1855,73 +1874,137 @@ def _query_txt_evidence(name: str, server_host: str | None, server_port: int, ti
     return result
 
 
+def _query_spf_txt_evidence(name: str, server_host: str | None, server_port: int, timeout: float) -> dict[str, Any]:
+    return _query_dns_evidence(name, "TXT", server_host, server_port, timeout, strict_txt=True)
+
+
+def _query_dns_evidence(
+    name: str,
+    record_type: str,
+    server_host: str | None,
+    server_port: int,
+    timeout: float,
+    *,
+    strict_txt: bool = False,
+) -> dict[str, Any]:
+    """Acquire one bounded RRset with typed failure states for SPF analysis."""
+    result: dict[str, Any] = {
+        "name": name, "record_type": record_type.upper(), "status": "TRUNCATED_OR_MALFORMED",
+        "records": [], "invalid_records": [], "answer_count": 0,
+        "response_size": None, "error_class": None,
+    }
+    resolver = dns.resolver.Resolver(configure=server_host is None)
+    if server_host:
+        resolver.nameservers = [server_host]
+    resolver.port = server_port
+    resolver.timeout = timeout
+    resolver.lifetime = timeout
+    try:
+        answer = resolver.resolve(name, record_type, search=False, raise_on_no_answer=False)
+        if answer.response.flags & dns.flags.TC:
+            result.update(status="TRUNCATED_OR_MALFORMED", error_class="truncated_dns_response")
+            return result
+        try:
+            response_size = len(answer.response.to_wire(max_size=65535))
+        except (dns.exception.DNSException, ValueError, OverflowError):
+            result.update(status="TRUNCATED_OR_MALFORMED", error_class="unrepresentable_dns_response")
+            return result
+        result["response_size"] = response_size
+        if response_size > MAX_DNS_RESPONSE_BYTES:
+            result.update(status="OPERATIONAL_LIMIT", error_class="dns_response_size_limit")
+            return result
+        records: list[str] = []
+        invalid_records: list[dict[str, Any]] = []
+        for record in answer:
+            if record_type.upper() == "TXT":
+                raw = b"".join(record.strings)
+                try:
+                    value = raw.decode("ascii" if strict_txt else "utf-8", errors="strict")
+                except UnicodeDecodeError:
+                    invalid_records.append({
+                        "sha256": hashlib.sha256(raw).hexdigest(),
+                        "octet_length": len(raw),
+                        "spf1_prefix": len(raw) >= 6 and raw[:6].lower() == b"v=spf1" and (len(raw) == 6 or raw[6:7] == b" "),
+                    })
+                    continue
+                records.append(value if strict_txt else value.strip())
+            elif record_type.upper() in {"A", "AAAA"}:
+                records.append(record.address)
+            elif record_type.upper() == "MX":
+                records.append(record.exchange.to_text().rstrip("."))
+            elif record_type.upper() == "PTR":
+                records.append(record.target.to_text().rstrip("."))
+            else:
+                result.update(status="TRUNCATED_OR_MALFORMED", error_class="unsupported_dns_record_type")
+                return result
+        result.update(
+            status="ANSWER" if records or invalid_records else "NODATA",
+            records=records,
+            invalid_records=invalid_records,
+            answer_count=len(records) + len(invalid_records),
+        )
+    except dns.resolver.NXDOMAIN:
+        result["status"] = "NXDOMAIN"
+    except dns.resolver.NoAnswer:
+        result["status"] = "NODATA"
+    except (dns.resolver.LifetimeTimeout, dns.exception.Timeout, TimeoutError):
+        result.update(status="TIMEOUT", error_class="timeout")
+    except dns.resolver.NoNameservers as exc:
+        status = _no_nameserver_status(exc)
+        result.update(status=status, error_class=status.casefold())
+    except dns.resolver.YXDOMAIN:
+        result.update(status="FORMERR", error_class="yxdomain")
+    except (dns.exception.FormError, dns.exception.TooBig, EOFError):
+        result.update(status="TRUNCATED_OR_MALFORMED", error_class="malformed_dns_response")
+    except (dns.exception.DNSException, OSError):
+        result.update(status="TRUNCATED_OR_MALFORMED", error_class="resolver_or_network_error")
+    return result
+
+
+def _no_nameserver_status(exc: dns.resolver.NoNameservers) -> str:
+    for item in exc.kwargs.get("errors", ()):
+        response = item[4] if len(item) > 4 else None
+        if response is None:
+            continue
+        code = response.rcode()
+        if code == dns.rcode.SERVFAIL:
+            return "SERVFAIL"
+        if code == dns.rcode.REFUSED:
+            return "REFUSED"
+        if code == dns.rcode.FORMERR:
+            return "FORMERR"
+    return "SERVFAIL"
+
+
 def _definitive_dns(evidence: dict[str, Any]) -> bool:
     return evidence.get("status") in {"ANSWER", "NODATA", "NXDOMAIN"}
 
 
 def _spf_records(evidence: dict[str, Any]) -> list[str]:
-    return [
-        record for record in evidence.get("records", [])
-        if re.match(r"^v=spf1(?:\s|$)", record, flags=re.IGNORECASE)
+    return selected_spf_records(evidence)
+
+
+def _compact_spf_txt_evidence(evidence: dict[str, Any]) -> dict[str, Any]:
+    records = _spf_records(evidence)
+    hashes = [hashlib.sha256(record.encode("ascii", errors="strict")).hexdigest() for record in records]
+    invalid = [
+        {"sha256": item.get("sha256"), "octet_length": item.get("octet_length"), "spf1_prefix": item.get("spf1_prefix")}
+        for item in evidence.get("invalid_records", [])
     ]
+    return {
+        "name": evidence.get("name"),
+        "record_type": evidence.get("record_type", "TXT"),
+        "status": evidence.get("status"),
+        "error_class": evidence.get("error_class") or evidence.get("error"),
+        "response_size": evidence.get("response_size"),
+        "selected_spf_count": len(records) + sum(item.get("spf1_prefix") is True for item in invalid),
+        "selected_spf_hashes": hashes,
+        "invalid_record_summaries": invalid,
+    }
 
 
 def _parse_spf_record(record: str) -> dict[str, Any]:
-    tokens = record.split()
-    parsed: dict[str, Any] = {"record": record, "valid": False, "terms": [], "terminal_all": None, "error": None}
-    if not tokens or tokens[0].casefold() != "v=spf1":
-        parsed["error"] = "invalid_version"
-        return parsed
-    redirect_seen = False
-    for index, token in enumerate(tokens[1:]):
-        if "=" in token and not token.lstrip("+-~?").startswith(("ip4:", "ip6:")):
-            name, value = token.split("=", 1)
-            if not re.fullmatch(r"[A-Za-z][A-Za-z0-9_.-]*", name) or not value or any(char.isspace() for char in value):
-                parsed["error"] = "invalid_modifier"
-                return parsed
-            if name.casefold() == "redirect":
-                if redirect_seen:
-                    parsed["error"] = "duplicate_redirect"
-                    return parsed
-                redirect_seen = True
-            parsed["terms"].append({"kind": "modifier", "name": name.casefold(), "value": value})
-            continue
-        qualifier = token[0] if token and token[0] in "+-~?" else "+"
-        body = token[1:] if token and token[0] in "+-~?" else token
-        match = re.fullmatch(r"([A-Za-z0-9]+)(?::([^/]+))?(?:/(\d{1,3}))?(?://(\d{1,3}))?", body)
-        if not match:
-            parsed["error"] = "invalid_mechanism_syntax"
-            return parsed
-        name, argument, cidr4, cidr6 = match.groups()
-        name = name.casefold()
-        if name not in {"all", "include", "a", "mx", "ptr", "ip4", "ip6", "exists"}:
-            parsed["error"] = "unknown_mechanism"
-            return parsed
-        if name in {"include", "exists", "ip4", "ip6"} and not argument:
-            parsed["error"] = "missing_mechanism_argument"
-            return parsed
-        if name == "all" and (argument or cidr4 or cidr6):
-            parsed["error"] = "all_has_argument"
-            return parsed
-        try:
-            if name == "ip4":
-                ipaddress.IPv4Network(argument + (f"/{cidr4}" if cidr4 else ""), strict=False)
-            elif name == "ip6":
-                ipaddress.IPv6Network(argument + (f"/{cidr4}" if cidr4 else ""), strict=False)
-            elif cidr4 and int(cidr4) > 32:
-                raise ValueError
-            elif cidr6 and int(cidr6) > 128:
-                raise ValueError
-        except ValueError:
-            parsed["error"] = "invalid_network_or_cidr"
-            return parsed
-        term = {"kind": "mechanism", "name": name, "qualifier": qualifier, "argument": argument, "position": index}
-        parsed["terms"].append(term)
-    mechanisms = [term for term in parsed["terms"] if term["kind"] == "mechanism"]
-    if mechanisms and mechanisms[-1]["name"] == "all":
-        parsed["terminal_all"] = mechanisms[-1]["qualifier"]
-    parsed["valid"] = True
-    return parsed
+    return parse_spf_record(record).evidence()
 
 
 def _analyze_spf(
@@ -1931,79 +2014,13 @@ def _analyze_spf(
     server_port: int,
     timeout: float,
 ) -> dict[str, Any]:
-    analysis: dict[str, Any] = {
-        "domain": domain, "record_count": 0, "records": [], "valid": None,
-        "permanent_error": None, "error_class": None, "lookup_count": 0,
-        "lookup_trace": [], "terminal_all": None,
-    }
-    if not _definitive_dns(root):
-        analysis["error_class"] = "dns_unavailable"
-        return analysis
-    records = _spf_records(root)
-    analysis["record_count"] = len(records)
-    if not records:
-        analysis.update(valid=False, permanent_error=False, error_class="record_missing")
-        return analysis
-    if len(records) > 1:
-        analysis.update(valid=False, permanent_error=True, error_class="multiple_spf_records")
-        return analysis
-    parsed = _parse_spf_record(records[0])
-    analysis["records"] = [parsed]
-    analysis["terminal_all"] = parsed.get("terminal_all")
-    if not parsed["valid"]:
-        analysis.update(valid=False, permanent_error=True, error_class=parsed["error"])
-        return analysis
-    if any(
-        "%" in str(term.get("argument") or term.get("value") or "")
-        for term in parsed["terms"]
-        if term.get("name") in {"include", "redirect", "a", "mx", "exists"}
-    ):
-        analysis.update(valid=None, permanent_error=None, error_class="macro_expansion_not_observable")
-        return analysis
-    visited = {domain.casefold()}
-    pending = [(domain, parsed)]
-    while pending:
-        source_domain, current = pending.pop()
-        for term in current["terms"]:
-            lookup_domain = None
-            if term["kind"] == "mechanism" and term["name"] in {"include", "a", "mx", "ptr", "exists"}:
-                analysis["lookup_count"] += 1
-                lookup_domain = term.get("argument")
-            elif term["kind"] == "modifier" and term["name"] == "redirect":
-                analysis["lookup_count"] += 1
-                lookup_domain = term["value"]
-            else:
-                continue
-            analysis["lookup_trace"].append({"source": source_domain, "term": term, "lookup_number": analysis["lookup_count"]})
-            if analysis["lookup_count"] > 10:
-                analysis.update(valid=False, permanent_error=True, error_class="dns_lookup_limit_exceeded")
-                return analysis
-            if term.get("name") not in {"include", "redirect"}:
-                continue
-            if not lookup_domain or "%" in lookup_domain:
-                analysis.update(valid=None, permanent_error=None, error_class="macro_expansion_not_observable")
-                return analysis
-            normalized = lookup_domain.casefold().rstrip(".")
-            if normalized in visited:
-                analysis.update(valid=False, permanent_error=True, error_class="include_redirect_loop")
-                return analysis
-            visited.add(normalized)
-            nested_evidence = _query_txt_evidence(normalized, server_host, server_port, timeout)
-            analysis["lookup_trace"][-1]["dns"] = nested_evidence
-            if not _definitive_dns(nested_evidence):
-                analysis.update(valid=None, permanent_error=None, error_class="nested_dns_unavailable")
-                return analysis
-            nested_records = _spf_records(nested_evidence)
-            if len(nested_records) != 1:
-                analysis.update(valid=False, permanent_error=True, error_class="nested_spf_record_count")
-                return analysis
-            nested = _parse_spf_record(nested_records[0])
-            if not nested["valid"]:
-                analysis.update(valid=False, permanent_error=True, error_class=nested["error"])
-                return analysis
-            pending.append((normalized, nested))
-    analysis.update(valid=True, permanent_error=False)
-    return analysis
+    return analyze_spf(
+        domain,
+        root,
+        lambda name, record_type, remaining: _query_dns_evidence(
+            name, record_type, server_host, server_port, min(timeout, remaining), strict_txt=True,
+        ),
+    )
 
 
 def _analyze_dmarc(evidence: dict[str, Any]) -> dict[str, Any]:
@@ -2063,7 +2080,11 @@ def _evaluate_email_security(
         missing_spf: bool | None = None
     else:
         missing_spf = not bool(_spf_records(root_txt))
-    malformed_spf = spf.get("permanent_error") if spf.get("error_class") != "record_missing" else False
+    malformed_spf = {
+        "MATCH": True,
+        "NO_MATCH": False,
+        "INDETERMINATE": None,
+    }.get(spf.get("outcome"), spf.get("permanent_error"))
     if spf.get("valid") is True:
         if dmarc.get("valid") is True:
             percentage = int(dmarc.get("tags", {}).get("pct", "100"))
@@ -2109,10 +2130,15 @@ def _evaluate_email_security(
         subdomain_none = any(item["effective_policy"] == "none" for item in sub_results)
     common = {"domain": domain, "policy_version": WAVE2_EMAIL_POLICY_VERSION}
     return {
-        "spf_record_missing": _evaluation(missing_spf, "checked the exact declared-domain TXT response for v=spf1", {**common, "query": root_txt}, policy_version=WAVE2_EMAIL_POLICY_VERSION),
-        "spf_record_malformed": _evaluation(malformed_spf, "parsed and recursively bounded the single SPF policy", {**common, "analysis": spf}, policy_version=WAVE2_EMAIL_POLICY_VERSION),
+        "spf_record_missing": _evaluation(missing_spf, "checked the exact declared-domain TXT response for v=spf1", {**common, "query": _compact_spf_txt_evidence(root_txt)}, policy_version=WAVE2_EMAIL_POLICY_VERSION),
+        "spf_record_malformed": _evaluation(malformed_spf, "performed bounded path-sensitive RFC 7208 permanent-error analysis", {"domain": domain, "policy_version": SPF_POLICY_VERSION, "analysis": spf}, policy_version=SPF_POLICY_VERSION),
         "spf_record_softfail": _evaluation(softfail, "combined a valid terminal ~all with the observable effective DMARC policy", {**common, "spf": spf, "dmarc": dmarc}, policy_version=WAVE2_EMAIL_POLICY_VERSION),
-        "spf_record_wildcard": _evaluation(wildcard, "compared SPF answers at two unpredictable nonce subdomains", {**common, "queries": nonce_queries}, policy_version=WAVE2_EMAIL_POLICY_VERSION),
+        "spf_record_wildcard": _evaluation(
+            wildcard,
+            "compared SPF answers at two unpredictable nonce subdomains",
+            {**common, "queries": [_compact_spf_txt_evidence(item) for item in nonce_queries]},
+            policy_version=WAVE2_EMAIL_POLICY_VERSION,
+        ),
         "dmarc_record_missing": _evaluation(dmarc_missing, "checked exact _dmarc TXT evidence for the declared organizational domain", {**common, "query": dmarc_txt, "analysis": dmarc}, policy_version=WAVE2_EMAIL_POLICY_VERSION),
         "dmarc_contains_none": _evaluation(dmarc_none, "parsed the single applicable DMARC record and effective p policy", {**common, "analysis": dmarc}, policy_version=WAVE2_EMAIL_POLICY_VERSION),
         "subdomain_dmarc_contains_none": _evaluation(subdomain_none, "evaluated direct or inherited policy only for explicitly declared subdomains", {**common, "subdomains": sub_results}, policy_version=WAVE2_EMAIL_POLICY_VERSION),

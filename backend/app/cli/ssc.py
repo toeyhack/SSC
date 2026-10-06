@@ -79,6 +79,11 @@ def build_parser():
         help="Activate reviewed Wave 4A SSH-negotiation evaluators against the attested SSC API baseline",
     )
     activate4a.add_argument("--yes", action="store_true", help="Confirm activation of the reviewed evaluator definitions")
+    activate4b = baseline_commands.add_parser(
+        "activate-wave4b",
+        help="Activate the reviewed Wave 4B SPF permanent-error evaluator against the attested SSC API baseline",
+    )
+    activate4b.add_argument("--yes", action="store_true", help="Confirm activation of the reviewed evaluator definition")
     return parser
 
 
