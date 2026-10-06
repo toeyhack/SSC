@@ -4,7 +4,7 @@ Review date: 2026-09-23
 
 Golden Baseline: immutable real `SSC_API` snapshot `0fe2bc8ffb7e3f734d4e88f70b11cffa6e8e9e47e722dc62107f6ff09694eca8`
 
-Implementation state updated 2026-10-05: Waves 1–4B, 38 active exact SSC evaluator mappings
+Implementation state updated 2026-10-06: Waves 1–5A, 42 active exact SSC evaluator mappings; 38 have separately approved internal-risk calibration
 
 This review originally changed product scope documentation only. The V1 Assessment Completeness Fix implemented on 2026-09-23 applies the correction specified here without changing the Golden Baseline, scanner primitives, rule activation, penalty arithmetic, factor weights, or SSC severity.
 
@@ -71,19 +71,19 @@ The proposed correction is a versioned assessment profile that pins the baseline
 
 ## Current V1 coverage
 
-The denominator was verified from the 202 exact snapshot memberships in the attested database clone. Support states come from the reviewed coverage matrix and correspond to the 38 active exact evaluator mappings after the bounded Wave 4B SPF permanent-error analyzer.
+The denominator was verified from the 202 exact snapshot memberships in the attested database clone. Support states come from the reviewed coverage matrix and correspond to the 42 active exact evaluator mappings after the bounded Wave 5A staged text-service batch.
 
 | V1 factor | Total | `SUPPORTED` | `PARTIAL` | `NOT_SUPPORTED` | Supported coverage |
 |---|---:|---:|---:|---:|---:|
 | `application_security` | 61 | 16 | 29 | 16 | 26.2% |
-| `network_security` | 68 | 15 | 46 | 7 | 22.1% |
+| `network_security` | 68 | 18 | 43 | 7 | 26.5% |
 | `dns_health` | 10 | 7 | 3 | 0 | 70.0% |
 | `patching_cadence` | 21 | 0 | 8 | 13 | 0.0% |
-| **V1 total** | **160** | **38** | **86** | **36** | **23.8%** |
+| **V1 total** | **160** | **41** | **83** | **36** | **25.6%** |
 
-For reconciliation, Version 2 contains 42 issues: 0 `SUPPORTED`, 3 `PARTIAL`, and 39 `NOT_SUPPORTED`. The full-baseline totals are now 38 `SUPPORTED`, 89 `PARTIAL`, and 75 `NOT_SUPPORTED` across 202 issues.
+For reconciliation, Version 2 contains 42 issues: 1 `SUPPORTED`, 2 `PARTIAL`, and 39 `NOT_SUPPORTED`. The full-baseline totals are now 42 `SUPPORTED`, 85 `PARTIAL`, and 75 `NOT_SUPPORTED` across 202 issues.
 
-The active V1 mappings are distributed as 16 Application Security, 7 DNS Health, 15 Network Security, and 0 Patching Cadence. Therefore current support coverage and current score completeness are separate facts; 38 active mappings do not make the four V1 factors fully assessed.
+The active V1 mappings are distributed as 16 Application Security, 7 DNS Health, 18 Network Security, and 0 Patching Cadence. Therefore current support coverage and current score completeness are separate facts; 41 active V1 mappings do not make the four V1 factors fully assessed. The additional active `mail_server_unusual_port` mapping belongs to out-of-scope `ip_reputation` and is why full-baseline support is 42.
 
 Wave 3A promoted `service_vnc`, `service_rsync`, `service_redis`, `service_socks_proxy`, `service_telnet`, and `service_smb`. The common adapter records bounded request/response metadata and transcript hashes. `MATCH` requires the protocol-specific exchange; `NO_MATCH` requires a complete recognized foreign-protocol response; timeouts, resets, arbitrary banners, malformed/truncated frames, unsupported transports, and incomplete exchanges remain `INDETERMINATE`. The other service-identification candidates remain `PARTIAL`; this batch does not claim the full primitive ceiling.
 
@@ -93,17 +93,19 @@ Wave 4A promotes only `ssh_weak_protocol`, `ssh_weak_cipher`, and `ssh_weak_mac`
 
 Wave 4B promotes only `spf_record_malformed`. It strictly selects records beginning with case-insensitive `v=spf1` followed by ASCII space or end-of-record, validates the complete selected policy before evaluation, and uses bounded path-sensitive include/redirect/A/AAAA/MX/exists traversal only to identify deterministic RFC permanent errors. It does not calculate or expose sender authorization. Reachable PTR and sender/IP/HELO-dependent macros, mixed safe/permanent-error paths, DNS uncertainty, and operational exhaustion remain `INDETERMINATE`. Calibration v1.3 assigns LOW/scoring to the deterministic authentication-control failure; the unchanged global LOW penalty derives a 2-point factor deduction for one qualifying OPEN MATCH.
 
+Wave 5A promotes `service_ftp`, `service_imap`, `service_pop3`, and `mail_server_unusual_port`. Each explicitly declared endpoint receives one bounded plaintext TCP connection with a server greeting, one fixed non-authenticating command, and one completion read under a shared deadline and byte/line budgets. FTP requires NOOP/200, IMAP requires untagged CAPABILITY plus matching A001 OK, POP3 requires a dot-terminated CAPA result, and SMTP requires EHLO/250 before applying `smtp-standard-ports.v1` `{25,465,587}`. Greeting-only, malformed, truncated, timed-out, reset, TLS-only, or budget-exhausted evidence remains `INDETERMINATE`; verified SMTP on a standard policy port is the only new issue-specific `NO_MATCH`. The four keys are intentionally uncalibrated and fail closed to UNKNOWN/non-scoring.
+
 ## Recommended next primitives
 
 This ordering favors deterministic support gained per engineering effort using current executors. Counts are V1-only ceilings from the reviewed matrix, not promises that an entire primitive becomes supported in one change.
 
 | Rank | Primitive | V1 opportunity | Complexity and reliability | Reuse and recommendation |
 |---:|---|---:|---|---|
-| 1 | `SERVICE_PROTOCOL_IDENTIFICATION` | After Wave 3B, 25 original-group V1 issues remain partial; 23 are directly testable and 2 require enrichment | Medium–high; high reliability only with protocol-definitive positive transcripts | Reuse the completed adapter framework for later separately approved batches. Never infer a service from an open port. Wave 3B separately completed declared-path `service_soap`. |
+| 1 | `SERVICE_PROTOCOL_IDENTIFICATION` | After Wave 5A, 22 original-group V1 issues remain partial; 20 are directly testable and 2 require enrichment | Medium–high; high reliability only with protocol-definitive positive exchanges | Reuse the completed adapter framework for later separately approved batches. Never infer a service from an open port. Wave 3B separately completed declared-path `service_soap`; Wave 5A completed the three in-scope text mail/file services. |
 | 2 | `TCP_SERVICE_DISCOVERY` | 1 partial, directly testable issue | Low; high for a bounded positive connect observation | The TCP executor already provides the prerequisite. Add an exact scope manifest and evaluator so a closed/timeout result is not conflated with no exposed port. Best single-issue efficiency. |
 | 3 | `TLS_HANDSHAKE` completion | 2 partial directly testable issues remain | Medium–high; conclusive negatives require complete legacy-cipher offer capability and authenticated OCSP staple bytes | Keep cipher and OCSP rows partial until the runtime can collect their full negative evidence without proxy assumptions. |
 
-Wave 3A moved V1 support from 21 to 27, Wave 3B moved it to 34, Wave 4A moved it to 37, and Wave 4B moves it to 38 of 160. The remaining ranked work is a ceiling, not a commitment or a claim of assessment completeness. `PRODUCT_FINGERPRINT` → `CVE_CORRELATION` → `LONGITUDINAL_PATCHING` is the critical follow-on path for Patching Cadence, but it is lower in immediate engineering efficiency and must not use ambiguous banners or unversioned vulnerability/lifecycle data.
+Wave 3A moved V1 support from 21 to 27, Wave 3B moved it to 34, Wave 4A moved it to 37, Wave 4B moved it to 38, and Wave 5A moves it to 41 of 160. The remaining ranked work is a ceiling, not a commitment or a claim of assessment completeness. `PRODUCT_FINGERPRINT` → `CVE_CORRELATION` → `LONGITUDINAL_PATCHING` is the critical follow-on path for Patching Cadence, but it is lower in immediate engineering efficiency and must not use ambiguous banners or unversioned vulnerability/lifecycle data.
 
 ## Recommended V1 exit criterion
 

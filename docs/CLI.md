@@ -44,7 +44,7 @@ Without enrichment, `pull-ssc` uses only `GET https://api.securityscorecard.io/m
 
 `status` works offline. `INTERNAL_ONLY` means no real SSC baseline has been recorded; all existing runtime features remain available without claiming alignment. `SSC_ALIGNED` requires at least one real imported SSC baseline with provenance. It does not imply scoring calibration. For real licensed UI/manual canonical JSON, use `python -m app.cli.import_golden_baseline --input <capture.json> --attest-real-source --json` on its first import. Never attest synthetic fixtures. Previously unattested snapshots cannot be relabeled on reuse.
 
-`activate-wave1 --yes` idempotently creates or selects the reviewed `HTTP_HEADERS`, `HTTP_REDIRECT`, and `TLS_CERTIFICATE` evaluator versions. `activate-wave2 --yes` does the same for the evidence-complete `TLS_HANDSHAKE` and `EMAIL_SECURITY` definitions. `activate-wave3a --yes` activates only the reviewed six-protocol first batch. `activate-wave3b --yes` activates the seven bounded `HTTP_CONTENT` evaluators. `activate-wave4a --yes` activates only `ssh_weak_protocol`, `ssh_weak_cipher`, and `ssh_weak_mac`. `activate-wave4b --yes` activates only `spf_record_malformed`. Activation succeeds only for exact current issue definitions contained in an attested real `SSC_API` snapshot. Each evaluator version stores a foreign key to that immutable issue version. Approved future SSC definition changes create a new linked rule version; they do not rewrite history. A newly approved `pull-ssc` import performs all six reconciliations automatically.
+`activate-wave1 --yes` idempotently creates or selects the reviewed `HTTP_HEADERS`, `HTTP_REDIRECT`, and `TLS_CERTIFICATE` evaluator versions. `activate-wave2 --yes` does the same for the evidence-complete `TLS_HANDSHAKE` and `EMAIL_SECURITY` definitions. `activate-wave3a --yes` activates only the reviewed six-protocol first batch. `activate-wave3b --yes` activates the seven bounded `HTTP_CONTENT` evaluators. `activate-wave4a --yes` activates only `ssh_weak_protocol`, `ssh_weak_cipher`, and `ssh_weak_mac`. `activate-wave4b --yes` activates only `spf_record_malformed`. `activate-wave5a --yes` activates exactly `service_ftp`, `service_imap`, `service_pop3`, and `mail_server_unusual_port`. Activation succeeds only for exact current issue definitions contained in an attested real `SSC_API` snapshot. Each evaluator version stores a foreign key to that immutable issue version. Approved future SSC definition changes create a new linked rule version; they do not rewrite history. A newly approved `pull-ssc` import performs all seven reconciliations automatically.
 
 Service probes are declared explicitly in scan configuration; neither a port number nor TCP-open state selects or identifies a protocol:
 
@@ -53,14 +53,16 @@ Service probes are declared explicitly in scan configuration; neither a port num
   "executors": ["tcp"],
   "service_probes": [
     {"protocol": "vnc", "port": 5900},
-    {"protocol": "redis", "port": 6379}
+    {"protocol": "redis", "port": 6379},
+    {"protocol": "ftp", "port": 2121},
+    {"protocol": "smtp", "port": 2525}
   ],
   "service_probe_timeout_seconds": 3.0,
   "service_probe_response_limit_bytes": 4096
 }
 ```
 
-Wave 3A protocol names are `vnc`, `rsync`, `redis`, `socks5`, `telnet`, and `smb2`. A target must retain its existing inventory authorization. Probes do not authenticate, enumerate data, relay traffic, or issue state-changing commands.
+Wave 3A protocol names are `vnc`, `rsync`, `redis`, `socks5`, `telnet`, and `smb2`. Wave 5A adds `ftp`, `imap`, `pop3`, and `smtp`. A target must retain its existing inventory authorization. At most six explicitly declared service probes run, each response budget remains 4096 bytes, and Wave 5A additionally caps the one outbound command at 1024 bytes, each line at 512 bytes, all parsed lines at 64, and the exchange at two stages under one total deadline. Probes do not authenticate, enumerate data, relay traffic, or issue state-changing commands. Wave 5A is plaintext-only and never infers TLS from a port: no implicit TLS or STARTTLS is attempted, so encrypted-only endpoints remain `INDETERMINATE`.
 
 SSH negotiation is configured separately on the same TCP executor so it does not overload Wave 3A service-probe evidence:
 
@@ -125,7 +127,7 @@ Save as `scan.json` and pass `--scan-config scan.json`. HTTP, TLS and DNS are en
 
 HTTP preserves every relevant header instance, redacted cookie attributes, CSP meta/header policies, a declared-path coverage manifest, and every normalized redirect hop/stop reason. If `http_paths` is omitted, the normalized configuration declares only `/`; explicit user-supplied paths take precedence. Each declared path is requested twice to distinguish repeatable 5xx responses. Bounded HTML/XML inspection stores hashes and redacted summaries rather than bodies or clear contact values. A content-rule `NO_MATCH` applies only to the declared paths evaluated in that scan; a root-only `NO_MATCH` does not establish absence from every possible application path. SRI may issue at most 20 actual same-origin resource GETs by default, with redirect GETs consuming the same budget; `http_sri_resource_limit` may lower that bound to zero. An SRI redirect that changes origin is stopped before the redirected GET, and budget exhaustion is indeterminate. SRI fetching is never recursive. HTTP otherwise fetches only declared paths and is not a crawler or discovery mechanism. TLS preserves certificate evidence plus offered/negotiated TLS versions, actual accepted ciphers, alerts and policy/catalog versions. `trusted_self_signed_fingerprints` is an optional reviewed SHA-256 allowlist; it does not modify system trust. DNS preserves TXT response status, records, SPF/DMARC analysis and nonce wildcard queries. `email_subdomains` may contain at most 20 explicitly declared names strictly below the inventory domain; no subdomain discovery or organizational-domain inference is performed. An explicit `dns_server_host`/`dns_server_port` overrides the system resolver; sensitive resolver addresses require the target's sensitive-network permission.
 
-Wave 1, Wave 2, Wave 3A, Wave 3B, Wave 4A, and Wave 4B findings use tri-state evaluators: positive evidence creates a finding, a deterministic non-match creates none, and insufficient evidence is skipped as indeterminate. Reports show SSC issue key and SSC source severity separately from internal risk and scoring. Internal calibration v1.3 resolves `spf_record_malformed` to `LOW` with `affects_score=true`; the unchanged global LOW penalty derives a 2-point factor deduction for one qualifying OPEN MATCH.
+Wave 1, Wave 2, Wave 3A, Wave 3B, Wave 4A, Wave 4B, and Wave 5A findings use tri-state evaluators: positive evidence creates a finding, a deterministic non-match creates none, and insufficient evidence is skipped as indeterminate. Reports show SSC issue key and SSC source severity separately from internal risk and scoring. Internal calibration v1.3 resolves `spf_record_malformed` to `LOW` with `affects_score=true`; the unchanged global LOW penalty derives a 2-point factor deduction for one qualifying OPEN MATCH. The four new Wave 5A keys are deliberately absent from calibration and therefore fail closed to `UNKNOWN` with `affects_score=false`.
 
 ## Outputs and exits
 

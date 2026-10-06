@@ -84,6 +84,11 @@ def build_parser():
         help="Activate the reviewed Wave 4B SPF permanent-error evaluator against the attested SSC API baseline",
     )
     activate4b.add_argument("--yes", action="store_true", help="Confirm activation of the reviewed evaluator definition")
+    activate5a = baseline_commands.add_parser(
+        "activate-wave5a",
+        help="Activate reviewed Wave 5A staged text-service evaluators against the attested SSC API baseline",
+    )
+    activate5a.add_argument("--yes", action="store_true", help="Confirm activation of the reviewed evaluator definitions")
     return parser
 
 

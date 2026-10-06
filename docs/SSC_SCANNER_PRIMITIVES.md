@@ -1,17 +1,17 @@
 # SSC Scanner Primitive Review
 
 Baseline content hash: `0fe2bc8ffb7e3f734d4e88f70b11cffa6e8e9e47e722dc62107f6ff09694eca8`  
-Review date: 2026-10-05
+Review date: 2026-10-06
 Scope: the 156 issues classified `DIRECTLY_TESTABLE` or `TESTABLE_WITH_ENRICHMENT` after the quality gate.
 
 This is a design and implementation-status catalog. A primitive supports a finding only when it records the exact observation, preserves scope and provenance, distinguishes negative results from errors/unknowns, and has a versioned evaluator linked to the SSC-aligned issue. It does not reproduce SSC collection methods or scoring.
 
 ## Current implementation boundary
 
-The platform has HTTP, TLS, DNS, and TCP collectors. Wave 1 added declared-path HTTP and certificate evidence. Wave 2 added version-pinned TLS negotiation and deterministic email-security evidence. Wave 3A added one bounded service-probe adapter framework and six non-authenticating protocol adapters. Wave 3B added bounded declared-path HTML/XML inspection, redacted URL observations, two-attempt 5xx evidence, and an actual-GET budget of up to 20 same-origin nonrecursive SRI resource requests including redirects. Wave 4A adds bounded pre-authentication SSH identification and SSH2 KEXINIT parsing on explicitly declared TCP ports. Wave 4B adds a bounded, path-sensitive SPF permanent-error analyzer; it is not a sender-authorization engine and does not invent SMTP client context. It still does not have a general or recursive crawler, browser runtime, WebSocket capture, later service-protocol adapters, complete legacy-TLS-cipher client coverage, stapled-OCSP capture, DKIM selector provenance, revocation client, product fingerprint engine, CVE/lifecycle feeds, or longitudinal patching model. Therefore:
+The platform has HTTP, TLS, DNS, and TCP collectors. Wave 1 added declared-path HTTP and certificate evidence. Wave 2 added version-pinned TLS negotiation and deterministic email-security evidence. Wave 3A added one bounded service-probe adapter framework and six non-authenticating protocol adapters. Wave 3B added bounded declared-path HTML/XML inspection, redacted URL observations, two-attempt 5xx evidence, and an actual-GET budget of up to 20 same-origin nonrecursive SRI resource requests including redirects. Wave 4A adds bounded pre-authentication SSH identification and SSH2 KEXINIT parsing on explicitly declared TCP ports. Wave 4B adds a bounded, path-sensitive SPF permanent-error analyzer; it is not a sender-authorization engine and does not invent SMTP client context. Wave 5A adds one bounded two-stage plaintext TCP path for FTP, IMAP, POP3, and SMTP unusual-port evaluation without authentication or transcript persistence. It still does not have a general or recursive crawler, browser runtime, WebSocket capture, later service-protocol adapters, encrypted service-probe variants, complete legacy-TLS-cipher client coverage, stapled-OCSP capture, DKIM selector provenance, revocation client, product fingerprint engine, CVE/lifecycle feeds, or longitudinal patching model. Therefore:
 
-- fully `SUPPORTED` today: **38**;
-- `PARTIAL` among the 156 primitive-addressable issues: **89**;
+- fully `SUPPORTED` today: **42**;
+- `PARTIAL` among the 156 primitive-addressable issues: **85**;
 - `NOT_SUPPORTED` among the 156: **29**;
 - every supported issue has an active evaluator pinned to an exact attested `SSC_API` issue version; other primitives still require issue-specific evidence and evaluators.
 
@@ -34,13 +34,13 @@ The platform has HTTP, TLS, DNS, and TCP collectors. Wave 1 added declared-path 
 | `LONGITUDINAL_PATCHING` | 11 | 0/11 | 0 | 0 | 11 | HIGH | stable asset/product identity, CVE state history, observation windows, missing-data semantics |
 | `PRODUCT_FINGERPRINT` | 16 | 0/16 | 0 | 15 | 1 | HIGH | versioned multi-signal fingerprints, provenance, ambiguity/confidence model, inventory corroboration |
 | `PROXY_VALIDATION` | 2 | 2/0 | 1 | 1 | 0 | MEDIUM | SOCKS5 identification is supported without relaying traffic; HTTP proxy validation still needs an organization-owned canary and strict egress target |
-| `SERVICE_PROTOCOL_IDENTIFICATION` | 32 | 30/2 | 6 | 26 | 0 | MEDIUM–HIGH | common bounded adapter is active for five original-group issues and declared-path SOAP/WSDL evidence supports `service_soap`; later adapters, UDP where needed, and per-protocol strict boundaries remain |
+| `SERVICE_PROTOCOL_IDENTIFICATION` | 32 | 30/2 | 10 | 22 | 0 | MEDIUM–HIGH | bounded adapters are active for five original-group Wave 3A issues plus four Wave 5A staged text services, and declared-path SOAP/WSDL evidence supports `service_soap`; later adapters, UDP where needed, and per-protocol strict boundaries remain |
 | `SSH_NEGOTIATION` | 3 | 3/0 | 3 | 0 | 0 | MEDIUM | bounded identification/KEXINIT parser, exact versioned cryptographic policy, no authentication |
 | `TCP_SERVICE_DISCOVERY` | 1 | 1/0 | 0 | 1 | 0 | LOW | approved port manifest and TCP connect evidence |
 | `TLS_CERTIFICATE` | 9 | 5/4 | 5 | 4 | 0 | MEDIUM–HIGH | CA policy history, authoritative revocation, jurisdiction, and CA registry enrichment |
 | `TLS_HANDSHAKE` | 3 | 3/0 | 1 | 1 | 1 | MEDIUM | complete prohibited-suite client coverage and OCSP-staple capture/validation |
 | `WEBSOCKET_RUNTIME` | 3 | 2/1 | 0 | 0 | 3 | HIGH | browser runtime, bounded frame metadata, synthetic markers, application data schema |
-| **Total** | **156** | **75/81** | **38** | **89** | **29** |  |  |
+| **Total** | **156** | **75/81** | **42** | **85** | **29** |  |  |
 
 ## Issue grouping
 
@@ -116,7 +116,7 @@ The three enrichment rows are the two session-cookie findings and `x_xss_protect
 
 Thirty issues have a deterministic protocol-level positive observation. `service_open_vpn` and `service_oracle_registry` require product-fingerprint/inventory enrichment: OpenVPN may remain silent to unauthenticated probes, and no unique public Oracle Service Registry wire handshake was identified. TCP-open alone never establishes any service-specific issue.
 
-Wave 3A supports `service_vnc`, `service_rsync`, `service_redis`, `service_telnet`, and `service_smb` from this group. Wave 3B supports `service_soap` only on explicitly declared authorized HTTP paths with complete bounded XML evidence. The shared Wave 3A adapter also supports `service_socks_proxy` from `PROXY_VALIDATION`. Every other issue in this group remains partial until its own acquisition, parser, conclusive-negative, ambiguity, failure, and exact-version linkage gates pass.
+Wave 3A supports `service_vnc`, `service_rsync`, `service_redis`, `service_telnet`, and `service_smb` from this group. Wave 3B supports `service_soap` only on explicitly declared authorized HTTP paths with complete bounded XML evidence. Wave 5A supports `service_ftp`, `service_imap`, `service_pop3`, and `mail_server_unusual_port` through a server greeting, one fixed non-authenticating command, and one completion read on the same declared TCP connection. FTP uses NOOP/200, IMAP uses tagged CAPABILITY/A001 OK, POP3 requires dot-terminated CAPA, and SMTP requires EHLO/250 before applying `smtp-standard-ports.v1` `{25,465,587}`. It is plaintext-only: implicit TLS and STARTTLS are not attempted, and TLS-only endpoints remain indeterminate. The shared Wave 3A adapter also supports `service_socks_proxy` from `PROXY_VALIDATION`. Every other issue in this group remains partial until its own acquisition, parser, conclusive-negative, ambiguity, failure, and exact-version linkage gates pass.
 
 ### `SSH_NEGOTIATION` (3)
 
@@ -156,10 +156,10 @@ The recommended order values defensibility and security usefulness over raw row 
 2. **`EMAIL_SECURITY` — Wave 2 complete for six direct rows.** Exact DNS response states, SPF/DMARC policy observations, nonce wildcard checks and declared-subdomain inheritance are active. Complete SPF permanent-error evaluation and DKIM selector/message provenance remain partial.
 3. **`TLS_CERTIFICATE` — Wave 1 complete for five direct rows.** Served-chain/extensions and the five direct evaluators are active; CA/B policy, OCSP/CRL, jurisdiction, and CA registry feeds remain separate.
 4. **`HTTP_REDIRECT` — Wave 1 complete for three direct rows.** Every normalized hop and stop reason is retained. External redirect targets remain indeterminate unless separately authorized or passively evidenced.
-5. **`SERVICE_PROTOCOL_IDENTIFICATION` — Wave 3A first batch complete.** The common safe adapter framework and six protocol-specific mappings are active. Later protocol-definitive adapters must ship only in separately approved small batches and earn support independently.
+5. **`SERVICE_PROTOCOL_IDENTIFICATION` — Wave 3A and Wave 5A batches complete.** The common safe adapter framework has six original adapters plus four staged plaintext text-service mappings. Later protocol-definitive adapters must ship only in separately approved small batches and earn support independently.
 6. **`HTTP_CONTENT` — Wave 3B direct batch complete.** Six content issues plus declared-path SOAP/WSDL identification now have exact active evaluators. Missing, blocked, truncated, unsupported, malformed, out-of-scope, or budget-incomplete evidence remains indeterminate.
 
-Wave 2 also completes `tls_weak_protocol` under `TLS_HANDSHAKE`; cipher and OCSP-stapling boundaries remain partial. Wave 3A does not claim the full `SERVICE_PROTOCOL_IDENTIFICATION` ceiling. Any next batch requires separate approval.
+Wave 2 also completes `tls_weak_protocol` under `TLS_HANDSHAKE`; cipher and OCSP-stapling boundaries remain partial. Waves 3A and 5A do not claim the full `SERVICE_PROTOCOL_IDENTIFICATION` ceiling. Any next batch requires separate approval.
 
 ## Safety and confidence rules
 

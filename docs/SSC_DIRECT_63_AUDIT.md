@@ -1,6 +1,6 @@
 # SSC DIRECT 63 Audit
 
-Audit date: 2026-10-01; implementation status updated 2026-10-05. Baseline: immutable `SSC_API` Golden Baseline content hash `0fe2bc8ffb7e3f734d4e88f70b11cffa6e8e9e47e722dc62107f6ff09694eca8` as captured in the repository. The 63 dashboard labels form a separate input set and do not replace or reduce the 202 issue baseline.
+Audit date: 2026-10-01; implementation status updated 2026-10-06. Baseline: immutable `SSC_API` Golden Baseline content hash `0fe2bc8ffb7e3f734d4e88f70b11cffa6e8e9e47e722dc62107f6ff09694eca8` as captured in the repository. The 63 dashboard labels form a separate input set and do not replace or reduce the 202 issue baseline.
 
 The [row-level CSV](SSC_DIRECT_63_AUDIT.csv) is the audit ledger. Each row includes the exact catalog key, factor, captured SSC severity, mapping status, current capability and implementation, proposed primitive, required evidence, deterministic MATCH/NO_MATCH/INDETERMINATE boundaries, classification, and rationale. `EXACT` means the dashboard label matches the captured catalog title character for character; no key was inferred from the label. `mapping_candidates` is reserved for ambiguous rows and is empty here.
 
@@ -24,22 +24,22 @@ The [row-level CSV](SSC_DIRECT_63_AUDIT.csv) is the audit ledger. Each row inclu
 | `NAME_VARIANT` mappings | 0 |
 | `AMBIGUOUS` mappings | 0 |
 | `NOT_FOUND` mappings | 0 |
-| Current `SUPPORTED` | 34 |
-| Current `PARTIAL` | 28 |
+| Current `SUPPORTED` | 38 |
+| Current `PARTIAL` | 24 |
 | Current `NOT_SUPPORTED` | 1 |
-| Direct backlog: verified and not supported | 19 |
+| Direct backlog: verified and not supported | 15 |
 
-The 63 include **34 of the platform’s 38 supported capabilities**. The other four supported issues are `spf_record_softfail`, `dmarc_record_missing`, `dmarc_contains_none`, and `subdomain_dmarc_contains_none`; they are in the 202 issue catalog but outside this dashboard list. All 34 supported rows here remain `VERIFIED_DIRECT`. Wave 4B moves the direct implementation count from **33/53 to 34/53** by supporting only `spf_record_malformed`.
+The 63 include **38 of the platform’s 42 supported capabilities**. The other four supported issues are `spf_record_softfail`, `dmarc_record_missing`, `dmarc_contains_none`, and `subdomain_dmarc_contains_none`; they are in the 202 issue catalog but outside this dashboard list. All 38 supported rows here remain `VERIFIED_DIRECT`. Wave 5A moves the direct implementation count from **34/53 to 38/53** by supporting exactly `service_ftp`, `service_imap`, `service_pop3`, and `mail_server_unusual_port`.
 
 ## By SSC factor
 
 | Factor | Reviewed | Verified direct | Move to enrichment | Unresolved | Supported | Partial | Not supported |
 |---|---:|---:|---:|---:|---:|---:|---:|
 | `application_security` | 22 | 16 | 6 | 0 | 16 | 5 | 1 |
-| `network_security` | 37 | 33 | 4 | 0 | 15 | 22 | 0 |
+| `network_security` | 37 | 33 | 4 | 0 | 18 | 19 | 0 |
 | `dns_health` | 3 | 3 | 0 | 0 | 3 | 0 | 0 |
-| `ip_reputation` | 1 | 1 | 0 | 0 | 0 | 1 | 0 |
-| **Total** | **63** | **53** | **10** | **0** | **34** | **28** | **1** |
+| `ip_reputation` | 1 | 1 | 0 | 0 | 1 | 0 | 0 |
+| **Total** | **63** | **53** | **10** | **0** | **38** | **24** | **1** |
 
 ## By proposed scanner primitive
 
@@ -47,7 +47,7 @@ The primary implementation backlog groups direct rows by reusable primitive. Com
 
 | Primitive | Reviewed | Verified direct | Move to enrichment | Supported | Direct backlog |
 |---|---:|---:|---:|---:|---:|
-| `SERVICE_PROTOCOL` | 24 | 24 | 0 | 6 | 18 |
+| `SERVICE_PROTOCOL` | 24 | 24 | 0 | 10 | 14 |
 | `HTTP_CONTENT` | 7 | 7 | 0 | 7 | 0 |
 | `HTTP_HEADERS` | 6 | 6 | 0 | 6 | 0 |
 | `TLS_CERTIFICATE` | 5 | 5 | 0 | 5 | 0 |
@@ -64,18 +64,18 @@ The primary implementation backlog groups direct rows by reusable primitive. Com
 | `PROXY_VALIDATION` | 1 | 0 | 1 | 0 | 0 |
 | `SERVICE_PROTOCOL+PRODUCT_FINGERPRINT` | 1 | 0 | 1 | 0 | 0 |
 | `TLS_CERTIFICATE+POLICY` | 1 | 0 | 1 | 0 | 0 |
-| **Total** | **63** | **53** | **10** | **34** | **19** |
+| **Total** | **63** | **53** | **10** | **38** | **15** |
 
 ## Prioritized direct implementation backlog
 
-Only the 19 `VERIFIED_DIRECT` rows still lacking `SUPPORTED` status appear below. Priority favors shared collectors and parsers that unlock several exact catalog issues. Each later implementation batch still needs exact-version rule linkage, positive and negative tests, and false-positive/unknown-boundary tests before its coverage can become `SUPPORTED`. The order is a planning recommendation, not implementation authorization.
+Only the 15 `VERIFIED_DIRECT` rows still lacking `SUPPORTED` status appear below. Priority favors shared collectors and parsers that unlock several exact catalog issues. Each later implementation batch still needs exact-version rule linkage, positive and negative tests, and false-positive/unknown-boundary tests before its coverage can become `SUPPORTED`. The order is a planning recommendation, not implementation authorization.
 
 | Priority | Primitive | Count | Exact SSC keys and batch scope |
 |---:|---|---:|---|
-| 1 | `SERVICE_PROTOCOL` | 18 | Extend the Wave 3A bounded adapter framework in small protocol-specific groups; begin with greeting/negotiation protocols, then framed database protocols, then bounded UDP/HTTP service signatures. Preserve foreign-protocol-only negatives.<br>`service_cassandra`, `service_couchdb`, `service_dns`, `service_elasticsearch`, `service_ftp`, `service_imap`, `service_ldap`, `service_microsoft_sql`, `minecraft_server`, `service_mongodb`, `service_mysql`, `service_oracle_db`, `service_pop3`, `service_pptp`, `service_postgresql`, `service_rdp`, `upnp_accessible`, `mail_server_unusual_port` |
+| 1 | `SERVICE_PROTOCOL` | 14 | Extend the bounded adapter framework only in separately reviewed protocol-specific groups. Wave 5A completed the four staged text services; the remaining work spans framed databases, special TCP negotiation, HTTP product identity, and bounded UDP/multistage cases.<br>`service_cassandra`, `service_couchdb`, `service_dns`, `service_elasticsearch`, `service_ldap`, `service_microsoft_sql`, `minecraft_server`, `service_mongodb`, `service_mysql`, `service_oracle_db`, `service_pptp`, `service_postgresql`, `service_rdp`, `upnp_accessible` |
 | 2 | `TLS_NEGOTIATION` | 1 | Use a client capable of offering every prohibited suite in the pinned policy and retain successful modern controls before making a negative claim.<br>`tls_weak_cipher` |
 
-Wave 4A completed the three SSH rows through one bounded pre-authentication identification/KEXINIT exchange and exact versioned crypto policy. Algorithm advertisement is protocol evidence of support, not proof of successful exploitation or downgrade; SSH-1.99 remains fail-closed unless SSH1 compatibility is safely proven. The `SERVICE_PROTOCOL` group has 18 remaining rows, but the shared framework alone cannot make them supported: every service needs its own protocol-valid acquisition, parser, versioned evaluator, and conclusive-negative boundary. The remaining DNS and TLS batches each close one specific evidence gap.
+Wave 4A completed the three SSH rows through one bounded pre-authentication identification/KEXINIT exchange and exact versioned crypto policy. Wave 5A completes FTP, IMAP, POP3, and unusual-port SMTP through one bounded two-stage plaintext connection per explicitly declared endpoint. Algorithm or protocol evidence does not prove exploitation, authentication weakness, or product version. The `SERVICE_PROTOCOL` group has 14 remaining rows; every service still needs its own protocol-valid acquisition, parser, versioned evaluator, and conclusive-negative boundary. The remaining TLS batch closes one specific evidence gap.
 
 ## Candidates that do not survive DIRECT review
 

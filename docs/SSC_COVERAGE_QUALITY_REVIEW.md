@@ -59,6 +59,21 @@ Record selection requires case-insensitive `v=spf1` followed by ASCII space or e
 
 RFC permanent-error limits are 10 reached DNS-causing terms, 2 void lookups under `ssc-wave4b-spf-malformed-policy.v1`, and 10 MX exchange hosts per applicable path. Separate operational limits are 256 logical DNS queries, 20 seconds total, 16 KiB per DNS response representation, 8 KiB per selected SPF record, 64 abstract states, 512 evaluator steps, and 256 compact trace entries. Operational limits never become `MATCH`. Internal calibration v1.3 assigns the deterministic SPF control failure LOW/scoring; the unchanged global LOW penalty derives 2 factor points for one qualifying OPEN MATCH.
 
+## Wave 5A implementation update (2026-10-06)
+
+Wave 5A implements exactly `service_ftp`, `service_imap`, `service_pop3`, and `mail_server_unusual_port`. The service-probe framework advances from `service-probe-adapter.v1` to `.v2` by adding one reusable two-stage plaintext TCP path: read greeting, optionally write one fixed command, read completion, stop. The six Wave 3A adapters retain their parser and acquisition semantics.
+
+| Coverage | Before Wave 5A | After Wave 5A |
+|---|---:|---:|
+| `SUPPORTED` | 38 | 42 |
+| `PARTIAL` | 89 | 85 |
+| `NOT_SUPPORTED` | 75 | 75 |
+| **Total** | **202** | **202** |
+
+The staged engine retains the 4096-byte total response cap and six declared-probe cap, adds a 1024-byte outbound cap, 512-byte line cap, 64-line cap, and two-stage cap, and uses one monotonic deadline for connect, reads, and writes. FTP requires a complete 220 greeting and NOOP/200 response; IMAP requires a legal greeting, untagged CAPABILITY, and matching A001 OK; POP3 requires +OK and an exact dot-terminated CAPA response; SMTP requires legal 220 and complete EHLO/250 evidence before the unusual-port predicate is evaluated. `smtp-standard-ports.v1` pins `{25,465,587}`. Verified SMTP on those ports is `NO_MATCH`; port membership without verified SMTP is never evidence.
+
+Wave 5A does not authenticate, access mailboxes or messages, submit mail, enumerate files, issue STARTTLS, or negotiate implicit TLS. TLS-only endpoints remain `INDETERMINATE`. Evidence retains only stage hashes, classes, bounded normalized counts/hashes, budgets, versions, and stop/error state—not greetings, host banners, capability text, credentials, or raw transcripts. All four keys remain absent from internal-risk calibration and therefore initially resolve to UNKNOWN/non-scoring.
+
 ## Pre-Wave 1 outcome
 
 The original 87 `DIRECTLY_TESTABLE` rows were re-reviewed against the imported issue descriptions, current executor evidence, authorization boundaries, and public standards. Twelve were over-optimistic and have been downgraded to `TESTABLE_WITH_ENRICHMENT`. No issue was upgraded.
