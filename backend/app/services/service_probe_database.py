@@ -30,6 +30,7 @@ class ProbeRequestContext:
     connect_host: str
     port: int
     attempt_nonce: bytes
+    declared_hostname: str | None = None
 
 
 @dataclass(frozen=True)

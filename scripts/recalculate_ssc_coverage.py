@@ -38,15 +38,24 @@ def main() -> int:
         WAVE5B_PARTIAL_REASONS,
         WAVE5B_PENDING_RULES,
     )
+    from app.services.wave5c_rules import (
+        WAVE5C_ACTIVE_BY_KEY,
+        WAVE5C_ACTIVE_RULES,
+        WAVE5C_CLOSURE_BLOCKERS,
+        WAVE5C_PARTIAL_REASONS,
+        WAVE5C_PENDING_RULES,
+    )
 
     all_by_key = {
         **WAVE1_BY_KEY, **WAVE2_BY_KEY, **WAVE3A_BY_KEY,
-        **WAVE3B_BY_KEY, **WAVE4A_BY_KEY, **WAVE4B_BY_KEY, **WAVE5A_BY_KEY, **WAVE5B_ACTIVE_BY_KEY,
+        **WAVE3B_BY_KEY, **WAVE4A_BY_KEY, **WAVE4B_BY_KEY, **WAVE5A_BY_KEY,
+        **WAVE5B_ACTIVE_BY_KEY, **WAVE5C_ACTIVE_BY_KEY,
     }
     all_partial_reasons = {
         **WAVE1_PARTIAL_REASONS,
         **WAVE2_PARTIAL_REASONS,
         **WAVE5B_PARTIAL_REASONS,
+        **WAVE5C_PARTIAL_REASONS,
     }
 
     mappings = []
@@ -60,6 +69,7 @@ def main() -> int:
         from app.services.wave4b_rules import active_wave4b_mappings
         from app.services.wave5a_rules import active_wave5a_mappings
         from app.services.wave5b_rules import active_wave5b_mappings
+        from app.services.wave5c_rules import active_wave5c_mappings
         with SessionLocal() as db:
             mappings = (
                 active_wave1_mappings(db) + active_wave2_mappings(db)
@@ -67,13 +77,14 @@ def main() -> int:
                 + active_wave4a_mappings(db) + active_wave4b_mappings(db)
                 + active_wave5a_mappings(db)
                 + active_wave5b_mappings(db)
+                + active_wave5c_mappings(db)
             )
         active_keys = {item["issue_key"] for item in mappings}
         expected = set(all_by_key)
         if active_keys != expected:
             missing = sorted(expected - active_keys)
             extra = sorted(active_keys - expected)
-            raise SystemExit(f"active Wave 1/2/3A/3B/4A/4B/5A/5B.1 mappings differ: missing={missing} extra={extra}")
+            raise SystemExit(f"active Wave 1/2/3A/3B/4A/4B/5A/5B.1/5C mappings differ: missing={missing} extra={extra}")
     else:
         active_keys = set(all_by_key)
 
@@ -139,6 +150,9 @@ def main() -> int:
                 WAVE5A_RULES,
                 WAVE5B_ACTIVE_RULES,
                 WAVE5B_PENDING_RULES,
+                WAVE5C_ACTIVE_RULES,
+                WAVE5C_PENDING_RULES,
+                WAVE5C_CLOSURE_BLOCKERS,
             ),
             encoding="utf-8",
         )
@@ -159,7 +173,7 @@ def main() -> int:
     return 0
 
 
-def render_markdown(rows, feasibility, coverage, wave1_rules, wave1_partial, wave2_rules, wave2_partial, wave3a_rules, wave3b_rules, wave4a_rules, wave4b_rules, wave5a_rules, wave5b_active_rules, wave5b_pending_rules) -> str:
+def render_markdown(rows, feasibility, coverage, wave1_rules, wave1_partial, wave2_rules, wave2_partial, wave3a_rules, wave3b_rules, wave4a_rules, wave4b_rules, wave5a_rules, wave5b_active_rules, wave5b_pending_rules, wave5c_active_rules, wave5c_pending_rules, wave5c_blockers) -> str:
     factors = defaultdict(Counter)
     for row in rows:
         factor = factors[row["factor"]]
@@ -172,7 +186,7 @@ def render_markdown(rows, feasibility, coverage, wave1_rules, wave1_partial, wav
         "",
         f"Snapshot content hash: `{BASELINE_HASH}`",
         "Source: immutable real `SSC_API` Golden Baseline",
-        "Implementation state: Waves 1-2, Wave 3A first-batch `SERVICE_PROTOCOL_IDENTIFICATION`, Wave 3B `HTTP_CONTENT`, Wave 4A `SSH_NEGOTIATION`, Wave 4B bounded SPF permanent-error analysis, Wave 5A staged plaintext FTP/IMAP/POP3/SMTP identification, and Wave 5B.1 closed LDAP identification; Oracle Net is implemented pending real interoperability and remains inactive/PARTIAL",
+        "Implementation state: Waves 1-2, Wave 3A, Wave 3B, Wave 4A, Wave 4B, Wave 5A, and Wave 5B.1 closed LDAP identification are active. Wave 5C Minecraft/PPTP/RDP protocol primitives are implemented but inactive/PARTIAL because authoritative public-target plus external-vantage context is absent; PPTP additionally lacks real interoperability. Oracle Net remains separately implemented pending real interoperability.",
         "Total mapped issues: **202**",
         "",
         "> This is an independent implementation mapped to SSC taxonomy. It does not reproduce or claim knowledge of SSC collection, aggregation, severity, scoring, or proprietary detection logic. `ssc_severity` remains source metadata and is not mapped to internal risk or score impact.",
@@ -183,7 +197,7 @@ def render_markdown(rows, feasibility, coverage, wave1_rules, wave1_partial, wav
         "",
         "## Coverage summary",
         "",
-        "| Coverage | Before Wave 5B.1 | After Wave 5B.1 | Percentage after |",
+        "| Coverage | Before Wave 5B.1 | After Wave 5C implementation | Percentage after |",
         "|---|---:|---:|---:|",
         f"| `SUPPORTED` | 42 | {coverage['SUPPORTED']} | {coverage['SUPPORTED']/202:.1%} |",
         f"| `PARTIAL` | 85 | {coverage['PARTIAL']} | {coverage['PARTIAL']/202:.1%} |",
@@ -356,6 +370,21 @@ def render_markdown(rows, feasibility, coverage, wave1_rules, wave1_partial, wav
         lines.append(
             f"| `{spec.issue_key}` | `{spec.protocol}` | `IMPLEMENTED_PENDING_INTEROP` / `PARTIAL` | "
             "Real protocol interoperability has not been validated. |"
+        )
+
+    lines += [
+        "",
+        "## Wave 5C implemented pending closure context",
+        "",
+        "All three protocol adapters are implemented under `service-probe-adapter.v3`, but no Wave 5C SSC rule is active. Protocol identity does not prove the Golden Baseline's public/Internet exposure semantics, and the repository has no authoritative contract combining public-routable target state with approved external scan vantage. Minecraft and RDP have real loopback interoperability; PPTP remains pending real interoperability as an independent blocker.",
+        "",
+        "| SSC issue key | Protocol | Current state | Closure blockers |",
+        "|---|---|---|---|",
+    ]
+    for spec in wave5c_pending_rules:
+        blockers = ", ".join(f"`{value}`" for value in wave5c_blockers[spec.issue_key])
+        lines.append(
+            f"| `{spec.issue_key}` | `{spec.protocol}` | `PARTIAL` / inactive | {blockers} |"
         )
 
     lines += [

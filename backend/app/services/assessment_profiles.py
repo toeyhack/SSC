@@ -23,6 +23,7 @@ from app.services.wave4a_rules import WAVE4A_BY_KEY
 from app.services.wave4b_rules import WAVE4B_BY_KEY
 from app.services.wave5a_rules import WAVE5A_BY_KEY
 from app.services.wave5b_rules import WAVE5B_ACTIVE_BY_KEY
+from app.services.wave5c_rules import WAVE5C_ACTIVE_BY_KEY
 
 
 V1_BASELINE_CONTENT_HASH = "0fe2bc8ffb7e3f734d4e88f70b11cffa6e8e9e47e722dc62107f6ff09694eca8"
@@ -119,7 +120,7 @@ def load_v1_assessment_profile(db: Session) -> ResolvedAssessmentProfile | None:
     supported_keys = (
         set(WAVE1_BY_KEY) | set(WAVE2_BY_KEY) | set(WAVE3A_BY_KEY)
         | set(WAVE3B_BY_KEY) | set(WAVE4A_BY_KEY) | set(WAVE4B_BY_KEY) | set(WAVE5A_BY_KEY)
-        | set(WAVE5B_ACTIVE_BY_KEY)
+        | set(WAVE5B_ACTIVE_BY_KEY) | set(WAVE5C_ACTIVE_BY_KEY)
     )
     issues = tuple(
         ProfileIssue(

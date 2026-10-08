@@ -82,6 +82,12 @@ Only these attempts use `service-probe-adapter.v3`; historical Wave 3A and Wave 
 
 Real loopback OpenLDAP interoperability and the full backend suite are validated, so `service_ldap` is the only approved active Wave 5B.1 evaluator and is CLOSED/SUPPORTED. `service_oracle_db` remains `IMPLEMENTED_PENDING_INTEROP`: its parser, builder, scanner wiring, and deterministic fixtures remain available, but no active evaluator is approved until real Oracle interoperability succeeds. Closed coverage is 39/53 VERIFIED_DIRECT, 42/160 V1, and 43/202 full baseline. The implementation ceiling remains 40/53, 43/160, and 44/202.
 
+## Wave 5C implementation-only update (2026-10-08)
+
+Wave 5C implements bounded identification for `minecraft_server`, `service_pptp`, and `service_rdp` on `service-probe-adapter.v3`. Minecraft uses one declared-hostname Java status exchange; PPTP uses one SCCRQ/SCCRP control exchange; RDP requires an X.224 Connection Confirm with an eight-byte RDP negotiation response or failure. No adapter authenticates, establishes a session, follows into TLS, or defines deterministic `NO_MATCH`, and evidence excludes raw responses and optional server content.
+
+The exact baseline issues describe publicly exposed or Internet-accessible services. The repository has no authoritative evidence contract combining public-routable target status with an approved external/public scan vantage, so protocol `MATCH` cannot activate these SSC rules. All three are `IMPLEMENTED_PENDING_EXPOSURE_CONTEXT` and inactive. Minecraft and RDP have real loopback interoperability; PPTP also remains `IMPLEMENTED_PENDING_INTEROP` because no safe unprivileged real fixture was available. Closed coverage remains 39/53 VERIFIED_DIRECT, 42/160 V1, and 43/202 full baseline. Including pending Oracle, the implementation ceiling becomes 43/53, 46/160, and 47/202.
+
 ## Pre-Wave 1 outcome
 
 The original 87 `DIRECTLY_TESTABLE` rows were re-reviewed against the imported issue descriptions, current executor evidence, authorization boundaries, and public standards. Twelve were over-optimistic and have been downgraded to `TESTABLE_WITH_ENRICHMENT`. No issue was upgraded.

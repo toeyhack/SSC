@@ -20,6 +20,7 @@ from app.services.service_probe_database import (
     DatabaseProbeAdapter,
     ProbeRequestContext,
 )
+from app.services.service_probe_framed import FRAMED_PROBES, FramedProbeAdapter
 from app.services.service_probe_text import (
     SMTP_STANDARD_PORT_POLICY_VERSION,
     SMTP_STANDARD_PORTS,
@@ -191,7 +192,7 @@ def _smb2_negotiate_request() -> bytes:
     return b"\x00" + len(payload).to_bytes(3, "big") + payload
 
 
-ADAPTERS: dict[str, ServiceProbeAdapter | StagedTextProbeSpec | DatabaseProbeAdapter] = {
+ADAPTERS: dict[str, ServiceProbeAdapter | StagedTextProbeSpec | DatabaseProbeAdapter | FramedProbeAdapter] = {
     "vnc": ServiceProbeAdapter("vnc", "service_vnc", "rfb-version-greeting", "1.0", b"", True, _parse_vnc, _fixed_or_foreign(12), _rfb_followup),
     "rsync": ServiceProbeAdapter("rsync", "service_rsync", "rsync-daemon-greeting", "1.0", b"", True, _parse_rsync, _line_complete, _rsync_followup),
     "redis": ServiceProbeAdapter("redis", "service_redis", "redis-resp-ping", "1.0", b"*1\r\n$4\r\nPING\r\n", False, _parse_redis, _line_complete),
@@ -200,6 +201,7 @@ ADAPTERS: dict[str, ServiceProbeAdapter | StagedTextProbeSpec | DatabaseProbeAda
     "smb2": ServiceProbeAdapter("smb2", "service_smb", "smb2-negotiate", "1.0", _smb2_negotiate_request(), False, _parse_smb2, _smb_complete),
     **STAGED_TEXT_PROBES,
     **DATABASE_PROBES,
+    **FRAMED_PROBES,
 }
 
 
@@ -229,11 +231,9 @@ def evaluate_service_probe_response(
     transport: str = "tcp",
 ) -> dict[str, Any]:
     adapter = ADAPTERS.get(protocol)
-    policy_version = (
-        WAVE5A_SERVICE_POLICY_VERSION
-        if isinstance(adapter, StagedTextProbeSpec)
-        else adapter.policy_version
-        if isinstance(adapter, DatabaseProbeAdapter)
+    policy_version = WAVE5A_SERVICE_POLICY_VERSION if isinstance(adapter, StagedTextProbeSpec) else (
+        adapter.policy_version
+        if isinstance(adapter, (DatabaseProbeAdapter, FramedProbeAdapter))
         else SERVICE_PROBE_POLICY_VERSION
     )
     if adapter is None:
@@ -247,19 +247,20 @@ def evaluate_service_probe_response(
         decision = _indeterminate("probe acquisition did not complete")
     elif isinstance(adapter, StagedTextProbeSpec):
         decision = _indeterminate("staged protocol identification requires both reviewed response phases")
-    elif isinstance(adapter, DatabaseProbeAdapter):
-        database_decision = adapter.parser(response)
+    elif isinstance(adapter, (DatabaseProbeAdapter, FramedProbeAdapter)):
+        framed_decision = adapter.parser(response)
         return {
-            "matched": database_decision.matched,
-            "outcome": database_decision.outcome,
-            "reason": database_decision.reason,
-            "response_class": database_decision.response_class,
+            "matched": framed_decision.matched,
+            "outcome": framed_decision.outcome,
+            "reason": framed_decision.reason,
+            "response_class": framed_decision.response_class,
             "response_magic": None,
             "response_version": None,
             "policy_version": adapter.policy_version,
-            "correlation_result": database_decision.correlation_result,
-            "declared_response_bytes": database_decision.declared_response_bytes,
-            "structural_counts": database_decision.structural_counts or {},
+            "correlation_result": framed_decision.correlation_result,
+            "declared_response_bytes": framed_decision.declared_response_bytes,
+            "declared_frame_length": framed_decision.declared_response_bytes,
+            "structural_counts": framed_decision.structural_counts or {},
         }
     else:
         decision = adapter.parser(response)
@@ -281,10 +282,11 @@ def evaluate_service_probe_response(
         "response_version": decision.version,
         "policy_version": policy_version,
     }
-    if isinstance(adapter, DatabaseProbeAdapter):
+    if isinstance(adapter, (DatabaseProbeAdapter, FramedProbeAdapter)):
         result.update({
             "correlation_result": "not_available",
             "declared_response_bytes": None,
+            "declared_frame_length": None,
             "structural_counts": {},
         })
     return result
@@ -521,6 +523,134 @@ def _run_staged_service_probe(
     }
 
 
+def _run_v3_service_probe(
+    connect_host: str,
+    declared_hostname: str | None,
+    port: int,
+    adapter: DatabaseProbeAdapter | FramedProbeAdapter,
+    *,
+    timeout: float,
+    response_limit: int,
+) -> dict[str, Any]:
+    if not 1 <= response_limit <= MAX_SERVICE_PROBE_RESPONSE_BYTES:
+        raise ValueError("service probe response limit exceeds the reviewed byte ceiling")
+    built = adapter.build(ProbeRequestContext(
+        connect_host=connect_host,
+        port=port,
+        attempt_nonce=secrets.token_bytes(16),
+        declared_hostname=declared_hostname,
+    ))
+    if len(built.payload) > MAX_SERVICE_PROBE_OUTBOUND_BYTES:
+        raise ValueError("service probe request exceeds the outbound byte ceiling")
+
+    started_at = datetime.now(timezone.utc)
+    started = time.monotonic()
+    deadline = started + timeout
+    response = bytearray()
+    sent = 0
+    stop_reason = "not_started"
+    error_class: str | None = None
+    active_phase = "connect"
+    try:
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            raise socket.timeout("service probe deadline exhausted before connect")
+        with socket.create_connection((connect_host, port), timeout=remaining) as connection:
+            if built.payload:
+                active_phase = "write"
+                remaining = deadline - time.monotonic()
+                if remaining <= 0:
+                    raise socket.timeout("service probe deadline exhausted before write")
+                connection.settimeout(remaining)
+                connection.sendall(built.payload)
+                sent = len(built.payload)
+            active_phase = "read"
+            while len(response) < response_limit:
+                remaining = deadline - time.monotonic()
+                if remaining <= 0:
+                    stop_reason = "timed_out"
+                    break
+                connection.settimeout(remaining)
+                if isinstance(adapter, FramedProbeAdapter):
+                    read_size = adapter.next_read_size(bytes(response), response_limit)
+                else:
+                    read_size = min(512, response_limit - len(response))
+                if read_size <= 0:
+                    stop_reason = "response_limit"
+                    break
+                try:
+                    chunk = connection.recv(read_size)
+                except socket.timeout as exc:
+                    stop_reason, error_class = "timed_out", exc.__class__.__name__
+                    break
+                except ConnectionResetError as exc:
+                    stop_reason, error_class = "reset", exc.__class__.__name__
+                    break
+                except OSError as exc:
+                    stop_reason, error_class = "read_error", exc.__class__.__name__
+                    break
+                if not chunk:
+                    stop_reason = "peer_closed"
+                    break
+                response.extend(chunk)
+                if adapter.completion(bytes(response)):
+                    stop_reason = "response_complete"
+                    break
+            else:
+                stop_reason = "response_limit"
+    except socket.timeout as exc:
+        stop_reason, error_class = "timed_out", exc.__class__.__name__
+    except ConnectionResetError as exc:
+        stop_reason, error_class = "reset", exc.__class__.__name__
+    except (BrokenPipeError, OSError) as exc:
+        stop_reason = "write_error" if active_phase == "write" else "connect_error"
+        error_class = exc.__class__.__name__
+
+    completed_at = datetime.now(timezone.utc)
+    decision = evaluate_service_probe_response(
+        adapter.protocol, bytes(response), stop_reason=stop_reason, error_class=error_class,
+    )
+    stage_evidence = {
+        "stage_number": 1,
+        "direction": "client_to_server_then_server_to_client",
+        "bytes_sent": sent,
+        "bytes_received": len(response),
+        "response_sha256": hashlib.sha256(response).hexdigest() if response else None,
+        "response_class": decision["response_class"],
+        "completion_reason": stop_reason,
+    }
+    result = {
+        "protocol": adapter.protocol,
+        "issue_key": adapter.issue_key,
+        "transport": "tcp",
+        "port": port,
+        "probe_type": adapter.probe_type,
+        "probe_version": adapter.probe_version,
+        "framework_version": adapter.framework_version,
+        "policy_version": adapter.policy_version,
+        "builder_version": adapter.builder_version,
+        "request_model": adapter.request_model,
+        "tls_mode": "plaintext",
+        "started_at": started_at.isoformat(),
+        "completed_at": completed_at.isoformat(),
+        "elapsed_ms": int((time.monotonic() - started) * 1000),
+        "stage_count": 1,
+        "stages": [stage_evidence],
+        "total_bytes_sent": sent,
+        "total_bytes_received": len(response),
+        "bytes_sent": sent,
+        "bytes_received": len(response),
+        "response_sha256": hashlib.sha256(response).hexdigest() if response else None,
+        "completion_reason": stop_reason,
+        "stop_reason": stop_reason,
+        "error_class": error_class,
+        **decision,
+    }
+    if built.correlation_metadata:
+        result["request_correlation"] = built.correlation_metadata
+    return result
+
+
 def run_service_probe(
     connect_host: str,
     port: int,
@@ -528,31 +658,26 @@ def run_service_probe(
     *,
     timeout: float,
     response_limit: int,
+    declared_hostname: str | None = None,
 ) -> dict[str, Any]:
     adapter = ADAPTERS[protocol]
     if isinstance(adapter, StagedTextProbeSpec):
         return _run_staged_service_probe(
             connect_host, port, adapter, timeout=timeout, response_limit=response_limit,
         )
-    database_adapter = adapter if isinstance(adapter, DatabaseProbeAdapter) else None
-    if database_adapter is not None:
-        built = database_adapter.build(ProbeRequestContext(
-            connect_host=connect_host,
-            port=port,
-            attempt_nonce=secrets.token_bytes(16),
-        ))
-        if len(built.payload) > MAX_SERVICE_PROBE_OUTBOUND_BYTES:
-            raise ValueError("service probe request exceeds the outbound byte ceiling")
-        initial_payload = built.payload
-        completion = database_adapter.completion
-        server_first = False
-        followup = None
-    else:
-        built = None
-        initial_payload = adapter.initial_payload
-        completion = adapter.completion
-        server_first = adapter.server_first
-        followup = adapter.followup
+    if isinstance(adapter, (DatabaseProbeAdapter, FramedProbeAdapter)):
+        return _run_v3_service_probe(
+            connect_host,
+            declared_hostname,
+            port,
+            adapter,
+            timeout=timeout,
+            response_limit=response_limit,
+        )
+    initial_payload = adapter.initial_payload
+    completion = adapter.completion
+    server_first = adapter.server_first
+    followup = adapter.followup
     started_at = datetime.now(timezone.utc)
     started = time.monotonic()
     response = bytearray()
@@ -627,7 +752,7 @@ def run_service_probe(
         "port": port,
         "probe_type": adapter.probe_type,
         "probe_version": adapter.probe_version,
-        "framework_version": database_adapter.framework_version if database_adapter else SERVICE_PROBE_FRAMEWORK_VERSION,
+        "framework_version": SERVICE_PROBE_FRAMEWORK_VERSION,
         "started_at": started_at.isoformat(),
         "completed_at": completed_at.isoformat(),
         "elapsed_ms": int((time.monotonic() - started) * 1000),
@@ -642,14 +767,6 @@ def run_service_probe(
         "error_class": error_class,
         **decision,
     }
-    if database_adapter is not None:
-        result.update({
-            "builder_version": database_adapter.builder_version,
-            "request_model": database_adapter.request_model,
-            "tls_mode": "plaintext",
-        })
-        if built is not None and built.correlation_metadata:
-            result["request_correlation"] = built.correlation_metadata
     return result
 
 

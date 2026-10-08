@@ -640,6 +640,7 @@ class TCPExecutor(BaseExecutor):
                 attempt = run_service_probe(
                     target.connect_host, port, protocol,
                     timeout=probe_timeout, response_limit=response_limit,
+                    declared_hostname=target.hostname,
                 )
             else:
                 observed_at = datetime.now(timezone.utc).isoformat()

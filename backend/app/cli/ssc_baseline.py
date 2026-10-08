@@ -75,6 +75,14 @@ def run(args) -> int:
                 result = activate_wave5b_rules(db)
             print(json.dumps(result, indent=2))
             return 0 if not result["unavailable"] else 3
+        if args.baseline_command == "activate-wave5c":
+            if not args.yes:
+                raise ValueError("Review the Wave 5C exposure-context blockers, then pass --yes to reconcile")
+            from app.services.wave5c_rules import activate_wave5c_rules
+            with SessionLocal() as db:
+                result = activate_wave5c_rules(db)
+            print(json.dumps(result, indent=2))
+            return 0 if not result["unavailable"] else 3
         if args.baseline_command == "discover-details":
             result = discover_issue_details()
             print(json.dumps(result, indent=2))

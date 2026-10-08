@@ -34,6 +34,9 @@ ssc baseline activate-wave3a --yes
 ssc baseline activate-wave3b --yes
 ssc baseline activate-wave4a --yes
 ssc baseline activate-wave4b --yes
+ssc baseline activate-wave5a --yes
+ssc baseline activate-wave5b --yes
+ssc baseline activate-wave5c --yes
 ```
 
 Without enrichment, `pull-ssc` uses only `GET https://api.securityscorecard.io/metadata/factors` and `GET https://api.securityscorecard.io/metadata/issue-types`; this is a complete minimum baseline and can establish taxonomy alignment after approval. `--enrich-details` optionally requests `/metadata/issue-types/{type}` with at most four workers, a 20-second request timeout and at most three attempts for safe transient transport failures or HTTP 408, 425, 429, 500, 502, 503 and 504 responses. Numeric or HTTP-date `Retry-After` is honored up to 60 seconds; longer or invalid delays fail that lookup instead of retrying early. Permanent failures are not retried. An individual detail failure is reported but retains that issue's list metadata and does not discard the baseline.
@@ -44,7 +47,7 @@ Without enrichment, `pull-ssc` uses only `GET https://api.securityscorecard.io/m
 
 `status` works offline. `INTERNAL_ONLY` means no real SSC baseline has been recorded; all existing runtime features remain available without claiming alignment. `SSC_ALIGNED` requires at least one real imported SSC baseline with provenance. It does not imply scoring calibration. For real licensed UI/manual canonical JSON, use `python -m app.cli.import_golden_baseline --input <capture.json> --attest-real-source --json` on its first import. Never attest synthetic fixtures. Previously unattested snapshots cannot be relabeled on reuse.
 
-`activate-wave1 --yes` idempotently creates or selects the reviewed `HTTP_HEADERS`, `HTTP_REDIRECT`, and `TLS_CERTIFICATE` evaluator versions. `activate-wave2 --yes` does the same for the evidence-complete `TLS_HANDSHAKE` and `EMAIL_SECURITY` definitions. `activate-wave3a --yes` activates only the reviewed six-protocol first batch. `activate-wave3b --yes` activates the seven bounded `HTTP_CONTENT` evaluators. `activate-wave4a --yes` activates only `ssh_weak_protocol`, `ssh_weak_cipher`, and `ssh_weak_mac`. `activate-wave4b --yes` activates only `spf_record_malformed`. `activate-wave5a --yes` activates exactly `service_ftp`, `service_imap`, `service_pop3`, and `mail_server_unusual_port`. Activation succeeds only for exact current issue definitions contained in an attested real `SSC_API` snapshot. Each evaluator version stores a foreign key to that immutable issue version. Approved future SSC definition changes create a new linked rule version; they do not rewrite history. A newly approved `pull-ssc` import performs all seven reconciliations automatically.
+`activate-wave1 --yes` through `activate-wave5a --yes` reconcile their reviewed active sets against exact current issue definitions in an attested real `SSC_API` snapshot. `activate-wave5b --yes` activates LDAP but keeps Oracle inactive pending real interoperability. `activate-wave5c --yes` is intentionally a fail-closed reconciler: it deactivates any managed Wave 5C rule and reports per-key blockers because the repository lacks authoritative public-target plus approved external-vantage context; PPTP also lacks real interoperability. Protocol `MATCH` alone cannot satisfy the baseline's public-exposure semantics. Each approved evaluator version stores a foreign key to the immutable issue version; later definition changes create new versions rather than rewriting history.
 
 Service probes are declared explicitly in scan configuration; neither a port number nor TCP-open state selects or identifies a protocol:
 
@@ -55,14 +58,15 @@ Service probes are declared explicitly in scan configuration; neither a port num
     {"protocol": "vnc", "port": 5900},
     {"protocol": "redis", "port": 6379},
     {"protocol": "ftp", "port": 2121},
-    {"protocol": "smtp", "port": 2525}
+    {"protocol": "smtp", "port": 2525},
+    {"protocol": "minecraft", "port": 25565}
   ],
   "service_probe_timeout_seconds": 3.0,
   "service_probe_response_limit_bytes": 4096
 }
 ```
 
-Wave 3A protocol names are `vnc`, `rsync`, `redis`, `socks5`, `telnet`, and `smb2`. Wave 5A adds `ftp`, `imap`, `pop3`, and `smtp`. A target must retain its existing inventory authorization. At most six explicitly declared service probes run, each response budget remains 4096 bytes, and Wave 5A additionally caps the one outbound command at 1024 bytes, each line at 512 bytes, all parsed lines at 64, and the exchange at two stages under one total deadline. Probes do not authenticate, enumerate data, relay traffic, or issue state-changing commands. Wave 5A is plaintext-only and never infers TLS from a port: no implicit TLS or STARTTLS is attempted, so encrypted-only endpoints remain `INDETERMINATE`.
+Wave 3A protocol names are `vnc`, `rsync`, `redis`, `socks5`, `telnet`, and `smb2`. Wave 5A adds `ftp`, `imap`, `pop3`, and `smtp`; Wave 5B.1 adds `ldap` and `oracle`; Wave 5C adds `minecraft`, `pptp`, and `rdp`. Minecraft uses the declared inventory hostname, not the resolved connect address, in its status handshake. A target must retain inventory authorization, but that approval is not proof of Internet exposure or external vantage. At most six probes run; response and outbound caps remain 4096 and 1024 bytes. v3 probes share one monotonic connect/write/read deadline and read only complete declared framing. Probes do not authenticate, enumerate data, relay traffic, continue negotiated TLS, or establish sessions. Unsupported TLS and all malformed/incomplete Wave 5C responses remain `INDETERMINATE`.
 
 SSH negotiation is configured separately on the same TCP executor so it does not overload Wave 3A service-probe evidence:
 

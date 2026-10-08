@@ -94,6 +94,11 @@ def build_parser():
         help="Activate reviewed Wave 5B.1 LDAP and Oracle evaluators against the attested SSC API baseline",
     )
     activate5b.add_argument("--yes", action="store_true", help="Confirm activation of the reviewed evaluator definitions")
+    activate5c = baseline_commands.add_parser(
+        "activate-wave5c",
+        help="Reconcile Wave 5C rules; exposure/vantage-gated keys remain inactive",
+    )
+    activate5c.add_argument("--yes", action="store_true", help="Confirm reconciliation of the reviewed evaluator definitions")
     return parser
 
 

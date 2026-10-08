@@ -64,7 +64,7 @@ Generate deterministic brand variants locally, but existence/activity requires e
 - HTTP now captures all relevant header instances, configured declared paths, CSP meta/header policy state, and bounded normalized redirects. It still lacks a general crawler/browser and authenticated synthetic flows.
 - TLS captures certificate evidence plus version-pinned TLS 1.0/1.1/1.2/1.3 attempts and accepted property-derived prohibited cipher groups. `tls_weak_protocol` is active. Weak-cipher support remains partial until the client can offer the complete prohibited legacy suite universe; stapled OCSP bytes and authoritative revocation retrieval/validation are also absent.
 - DNS preserves ANSWER/NODATA/NXDOMAIN/error states, joined TXT records, SPF parse/lookup traces, DMARC tags/effective policy, two nonce wildcard queries, and exact declared-subdomain inheritance. Six SPF/DMARC rules are active. Complete RFC 7208 dynamic permanent-error semantics, public-suffix inference, and DKIM selector/message provenance remain absent; organizational-domain scope is explicitly declared rather than inferred.
-- TCP records only connect success; it lacks protocol-specific safe handshakes and fingerprint confidence.
+- TCP includes bounded protocol-specific Wave 3A, Wave 5A, Wave 5B.1, and Wave 5C identification exchanges. Wave 5C Minecraft/PPTP/RDP observations remain inactive because the baseline's public-exposure semantics additionally require authoritative public-target and approved external-vantage context; PPTP also awaits real interoperability. TCP-open alone remains unusable as service identity.
 - No browser/WebSocket, SBOM/inventory, CPE/CVE/KEV, lifecycle, longitudinal analytics, or external-intelligence ingestion contracts exist yet.
 
 ## Mapping totals
@@ -73,6 +73,6 @@ Generate deterministic brand variants locally, but existence/activity requires e
 - Testable with enrichment: 81
 - External data required: 42
 - Not reproducible: 4
-- Current supported / partial / unsupported: 21 / 101 / 80
+- Current supported / partial / unsupported: 43 / 84 / 75
 
 The row-level proposed method, exact evidence, rule logic, executor, external data, references, complexity, confidence, notes, and support status are in `SSC_ISSUE_COVERAGE.csv`.
