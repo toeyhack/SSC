@@ -33,6 +33,7 @@ from app.services.wave3b_rules import WAVE3B_BY_KEY
 from app.services.wave4a_rules import WAVE4A_BY_KEY
 from app.services.wave4b_rules import WAVE4B_BY_KEY
 from app.services.wave5a_rules import WAVE5A_BY_KEY
+from app.services.wave5b_rules import WAVE5B_ACTIVE_BY_KEY, WAVE5B_BY_KEY
 
 
 def _profile() -> ResolvedAssessmentProfile:
@@ -296,6 +297,7 @@ def test_versioned_v1_profile_resolves_exact_baseline_scope_and_capabilities(db)
         "network_security": (
             supported[10:15] + sorted(WAVE3A_BY_KEY) + ["service_soap"] + sorted(WAVE4A_BY_KEY)
             + sorted(set(WAVE5A_BY_KEY) - {"mail_server_unusual_port"})
+            + sorted(WAVE5B_BY_KEY)
         ),
         "dns_health": supported[15:21] + sorted(WAVE4B_BY_KEY),
         "patching_cadence": [],
@@ -363,15 +365,17 @@ def test_versioned_v1_profile_resolves_exact_baseline_scope_and_capabilities(db)
     out_of_scope = [item for item in profile.issues if item.factor_code not in profile.definition.in_scope_factor_codes]
     assert len(in_scope) == 160
     assert len(out_of_scope) == 42
-    assert sum(item.supported_capability for item in in_scope) == 41
-    assert sum(item.supported_capability for item in profile.issues) == 42
+    assert sum(item.supported_capability for item in in_scope) == 42
+    assert sum(item.supported_capability for item in profile.issues) == 43
+    assert next(item for item in in_scope if item.stable_key == "service_ldap").supported_capability is True
+    assert next(item for item in in_scope if item.stable_key == "service_oracle_db").supported_capability is False
     assert next(item for item in out_of_scope if item.stable_key == "mail_server_unusual_port").supported_capability is True
     assert {
         code: sum(item.supported_capability for item in in_scope if item.factor_code == code)
         for code in profile.definition.in_scope_factor_codes
     } == {
         "application_security": 16,
-        "network_security": 18,
+        "network_security": 19,
         "dns_health": 7,
         "patching_cadence": 0,
     }

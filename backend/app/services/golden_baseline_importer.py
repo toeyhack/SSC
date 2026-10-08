@@ -267,13 +267,15 @@ def import_golden_baseline(
             from app.services.wave4a_rules import activate_wave4a_rules
             from app.services.wave4b_rules import activate_wave4b_rules
             from app.services.wave5a_rules import activate_wave5a_rules
+            from app.services.wave5b_rules import activate_wave5b_rules
             activation1 = activate_wave1_rules(db, commit=False)
             activation2 = activate_wave2_rules(db, commit=False)
             activation3a = activate_wave3a_rules(db, commit=False)
             activation3b = activate_wave3b_rules(db, commit=False)
             activation4a = activate_wave4a_rules(db, commit=False)
             activation4b = activate_wave4b_rules(db, commit=False)
-            activation5a = activate_wave5a_rules(db)
+            activation5a = activate_wave5a_rules(db, commit=False)
+            activation5b = activate_wave5b_rules(db)
             warnings.append(f"Wave 1 evaluators active: {len(activation1['activated'])}.")
             warnings.append(f"Wave 2 evaluators active: {len(activation2['activated'])}.")
             warnings.append(f"Wave 3A evaluators active: {len(activation3a['activated'])}.")
@@ -281,6 +283,7 @@ def import_golden_baseline(
             warnings.append(f"Wave 4A evaluators active: {len(activation4a['activated'])}.")
             warnings.append(f"Wave 4B evaluators active: {len(activation4b['activated'])}.")
             warnings.append(f"Wave 5A evaluators active: {len(activation5a['activated'])}.")
+            warnings.append(f"Wave 5B.1 evaluators active: {len(activation5b['activated'])}.")
         return GoldenBaselineImportResult(
             dry_run=dry_run,
             content_hash=content_hash,
@@ -395,6 +398,7 @@ def import_golden_baseline(
             from app.services.wave4a_rules import activate_wave4a_rules
             from app.services.wave4b_rules import activate_wave4b_rules
             from app.services.wave5a_rules import activate_wave5a_rules
+            from app.services.wave5b_rules import activate_wave5b_rules
             activate_wave1_rules(db, commit=False)
             activate_wave2_rules(db, commit=False)
             activate_wave3a_rules(db, commit=False)
@@ -402,6 +406,7 @@ def import_golden_baseline(
             activate_wave4a_rules(db, commit=False)
             activate_wave4b_rules(db, commit=False)
             activate_wave5a_rules(db, commit=False)
+            activate_wave5b_rules(db, commit=False)
 
         db.commit()
     except IntegrityError as exc:

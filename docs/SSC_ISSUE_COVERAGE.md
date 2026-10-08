@@ -2,7 +2,7 @@
 
 Snapshot content hash: `0fe2bc8ffb7e3f734d4e88f70b11cffa6e8e9e47e722dc62107f6ff09694eca8`
 Source: immutable real `SSC_API` Golden Baseline
-Implementation state: Waves 1-2, Wave 3A first-batch `SERVICE_PROTOCOL_IDENTIFICATION`, Wave 3B `HTTP_CONTENT`, Wave 4A `SSH_NEGOTIATION`, Wave 4B bounded SPF permanent-error analysis, and Wave 5A staged plaintext FTP/IMAP/POP3/SMTP identification
+Implementation state: Waves 1-2, Wave 3A first-batch `SERVICE_PROTOCOL_IDENTIFICATION`, Wave 3B `HTTP_CONTENT`, Wave 4A `SSH_NEGOTIATION`, Wave 4B bounded SPF permanent-error analysis, Wave 5A staged plaintext FTP/IMAP/POP3/SMTP identification, and Wave 5B.1 closed LDAP identification; Oracle Net is implemented pending real interoperability and remains inactive/PARTIAL
 Total mapped issues: **202**
 
 > This is an independent implementation mapped to SSC taxonomy. It does not reproduce or claim knowledge of SSC collection, aggregation, severity, scoring, or proprietary detection logic. `ssc_severity` remains source metadata and is not mapped to internal risk or score impact.
@@ -13,10 +13,10 @@ Total mapped issues: **202**
 
 ## Coverage summary
 
-| Coverage | Before Wave 5A | After Wave 5A | Percentage after |
+| Coverage | Before Wave 5B.1 | After Wave 5B.1 | Percentage after |
 |---|---:|---:|---:|
-| `SUPPORTED` | 38 | 42 | 20.8% |
-| `PARTIAL` | 89 | 85 | 42.1% |
+| `SUPPORTED` | 42 | 43 | 21.3% |
+| `PARTIAL` | 85 | 84 | 41.6% |
 | `NOT_SUPPORTED` | 75 | 75 | 37.1% |
 | **Total** | **202** | **202** | **100.0%** |
 
@@ -40,7 +40,7 @@ Total mapped issues: **202**
 | `hacker_chatter` | 2 | 0 | 0 | 2 | 0 | 0 | 0 | 2 |
 | `ip_reputation` | 26 | 1 | 1 | 24 | 0 | 1 | 1 | 24 |
 | `leaked_information` | 8 | 0 | 0 | 8 | 0 | 0 | 0 | 8 |
-| `network_security` | 68 | 42 | 20 | 5 | 1 | 18 | 43 | 7 |
+| `network_security` | 68 | 42 | 20 | 5 | 1 | 19 | 42 | 7 |
 | `patching_cadence` | 21 | 0 | 21 | 0 | 0 | 0 | 8 | 13 |
 | `social_engineering` | 1 | 0 | 0 | 1 | 0 | 0 | 0 | 1 |
 
@@ -157,6 +157,22 @@ Wave 5A uses method schema `ssc-wave5a-staged-text-service-observation.v1`, poli
 | `service_imap` | `imap` | `SERVICE_PROTOCOL_IDENTIFICATION` | MATCH only for a legal IMAP OK/PREAUTH greeting followed by one A001 CAPABILITY command, a valid untagged CAPABILITY response, and matching A001 OK completion. | No protocol-negative result is inferred from a wrong reply, arbitrary bytes, a greeting alone, or TCP reachability. | Connection refusal, timeout, reset, peer close, write/read failure, malformed or incomplete framing, unknown banner, response/line budget exhaustion, and unsupported plaintext/TLS mode are INDETERMINATE. | https://www.rfc-editor.org/rfc/rfc9051.html |
 | `service_pop3` | `pop3` | `SERVICE_PROTOCOL_IDENTIFICATION` | MATCH only for a complete POP3 +OK greeting followed by one CAPA command and a valid +OK capability response with exact dot termination. | No protocol-negative result is inferred from a wrong reply, arbitrary bytes, a greeting alone, or TCP reachability. | Connection refusal, timeout, reset, peer close, write/read failure, malformed or incomplete framing, unknown banner, response/line budget exhaustion, and unsupported plaintext/TLS mode are INDETERMINATE. | https://www.rfc-editor.org/rfc/rfc1939.html |
 | `mail_server_unusual_port` | `smtp` | `SERVICE_PROTOCOL_IDENTIFICATION` | MATCH only after a legal SMTP 220 greeting and complete 250 EHLO response positively identify SMTP, and the declared port is outside smtp-standard-ports.v1 {25,465,587}. | NO_MATCH only after the same positive SMTP exchange when the declared port is 25, 465, or 587; port alone never identifies SMTP. | Connection refusal, timeout, reset, peer close, write/read failure, malformed or incomplete framing, unknown banner, response/line budget exhaustion, and unsupported plaintext/TLS mode are INDETERMINATE. | https://www.rfc-editor.org/rfc/rfc5321.html |
+
+## Active Wave 5B.1 evaluator mappings
+
+The approved Wave 5B.1 activation set contains only `service_ldap`. Its no-Bind RootDSE evaluator is linked to the exact attested issue version. Oracle Net remains implemented and tested but inactive/PARTIAL pending real interoperability. The adapters define no deterministic NO_MATCH, perform no authentication/session/query, and never follow Oracle redirects. The five product-ambiguous database keys remain PARTIAL.
+
+| SSC issue key | Protocol | Primitive | Exact MATCH condition | Exact NO_MATCH boundary | INDETERMINATE boundary | Authoritative reference |
+|---|---|---|---|---|---|---|
+| `service_ldap` | `LDAPv3 RootDSE base-object search` | `SERVICE_PROTOCOL_IDENTIFICATION` | MATCH only for a complete definite-length BER sequence with message ID 1, zero or more legal SearchResultEntry/SearchResultReference messages, and a structurally valid final SearchResultDone. | Wave 5B.1 defines no deterministic NO_MATCH; wrong, foreign, or arbitrary responses remain INDETERMINATE. | Open port alone, connection failure, timeout, reset, peer close, malformed or truncated framing, response-limit exhaustion, unsupported TLS/transport, arbitrary bytes, or insufficient protocol semantics are INDETERMINATE. | https://www.rfc-editor.org/rfc/rfc4511.html |
+
+## Wave 5B.1 implemented pending interoperability
+
+These adapters and deterministic tests remain available, but they have no approved active evaluator and are not counted as `SUPPORTED`.
+
+| SSC issue key | Protocol | Current state | Closure blocker |
+|---|---|---|---|
+| `service_oracle_db` | `Oracle Net/TNS CONNECT` | `IMPLEMENTED_PENDING_INTEROP` / `PARTIAL` | Real protocol interoperability has not been validated. |
 
 ## Per-issue index
 
@@ -303,7 +319,7 @@ The CSV remains normative for exact evidence requirements, proposed logic, depen
 | `service_ftp` | FTP Service Observed | `network_security` | `medium` | `DIRECTLY_TESTABLE` | `SERVICE_PROTOCOL_IDENTIFICATION` | `SUPPORTED` |
 | `service_http_proxy` | HTTP Proxy Service Detected | `network_security` | `medium` | `DIRECTLY_TESTABLE` | `PROTOCOL_PROBE+TCP` | `PARTIAL` |
 | `service_imap` | IMAP Service Observed | `network_security` | `medium` | `DIRECTLY_TESTABLE` | `SERVICE_PROTOCOL_IDENTIFICATION` | `SUPPORTED` |
-| `service_ldap` | LDAP Server Accessible | `network_security` | `medium` | `DIRECTLY_TESTABLE` | `PROTOCOL_PROBE+TCP` | `PARTIAL` |
+| `service_ldap` | LDAP Server Accessible | `network_security` | `medium` | `DIRECTLY_TESTABLE` | `SERVICE_PROTOCOL_IDENTIFICATION` | `SUPPORTED` |
 | `service_ldap_anonymous` | LDAP Server Allows Anonymous Binding | `network_security` | `medium` | `DIRECTLY_TESTABLE` | `PROTOCOL_PROBE+TCP` | `PARTIAL` |
 | `service_microsoft_sql` | Microsoft SQL Server Service Observed | `network_security` | `medium` | `DIRECTLY_TESTABLE` | `PROTOCOL_PROBE+TCP` | `PARTIAL` |
 | `service_mongodb` | MongoDB Service Observed | `network_security` | `medium` | `DIRECTLY_TESTABLE` | `PROTOCOL_PROBE+TCP` | `PARTIAL` |
@@ -312,7 +328,7 @@ The CSV remains normative for exact evidence requirements, proposed logic, depen
 | `service_netbus_remote_access` | NetBus Remote Access Service Detected | `network_security` | `info` | `EXTERNAL_DATA_REQUIRED` | `EXTERNAL_INTEL_INGEST` | `NOT_SUPPORTED` |
 | `service_networking` | Networking Service Observed | `network_security` | `medium` | `NOT_REPRODUCIBLE` | `None` | `NOT_SUPPORTED` |
 | `service_open_vpn` | OpenVPN Device Accessible | `network_security` | `medium` | `TESTABLE_WITH_ENRICHMENT` | `PROTOCOL_PROBE+PRODUCT_FINGERPRINT` | `PARTIAL` |
-| `service_oracle_db` | Oracle Database Server Accessible | `network_security` | `medium` | `DIRECTLY_TESTABLE` | `PROTOCOL_PROBE+TCP` | `PARTIAL` |
+| `service_oracle_db` | Oracle Database Server Accessible | `network_security` | `medium` | `DIRECTLY_TESTABLE` | `SERVICE_PROTOCOL_IDENTIFICATION` | `PARTIAL` |
 | `service_oracle_registry` | Oracle Service Registry Detected | `network_security` | `info` | `TESTABLE_WITH_ENRICHMENT` | `HTTP+PRODUCT_FINGERPRINT` | `PARTIAL` |
 | `service_pop3` | POP3 Service Observed | `network_security` | `medium` | `DIRECTLY_TESTABLE` | `SERVICE_PROTOCOL_IDENTIFICATION` | `SUPPORTED` |
 | `service_postgresql` | PostgreSQL Service Observed | `network_security` | `medium` | `DIRECTLY_TESTABLE` | `PROTOCOL_PROBE+TCP` | `PARTIAL` |

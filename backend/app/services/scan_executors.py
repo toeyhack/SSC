@@ -651,7 +651,7 @@ class TCPExecutor(BaseExecutor):
                     "port": port,
                     "probe_type": adapter.probe_type,
                     "probe_version": adapter.probe_version,
-                    "framework_version": SERVICE_PROBE_FRAMEWORK_VERSION,
+                    "framework_version": getattr(adapter, "framework_version", SERVICE_PROBE_FRAMEWORK_VERSION),
                     "started_at": observed_at,
                     "completed_at": observed_at,
                     "elapsed_ms": 0,
@@ -666,7 +666,19 @@ class TCPExecutor(BaseExecutor):
                     "error_class": None,
                     **evaluate_service_probe_response(protocol, b"", transport=transport),
                 }
+                if hasattr(adapter, "request_model"):
+                    attempt.update({
+                        "builder_version": adapter.builder_version,
+                        "request_model": adapter.request_model,
+                        "tls_mode": "plaintext",
+                    })
             evidence["service_probes"].append(attempt)
+        framework_versions = sorted({item["framework_version"] for item in evidence["service_probes"]})
+        if framework_versions:
+            evidence["probe_framework_versions"] = framework_versions
+            evidence["probe_framework_version"] = (
+                framework_versions[0] if len(framework_versions) == 1 else "mixed"
+            )
         for port in ssh_ports:
             evidence["ssh_negotiations"].append(collect_ssh_negotiation(
                 target.connect_host,

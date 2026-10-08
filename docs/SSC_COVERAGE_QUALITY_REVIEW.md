@@ -74,6 +74,14 @@ The staged engine retains the 4096-byte total response cap and six declared-prob
 
 Wave 5A does not authenticate, access mailboxes or messages, submit mail, enumerate files, issue STARTTLS, or negotiate implicit TLS. TLS-only endpoints remain `INDETERMINATE`. Evidence retains only stage hashes, classes, bounded normalized counts/hashes, budgets, versions, and stop/error state—not greetings, host banners, capability text, credentials, or raw transcripts. Internal calibration v1.4 explicitly assigns all four keys UNKNOWN/non-scoring. Deterministic service identity is useful for inventory, attack-surface visibility, and follow-up assessment, but does not establish weak authentication, unsafe transport, unauthorized access, public exposure, relay abuse, vulnerable software, or compromise. Capability coverage remains 38/53 VERIFIED_DIRECT, 41/160 V1 supported, and 42/202 full-baseline supported.
 
+## Wave 5B.1 implementation and closure update (2026-10-08)
+
+Wave 5B.1 implements exactly `service_ldap` and `service_oracle_db`. LDAP performs one no-Bind RootDSE base-object search and requires a complete correlated definite-length BER sequence ending in SearchResultDone. Oracle sends one endpoint-aware CONNECT for a fixed synthetic nonexistent service and accepts only complete TNS ACCEPT, REFUSE, or REDIRECT identification responses; redirects are never followed. Neither adapter defines NO_MATCH, and implicit TLS/TCPS, failure, malformed framing, arbitrary bytes, or budget exhaustion remain indeterminate.
+
+Only these attempts use `service-probe-adapter.v3`; historical Wave 3A and Wave 5A evidence remains v2. The existing limits remain six declared probes, 4096 response bytes, and 1024 outbound bytes. Evidence contains only compact hashes, classes, correlation/completion metadata, structural counts, versions, budgets, timestamps, and stop/error state. No directory values, Oracle descriptors, redirect destinations, credentials, authentication challenges, or raw transcripts are retained. The five product-ambiguous database keys remain partial.
+
+Real loopback OpenLDAP interoperability and the full backend suite are validated, so `service_ldap` is the only approved active Wave 5B.1 evaluator and is CLOSED/SUPPORTED. `service_oracle_db` remains `IMPLEMENTED_PENDING_INTEROP`: its parser, builder, scanner wiring, and deterministic fixtures remain available, but no active evaluator is approved until real Oracle interoperability succeeds. Closed coverage is 39/53 VERIFIED_DIRECT, 42/160 V1, and 43/202 full baseline. The implementation ceiling remains 40/53, 43/160, and 44/202.
+
 ## Pre-Wave 1 outcome
 
 The original 87 `DIRECTLY_TESTABLE` rows were re-reviewed against the imported issue descriptions, current executor evidence, authorization boundaries, and public standards. Twelve were over-optimistic and have been downgraded to `TESTABLE_WITH_ENRICHMENT`. No issue was upgraded.

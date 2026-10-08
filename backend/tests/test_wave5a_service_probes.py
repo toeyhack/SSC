@@ -209,7 +209,8 @@ def test_stage2_timeout_reset_and_hard_total_deadline_are_indeterminate():
     assert stage2_timeout["outcome"] == "INDETERMINATE" and stage2_timeout["stop_reason"] == "timed_out"
     with _staged_server(greeting, request, response, reset_after_stage1=True) as (port, _):
         reset = run_service_probe("127.0.0.1", port, "ftp", timeout=0.2, response_limit=4096)
-    assert reset["outcome"] == "INDETERMINATE" and reset["stop_reason"] in {"write_error", "reset"}
+    assert reset["outcome"] == "INDETERMINATE"
+    assert reset["stop_reason"] in {"write_error", "reset", "peer_closed"}
     with _staged_server(greeting, request, response, stage1_delay=0.04, stage2_delay=0.08) as (port, _):
         started = time.monotonic()
         deadline = run_service_probe("127.0.0.1", port, "ftp", timeout=0.08, response_limit=4096)

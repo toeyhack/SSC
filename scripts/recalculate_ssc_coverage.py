@@ -32,12 +32,22 @@ def main() -> int:
     from app.services.wave4a_rules import WAVE4A_BY_KEY, WAVE4A_RULES
     from app.services.wave4b_rules import WAVE4B_BY_KEY, WAVE4B_RULES
     from app.services.wave5a_rules import WAVE5A_BY_KEY, WAVE5A_RULES
+    from app.services.wave5b_rules import (
+        WAVE5B_ACTIVE_BY_KEY,
+        WAVE5B_ACTIVE_RULES,
+        WAVE5B_PARTIAL_REASONS,
+        WAVE5B_PENDING_RULES,
+    )
 
     all_by_key = {
         **WAVE1_BY_KEY, **WAVE2_BY_KEY, **WAVE3A_BY_KEY,
-        **WAVE3B_BY_KEY, **WAVE4A_BY_KEY, **WAVE4B_BY_KEY, **WAVE5A_BY_KEY,
+        **WAVE3B_BY_KEY, **WAVE4A_BY_KEY, **WAVE4B_BY_KEY, **WAVE5A_BY_KEY, **WAVE5B_ACTIVE_BY_KEY,
     }
-    all_partial_reasons = {**WAVE1_PARTIAL_REASONS, **WAVE2_PARTIAL_REASONS}
+    all_partial_reasons = {
+        **WAVE1_PARTIAL_REASONS,
+        **WAVE2_PARTIAL_REASONS,
+        **WAVE5B_PARTIAL_REASONS,
+    }
 
     mappings = []
     if args.verify_database:
@@ -49,19 +59,21 @@ def main() -> int:
         from app.services.wave4a_rules import active_wave4a_mappings
         from app.services.wave4b_rules import active_wave4b_mappings
         from app.services.wave5a_rules import active_wave5a_mappings
+        from app.services.wave5b_rules import active_wave5b_mappings
         with SessionLocal() as db:
             mappings = (
                 active_wave1_mappings(db) + active_wave2_mappings(db)
                 + active_wave3a_mappings(db) + active_wave3b_mappings(db)
                 + active_wave4a_mappings(db) + active_wave4b_mappings(db)
                 + active_wave5a_mappings(db)
+                + active_wave5b_mappings(db)
             )
         active_keys = {item["issue_key"] for item in mappings}
         expected = set(all_by_key)
         if active_keys != expected:
             missing = sorted(expected - active_keys)
             extra = sorted(active_keys - expected)
-            raise SystemExit(f"active Wave 1/2/3A/3B/4A/4B/5A mappings differ: missing={missing} extra={extra}")
+            raise SystemExit(f"active Wave 1/2/3A/3B/4A/4B/5A/5B.1 mappings differ: missing={missing} extra={extra}")
     else:
         active_keys = set(all_by_key)
 
@@ -80,7 +92,8 @@ def main() -> int:
                 "Wave 3B" if row["ssc_issue_key"] in WAVE3B_BY_KEY else
                 "Wave 4A" if row["ssc_issue_key"] in WAVE4A_BY_KEY else
                 "Wave 4B" if row["ssc_issue_key"] in WAVE4B_BY_KEY else
-                "Wave 5A"
+                "Wave 5A" if row["ssc_issue_key"] in WAVE5A_BY_KEY else
+                "Wave 5B.1"
             )
             row["current_platform_support"] = "SUPPORTED"
             row["required_executor"] = spec.primitive
@@ -104,9 +117,9 @@ def main() -> int:
         row["current_platform_support"] for row in rows if row["factor"] in V1_FACTORS
     )
     feasibility = Counter(row["feasibility_category"] for row in rows)
-    if coverage != {"SUPPORTED": 42, "PARTIAL": 85, "NOT_SUPPORTED": 75}:
+    if coverage != {"SUPPORTED": 43, "PARTIAL": 84, "NOT_SUPPORTED": 75}:
         raise SystemExit(f"unexpected coverage totals: {dict(coverage)}")
-    if v1_coverage != {"SUPPORTED": 41, "PARTIAL": 83, "NOT_SUPPORTED": 36}:
+    if v1_coverage != {"SUPPORTED": 42, "PARTIAL": 82, "NOT_SUPPORTED": 36}:
         raise SystemExit(f"unexpected V1 coverage totals: {dict(v1_coverage)}")
 
     if args.write:
@@ -124,6 +137,8 @@ def main() -> int:
                 WAVE4A_RULES,
                 WAVE4B_RULES,
                 WAVE5A_RULES,
+                WAVE5B_ACTIVE_RULES,
+                WAVE5B_PENDING_RULES,
             ),
             encoding="utf-8",
         )
@@ -144,7 +159,7 @@ def main() -> int:
     return 0
 
 
-def render_markdown(rows, feasibility, coverage, wave1_rules, wave1_partial, wave2_rules, wave2_partial, wave3a_rules, wave3b_rules, wave4a_rules, wave4b_rules, wave5a_rules) -> str:
+def render_markdown(rows, feasibility, coverage, wave1_rules, wave1_partial, wave2_rules, wave2_partial, wave3a_rules, wave3b_rules, wave4a_rules, wave4b_rules, wave5a_rules, wave5b_active_rules, wave5b_pending_rules) -> str:
     factors = defaultdict(Counter)
     for row in rows:
         factor = factors[row["factor"]]
@@ -157,7 +172,7 @@ def render_markdown(rows, feasibility, coverage, wave1_rules, wave1_partial, wav
         "",
         f"Snapshot content hash: `{BASELINE_HASH}`",
         "Source: immutable real `SSC_API` Golden Baseline",
-        "Implementation state: Waves 1-2, Wave 3A first-batch `SERVICE_PROTOCOL_IDENTIFICATION`, Wave 3B `HTTP_CONTENT`, Wave 4A `SSH_NEGOTIATION`, Wave 4B bounded SPF permanent-error analysis, and Wave 5A staged plaintext FTP/IMAP/POP3/SMTP identification",
+        "Implementation state: Waves 1-2, Wave 3A first-batch `SERVICE_PROTOCOL_IDENTIFICATION`, Wave 3B `HTTP_CONTENT`, Wave 4A `SSH_NEGOTIATION`, Wave 4B bounded SPF permanent-error analysis, Wave 5A staged plaintext FTP/IMAP/POP3/SMTP identification, and Wave 5B.1 closed LDAP identification; Oracle Net is implemented pending real interoperability and remains inactive/PARTIAL",
         "Total mapped issues: **202**",
         "",
         "> This is an independent implementation mapped to SSC taxonomy. It does not reproduce or claim knowledge of SSC collection, aggregation, severity, scoring, or proprietary detection logic. `ssc_severity` remains source metadata and is not mapped to internal risk or score impact.",
@@ -168,10 +183,10 @@ def render_markdown(rows, feasibility, coverage, wave1_rules, wave1_partial, wav
         "",
         "## Coverage summary",
         "",
-        "| Coverage | Before Wave 5A | After Wave 5A | Percentage after |",
+        "| Coverage | Before Wave 5B.1 | After Wave 5B.1 | Percentage after |",
         "|---|---:|---:|---:|",
-        f"| `SUPPORTED` | 38 | {coverage['SUPPORTED']} | {coverage['SUPPORTED']/202:.1%} |",
-        f"| `PARTIAL` | 89 | {coverage['PARTIAL']} | {coverage['PARTIAL']/202:.1%} |",
+        f"| `SUPPORTED` | 42 | {coverage['SUPPORTED']} | {coverage['SUPPORTED']/202:.1%} |",
+        f"| `PARTIAL` | 85 | {coverage['PARTIAL']} | {coverage['PARTIAL']/202:.1%} |",
         f"| `NOT_SUPPORTED` | 75 | {coverage['NOT_SUPPORTED']} | {coverage['NOT_SUPPORTED']/202:.1%} |",
         "| **Total** | **202** | **202** | **100.0%** |",
         "",
@@ -311,6 +326,36 @@ def render_markdown(rows, feasibility, coverage, wave1_rules, wave1_partial, wav
         lines.append(
             f"| `{spec.issue_key}` | `{spec.protocol}` | `{spec.primitive}` | {spec.match_condition} | "
             f"{spec.no_match_boundary} | {spec.indeterminate_boundary} | {spec.reference} |"
+        )
+
+    lines += [
+        "",
+        "## Active Wave 5B.1 evaluator mappings",
+        "",
+        "The approved Wave 5B.1 activation set contains only `service_ldap`. Its no-Bind RootDSE evaluator is linked to the exact attested issue version. Oracle Net remains implemented and tested but inactive/PARTIAL pending real interoperability. The adapters define no deterministic NO_MATCH, perform no authentication/session/query, and never follow Oracle redirects. The five product-ambiguous database keys remain PARTIAL.",
+        "",
+        "| SSC issue key | Protocol | Primitive | Exact MATCH condition | Exact NO_MATCH boundary | INDETERMINATE boundary | Authoritative reference |",
+        "|---|---|---|---|---|---|---|",
+    ]
+    for spec in wave5b_active_rules:
+        lines.append(
+            f"| `{spec.issue_key}` | `{spec.protocol}` | `{spec.primitive}` | {spec.match_condition} | "
+            f"{spec.no_match_boundary} | {spec.indeterminate_boundary} | {spec.reference} |"
+        )
+
+    lines += [
+        "",
+        "## Wave 5B.1 implemented pending interoperability",
+        "",
+        "These adapters and deterministic tests remain available, but they have no approved active evaluator and are not counted as `SUPPORTED`.",
+        "",
+        "| SSC issue key | Protocol | Current state | Closure blocker |",
+        "|---|---|---|---|",
+    ]
+    for spec in wave5b_pending_rules:
+        lines.append(
+            f"| `{spec.issue_key}` | `{spec.protocol}` | `IMPLEMENTED_PENDING_INTEROP` / `PARTIAL` | "
+            "Real protocol interoperability has not been validated. |"
         )
 
     lines += [
