@@ -29,6 +29,12 @@ from sqlalchemy.orm import Session, joinedload
 
 from app.models.models import Domain, Host, Organization
 from app.models.scan_models import EvidenceSourceEnum, ScanJobTarget, ScanTargetTypeEnum
+from app.services.public_exposure import (
+    ExecutionContext,
+    attach_exposure_contexts,
+    reject_reserved_trust_keys,
+    unknown_execution_context,
+)
 from app.services.http_content import (
     complete_sri_candidate,
     evaluate_http_content,
@@ -705,8 +711,13 @@ EXECUTOR_BY_NAME: dict[str, BaseExecutor] = {
 }
 
 
-def collect_scanner_observations(target: InventoryScanTarget, config: dict[str, Any] | None) -> list[ExecutorObservation]:
+def collect_scanner_observations(
+    target: InventoryScanTarget,
+    config: dict[str, Any] | None,
+    execution_context: ExecutionContext | None = None,
+) -> list[ExecutorObservation]:
     normalized_config = validate_scan_config(config)
+    execution_context = execution_context or unknown_execution_context()
     executor_names = normalized_config.get("executors")
     if executor_names is None:
         executor_names = ["http", "tls", "dns"]
@@ -728,7 +739,14 @@ def collect_scanner_observations(target: InventoryScanTarget, config: dict[str, 
         if wait > 0:
             time.sleep(wait)
         last_started = time.monotonic()
-        observations.append(executor.collect(target, normalized_config))
+        observation = executor.collect(target, normalized_config)
+        if observation.evidence_source in {
+            EvidenceSourceEnum.SCANNER_HTTP,
+            EvidenceSourceEnum.SCANNER_TLS,
+            EvidenceSourceEnum.SCANNER_TCP,
+        }:
+            attach_exposure_contexts(observation.evidence, target.connect_host, execution_context)
+        observations.append(observation)
     return observations
 
 
@@ -2166,6 +2184,10 @@ def validate_scan_config(config: dict[str, Any] | None) -> dict[str, Any]:
     if config is not None and not isinstance(config, dict):
         raise ScanExecutorError("scan_config must be an object")
     config = dict(config or {})
+    try:
+        reject_reserved_trust_keys(config, field_name="scan_config")
+    except ValueError as exc:
+        raise ScanExecutorError(str(exc)) from exc
     names = config.get(
         "executors",
         ["http", "tls", "dns"] + (["tcp"] if config.get("tcp_ports") or config.get("service_probes") or config.get("ssh_ports") else []),

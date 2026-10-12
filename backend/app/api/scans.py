@@ -15,6 +15,7 @@ from app.services.scan_engine import (
     validate_scan_target,
     validate_scan_target_authorized_for_scanner,
 )
+from app.services.public_exposure import api_inline_execution_context
 
 router = APIRouter(prefix="/api/v1/scans", tags=["scans"])
 
@@ -97,7 +98,7 @@ def read_scan_job(scan_job_id: UUID, db: Session = Depends(get_db)):
 @router.post("/jobs/{scan_job_id}/run", response_model=ScanRunRead, status_code=status.HTTP_201_CREATED)
 def run_scan_job_endpoint(scan_job_id: UUID, db: Session = Depends(get_db)):
     try:
-        return run_scan_job(db, scan_job_id)
+        return run_scan_job(db, scan_job_id, api_inline_execution_context())
     except ScanEngineError as exc:
         raise _bad_request(str(exc)) from exc
 

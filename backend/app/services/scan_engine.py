@@ -19,6 +19,12 @@ from app.models.scan_models import (
     ScanTargetTypeEnum,
 )
 from app.services.rule_evaluation import RuleEvaluationError, evaluate_rule_expression, _extract_path
+from app.services.public_exposure import (
+    ExecutionContext,
+    execution_context_snapshot,
+    reject_reserved_trust_keys,
+    unknown_execution_context,
+)
 from app.services.scan_executors import (
     ScanExecutorError,
     collect_scanner_observations,
@@ -30,7 +36,12 @@ from app.services.scan_executors import (
 ScanEngineError = RuleEvaluationError  # Preserve the Phase 4 public exception contract.
 
 
-def run_scan_job(db: Session, scan_job_id: UUID) -> ScanRun:
+def run_scan_job(
+    db: Session,
+    scan_job_id: UUID,
+    execution_context: ExecutionContext | None = None,
+) -> ScanRun:
+    execution_context = execution_context or unknown_execution_context()
     job = db.execute(
         select(ScanJob)
         .where(ScanJob.id == scan_job_id)
@@ -46,7 +57,13 @@ def run_scan_job(db: Session, scan_job_id: UUID) -> ScanRun:
     job.started_at = now
     job.completed_at = None
     job.error_message = None
-    run = ScanRun(scan_job_id=job.id, status=ScanStatusEnum.RUNNING, started_at=now)
+    context_snapshot = execution_context_snapshot(execution_context)
+    run = ScanRun(
+        scan_job_id=job.id,
+        status=ScanStatusEnum.RUNNING,
+        started_at=now,
+        summary={"public_exposure_context_v1": context_snapshot},
+    )
     db.add(run)
     db.flush()
     run_id = run.id
@@ -75,7 +92,9 @@ def run_scan_job(db: Session, scan_job_id: UUID) -> ScanRun:
         target_snapshots = []
         observation_count = 0
         for target in targets:
-            evidence, source_by_root, created_observations = _collect_or_load_evidence(db, job, run, target)
+            evidence, source_by_root, created_observations = _collect_or_load_evidence(
+                db, job, run, target, execution_context
+            )
             observation_count += created_observations
             identity = target.host or target.domain or target.organization
             target_snapshots.append({"inventory_id": str(target.host_id or target.domain_id or target.organization_id),
@@ -142,6 +161,7 @@ def run_scan_job(db: Session, scan_job_id: UUID) -> ScanRun:
         run.status = ScanStatusEnum.COMPLETED
         run.completed_at = completed_at
         run.summary = {
+            "public_exposure_context_v1": context_snapshot,
             "targets": len(targets),
             "observations_created": observation_count,
             "evidence_mode": "SCANNER" if job.collect_observations else "MANUAL",
@@ -164,12 +184,17 @@ def run_scan_job(db: Session, scan_job_id: UUID) -> ScanRun:
             failed_job.error_message = str(exc)
             failed_job.completed_at = datetime.now(timezone.utc)
             db.add(ScanRun(id=run_id, scan_job_id=scan_job_id, status=ScanStatusEnum.FAILED,
-                           started_at=now, completed_at=failed_job.completed_at, error_message=str(exc)))
+                           started_at=now, completed_at=failed_job.completed_at,
+                           summary={"public_exposure_context_v1": context_snapshot},
+                           error_message=str(exc)))
             db.commit()
         raise
 
 
-def process_next_scan_job(db: Session) -> ScanRun | None:
+def process_next_scan_job(
+    db: Session,
+    execution_context: ExecutionContext | None = None,
+) -> ScanRun | None:
     job = db.execute(
         select(ScanJob)
         .where(ScanJob.status == ScanStatusEnum.QUEUED)
@@ -178,10 +203,15 @@ def process_next_scan_job(db: Session) -> ScanRun | None:
     ).scalar_one_or_none()
     if job is None:
         return None
-    return run_scan_job(db, job.id)
+    return run_scan_job(db, job.id, execution_context or unknown_execution_context())
 
 
 def validate_scan_target(db: Session, target: ScanJobTarget):
+    try:
+        reject_reserved_trust_keys(target.evidence, field_name="evidence", recursive=True)
+        reject_reserved_trust_keys(target.scan_config, field_name="scan_config")
+    except ValueError as exc:
+        raise ScanEngineError(str(exc)) from exc
     if target.target_type == ScanTargetTypeEnum.ORGANIZATION:
         if db.get(Organization, target.organization_id) is None:
             raise ScanEngineError("Organization target not found")
@@ -211,9 +241,14 @@ def _collect_or_load_evidence(
     job: ScanJob,
     run: ScanRun,
     target: ScanJobTarget,
+    execution_context: ExecutionContext,
 ) -> tuple[dict[str, Any], dict[str, EvidenceSourceEnum], int]:
     if not job.collect_observations:
         evidence = target.evidence or {}
+        try:
+            reject_reserved_trust_keys(evidence, field_name="evidence", recursive=True)
+        except ValueError as exc:
+            raise ScanEngineError(str(exc)) from exc
         if target.evidence is not None:
             db.add(
                 ScanObservation(
@@ -229,7 +264,9 @@ def _collect_or_load_evidence(
 
     try:
         inventory_target = load_authorized_scan_target(db, target)
-        observations = collect_scanner_observations(inventory_target, target.scan_config)
+        observations = collect_scanner_observations(
+            inventory_target, target.scan_config, execution_context
+        )
     except ScanExecutorError as exc:
         raise ScanEngineError(str(exc)) from exc
 

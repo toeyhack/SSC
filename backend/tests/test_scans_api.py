@@ -72,6 +72,13 @@ def test_scan_job_run_creates_findings_with_exact_rule_version():
     run = run_resp.json()
     assert run["status"] == "COMPLETED"
     assert run["summary"]["targets"] == 1
+    assert run["summary"]["public_exposure_context_v1"]["vantage"] == {
+        "policy_version": "ssc-scan-vantage-attestation.v1",
+        "vantage_class": "UNKNOWN",
+        "vantage_id": None,
+        "attestation_source": "API_INLINE",
+        "manifest_digest": None,
+    }
     assert run["summary"]["rules_evaluated"] == 1
     assert run["summary"]["findings_created"] == 1
 
@@ -112,6 +119,23 @@ def test_scan_job_with_nonmatching_evidence_completes_without_findings():
     findings = client.get(f"/api/v1/scans/runs/{run['id']}/findings")
     assert findings.status_code == 200
     assert findings.json() == []
+
+
+def test_api_rejects_job_controlled_exposure_attestation():
+    _org, _domain, host = _host()
+    for target_fields in (
+        {"evidence": {"public_exposure_context": {"matched": True}}},
+        {"scan_config": {"vantage_class": "EXTERNAL_PUBLIC"}},
+    ):
+        response = client.post(
+            "/api/v1/scans/jobs",
+            json={
+                "name": "Spoofed exposure",
+                "targets": [{"target_type": "HOST", "host_id": host["id"], **target_fields}],
+            },
+        )
+        assert response.status_code == 400
+        assert "reserved" in response.json()["detail"]
 
 
 def test_scan_job_validation_rejects_unknown_targets_and_rules():

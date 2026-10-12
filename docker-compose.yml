@@ -60,6 +60,7 @@ services:
       DATABASE_URL: postgresql+psycopg://postgres:postgres@postgres:5432/ssc
       REDIS_URL: redis://redis:6379/0
       PYTHONUNBUFFERED: 1
+      SCANNER_VANTAGE_MANIFEST_PATH: ${SCANNER_VANTAGE_MANIFEST_PATH:-}
     volumes:
       - ./backend:/app
     command:

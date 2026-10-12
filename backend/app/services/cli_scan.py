@@ -5,6 +5,7 @@ from app.models.models import Domain, Host
 from app.models.rule_models import RuleEngineRule, RuleTargetTypeEnum
 from app.models.scan_models import ScanJob, ScanJobTarget, ScanTargetTypeEnum
 from app.services.scan_engine import run_scan_job, validate_scan_target_authorized_for_scanner
+from app.services.public_exposure import local_cli_execution_context
 from app.services.scan_executors import _clean_host_identifier, validate_scan_config
 from app.services.score_results import build_score_result
 from app.services.scoring_engine import ScoringDefinition
@@ -47,5 +48,5 @@ def scan_inventory_target(db: Session, *, name: str, scan_config: dict, model: S
     target.scan_job_id = job.id
     db.add(target)
     db.commit()
-    run = run_scan_job(db, job.id)
+    run = run_scan_job(db, job.id, local_cli_execution_context())
     return build_score_result(db, run.id, model)
