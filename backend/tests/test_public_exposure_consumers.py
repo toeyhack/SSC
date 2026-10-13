@@ -117,8 +117,13 @@ def _seed_job(
         version_number=1,
         name=issue_key,
         target_type=RuleTargetTypeEnum.HOST,
-        rule_expression=public_exposure_rule_expression(issue_key),
-        evidence_schema={"consumer_policy_version": consumer.consumer_policy_version},
+        rule_expression=public_exposure_rule_expression(issue_key) or {
+            "operator": "equals", "path": f"tcp.evaluations.{issue_key}.matched", "value": True,
+        },
+        evidence_schema=(
+            {"consumer_policy_version": consumer.consumer_policy_version}
+            if consumer is not None else {"semantic_class": "PROTOCOL_IDENTITY_ONLY"}
+        ),
         source_type=RuleSourceTypeEnum.SSC_REFERENCE,
     )
     db.add(rule_version)
@@ -150,7 +155,7 @@ def _seed_job(
     )
     db.add(job)
     db.flush()
-    root = consumer.evidence_root
+    root = consumer.evidence_root if consumer is not None else "tcp"
     target = ScanJobTarget(
         scan_job_id=job.id,
         target_type=ScanTargetTypeEnum.HOST,
@@ -190,6 +195,7 @@ def _scanner_observation(issue_key, source, *, protocol_outcome="MATCH", stale=F
     [
         ("service_rsync", EvidenceSourceEnum.SCANNER_TCP),
         ("service_soap", EvidenceSourceEnum.SCANNER_HTTP),
+        ("service_rdp", EvidenceSourceEnum.SCANNER_TCP),
     ],
 )
 def test_external_public_scanner_match_creates_explained_finding(db, monkeypatch, issue_key, source):
@@ -209,16 +215,38 @@ def test_external_public_scanner_match_creates_explained_finding(db, monkeypatch
     assert context["composition"]["outcome"] == "MATCH"
 
 
+def test_minecraft_protocol_match_creates_finding_without_external_vantage(db, monkeypatch):
+    job = _seed_job(db, "minecraft_server")
+    monkeypatch.setattr(
+        scan_engine,
+        "collect_scanner_observations",
+        _scanner_observation("minecraft_server", EvidenceSourceEnum.SCANNER_TCP),
+    )
+    run = run_scan_job(db, job.id, local_cli_execution_context())
+    assert run.summary["findings_created"] == 1
+    assessment = run.summary["rule_assessments"][0]
+    assert assessment["status"] == "evaluated"
+    assert assessment["evaluation_outcome"] == "MATCH"
+    assert run.findings[0].evidence["target_evidence"] == {
+        "path": "tcp.evaluations.minecraft_server.matched",
+        "found": True,
+        "value": True,
+    }
+
+
 @pytest.mark.parametrize(
     "execution_context",
     [local_cli_execution_context(), api_inline_execution_context(), unknown_execution_context()],
 )
-def test_unknown_local_api_and_default_worker_vantage_are_not_assessed(db, monkeypatch, execution_context):
-    job = _seed_job(db, "service_rsync")
+@pytest.mark.parametrize("issue_key", ["service_rsync", "service_rdp"])
+def test_unknown_local_api_and_default_worker_vantage_are_not_assessed(
+    db, monkeypatch, execution_context, issue_key
+):
+    job = _seed_job(db, issue_key)
     monkeypatch.setattr(
         scan_engine,
         "collect_scanner_observations",
-        _scanner_observation("service_rsync", EvidenceSourceEnum.SCANNER_TCP),
+        _scanner_observation(issue_key, EvidenceSourceEnum.SCANNER_TCP),
     )
     run = run_scan_job(db, job.id, execution_context)
     assessment = run.summary["rule_assessments"][0]
@@ -235,15 +263,16 @@ def test_unknown_local_api_and_default_worker_vantage_are_not_assessed(db, monke
         ("8.8.8.8", _external_context(), "INDETERMINATE"),
     ],
 )
+@pytest.mark.parametrize("issue_key", ["service_rsync", "service_rdp"])
 def test_internal_vantage_non_public_target_and_protocol_indeterminate_are_not_assessed(
-    db, monkeypatch, address, context, protocol_outcome
+    db, monkeypatch, address, context, protocol_outcome, issue_key
 ):
-    job = _seed_job(db, "service_rsync", address=address)
+    job = _seed_job(db, issue_key, address=address)
     monkeypatch.setattr(
         scan_engine,
         "collect_scanner_observations",
         _scanner_observation(
-            "service_rsync", EvidenceSourceEnum.SCANNER_TCP, protocol_outcome=protocol_outcome
+            issue_key, EvidenceSourceEnum.SCANNER_TCP, protocol_outcome=protocol_outcome
         ),
     )
     run = run_scan_job(db, job.id, context)
@@ -258,29 +287,31 @@ def test_internal_vantage_non_public_target_and_protocol_indeterminate_are_not_a
         (EvidenceSourceEnum.SCANNER_HTTP, False, "untrusted_observation_source"),
     ],
 )
-def test_stale_policy_and_wrong_scanner_source_fail_closed(db, monkeypatch, source, stale, reason):
-    job = _seed_job(db, "service_rsync")
+@pytest.mark.parametrize("issue_key", ["service_rsync", "service_rdp"])
+def test_stale_policy_and_wrong_scanner_source_fail_closed(db, monkeypatch, source, stale, reason, issue_key):
+    job = _seed_job(db, issue_key)
     monkeypatch.setattr(
         scan_engine,
         "collect_scanner_observations",
-        _scanner_observation("service_rsync", source, stale=stale),
+        _scanner_observation(issue_key, source, stale=stale),
     )
     run = run_scan_job(db, job.id, _external_context())
     assert run.summary["rule_assessments"][0]["reason_code"] == reason
     assert run.summary["findings_created"] == 0
 
 
-def test_manual_protocol_shaped_match_is_rejected_by_source_identity(db):
+@pytest.mark.parametrize("issue_key", ["service_rsync", "service_rdp"])
+def test_manual_protocol_shaped_match_is_rejected_by_source_identity(db, issue_key):
     evidence = {
         "tcp": {
             "evaluations": {
-                "service_rsync": {"outcome": "MATCH", "matched": True},
+                issue_key: {"outcome": "MATCH", "matched": True},
             }
         }
     }
     job = _seed_job(
         db,
-        "service_rsync",
+        issue_key,
         collect_observations=False,
         manual_evidence=evidence,
     )

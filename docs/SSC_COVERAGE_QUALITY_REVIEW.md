@@ -88,6 +88,10 @@ Wave 5C implements bounded identification for `minecraft_server`, `service_pptp`
 
 The later exact pinned-baseline review classifies `minecraft_server` as protocol-identity-only and `service_rdp` and `service_pptp` as public-exposure-required. `PUBLIC_EXPOSURE_CONTEXT v1` now supplies an authoritative evidence contract for reviewed consumers, but Wave 5C activation is deliberately excluded from this tranche, so all three remain inactive/PARTIAL. Minecraft and RDP have real loopback interoperability; PPTP also remains `IMPLEMENTED_PENDING_INTEROP` because no safe unprivileged real fixture was available. Closed coverage remains 39/53 VERIFIED_DIRECT, 42/160 V1, and 43/202 full baseline.
 
+## Wave 5C closure/activation update (2026-10-13)
+
+The approved closure tranche activates `minecraft_server` and `service_rdp` against exact current definitions in attested baseline `0fe2bc8ffb7e3f734d4e88f70b11cffa6e8e9e47e722dc62107f6ff09694eca8`. Minecraft remains protocol-identity-only. RDP consumes the composed `PUBLIC_EXPOSURE_CONTEXT v1` result and requires SCANNER_TCP; manual, wrong-source, unknown/internal-vantage, non-public, protocol-indeterminate, and stale-policy cases are NOT_ASSESSED. PPTP's exposure consumer is ready but it remains `IMPLEMENTED_PENDING_INTEROP`/PARTIAL/inactive. Closed coverage is 41/53 VERIFIED_DIRECT, 44/160 V1, and 45/202 full baseline. PPTP plus unchanged pending Oracle keep the implementation ceiling at 43/53, 46/160, and 47/202.
+
 ## Pre-Wave 1 outcome
 
 The original 87 `DIRECTLY_TESTABLE` rows were re-reviewed against the imported issue descriptions, current executor evidence, authorization boundaries, and public standards. Twelve were over-optimistic and have been downgraded to `TESTABLE_WITH_ENRICHMENT`. No issue was upgraded.

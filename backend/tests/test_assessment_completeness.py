@@ -366,13 +366,14 @@ def test_versioned_v1_profile_resolves_exact_baseline_scope_and_capabilities(db)
     out_of_scope = [item for item in profile.issues if item.factor_code not in profile.definition.in_scope_factor_codes]
     assert len(in_scope) == 160
     assert len(out_of_scope) == 42
-    assert sum(item.supported_capability for item in in_scope) == 42
-    assert sum(item.supported_capability for item in profile.issues) == 43
+    assert sum(item.supported_capability for item in in_scope) == 44
+    assert sum(item.supported_capability for item in profile.issues) == 45
     assert next(item for item in in_scope if item.stable_key == "service_ldap").supported_capability is True
     assert next(item for item in in_scope if item.stable_key == "service_oracle_db").supported_capability is False
-    assert WAVE5C_ACTIVE_BY_KEY == {}
+    assert set(WAVE5C_ACTIVE_BY_KEY) == {"minecraft_server", "service_rdp"}
     assert all(
-        next(item for item in in_scope if item.stable_key == key).supported_capability is False
+        next(item for item in in_scope if item.stable_key == key).supported_capability
+        is (key in WAVE5C_ACTIVE_BY_KEY)
         for key in WAVE5C_BY_KEY
     )
     assert next(item for item in out_of_scope if item.stable_key == "mail_server_unusual_port").supported_capability is True
@@ -381,7 +382,7 @@ def test_versioned_v1_profile_resolves_exact_baseline_scope_and_capabilities(db)
         for code in profile.definition.in_scope_factor_codes
     } == {
         "application_security": 16,
-        "network_security": 19,
+        "network_security": 21,
         "dns_health": 7,
         "patching_cadence": 0,
     }

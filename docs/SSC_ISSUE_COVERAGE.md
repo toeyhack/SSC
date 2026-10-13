@@ -2,7 +2,7 @@
 
 Snapshot content hash: `0fe2bc8ffb7e3f734d4e88f70b11cffa6e8e9e47e722dc62107f6ff09694eca8`
 Source: immutable real `SSC_API` Golden Baseline
-Implementation state: Waves 1-2, Wave 3A, Wave 3B, Wave 4A, Wave 4B, Wave 5A, and Wave 5B.1 closed LDAP are active. Nine exact reviewed consumers (`service_rsync`, `service_redis`, `service_socks_proxy`, `service_smb`, `service_soap`, `service_ftp`, `service_imap`, `service_pop3`, and `service_ldap`) now compose protocol identity with `PUBLIC_EXPOSURE_CONTEXT v1`; this changes per-run assessment eligibility, not capability support. Wave 5C Minecraft/PPTP/RDP protocol primitives remain inactive/PARTIAL; exact review classifies Minecraft as protocol-identity-only and RDP/PPTP as public-exposure-required, while PPTP additionally lacks real interoperability. Oracle Net remains separately implemented pending real interoperability.
+Implementation state: Waves 1-2, Wave 3A, Wave 3B, Wave 4A, Wave 4B, Wave 5A, Wave 5B.1 LDAP, and Wave 5C Minecraft/RDP are active. Minecraft is protocol-identity-only; RDP consumes PUBLIC_EXPOSURE_CONTEXT v1. PPTP remains implemented/inactive pending real interoperability, and Oracle Net remains separately implemented pending real interoperability.
 Total mapped issues: **202**
 
 > This is an independent implementation mapped to SSC taxonomy. It does not reproduce or claim knowledge of SSC collection, aggregation, severity, scoring, or proprietary detection logic. `ssc_severity` remains source metadata and is not mapped to internal risk or score impact.
@@ -13,10 +13,10 @@ Total mapped issues: **202**
 
 ## Coverage summary
 
-| Coverage | Before Wave 5B.1 | After Wave 5C implementation | Percentage after |
+| Coverage | Before Wave 5C closure | After Wave 5C closure | Percentage after |
 |---|---:|---:|---:|
-| `SUPPORTED` | 42 | 43 | 21.3% |
-| `PARTIAL` | 85 | 84 | 41.6% |
+| `SUPPORTED` | 43 | 45 | 22.3% |
+| `PARTIAL` | 84 | 82 | 40.6% |
 | `NOT_SUPPORTED` | 75 | 75 | 37.1% |
 | **Total** | **202** | **202** | **100.0%** |
 
@@ -40,7 +40,7 @@ Total mapped issues: **202**
 | `hacker_chatter` | 2 | 0 | 0 | 2 | 0 | 0 | 0 | 2 |
 | `ip_reputation` | 26 | 1 | 1 | 24 | 0 | 1 | 1 | 24 |
 | `leaked_information` | 8 | 0 | 0 | 8 | 0 | 0 | 0 | 8 |
-| `network_security` | 68 | 42 | 20 | 5 | 1 | 19 | 42 | 7 |
+| `network_security` | 68 | 42 | 20 | 5 | 1 | 21 | 40 | 7 |
 | `patching_cadence` | 21 | 0 | 21 | 0 | 0 | 0 | 8 | 13 |
 | `social_engineering` | 1 | 0 | 0 | 1 | 0 | 0 | 0 | 1 |
 
@@ -174,15 +174,22 @@ These adapters and deterministic tests remain available, but they have no approv
 |---|---|---|---|
 | `service_oracle_db` | `Oracle Net/TNS CONNECT` | `IMPLEMENTED_PENDING_INTEROP` / `PARTIAL` | Real protocol interoperability has not been validated. |
 
-## Wave 5C implemented pending separate activation
+## Active Wave 5C evaluator mappings
 
-All three protocol adapters are implemented under `service-probe-adapter.v3`, but no Wave 5C SSC rule is active. Exact pinned-baseline review classifies `minecraft_server` as `PROTOCOL_IDENTITY_ONLY` and `service_rdp` and `service_pptp` as `PUBLIC_EXPOSURE_REQUIRED`. The reusable exposure foundation now exists, but Wave 5C activation and semantic rule versions are deliberately outside this tranche. Minecraft and RDP have real loopback interoperability; PPTP remains pending real interoperability as an independent blocker.
+The approved Wave 5C activation set contains `minecraft_server` and `service_rdp`, each linked to the exact attested issue version. Minecraft uses protocol identity as its complete applicability predicate. RDP requires protocol MATCH plus PUBLIC_ROUTABLE plus trusted EXTERNAL_PUBLIC deployment-manifest vantage through PUBLIC_EXPOSURE_CONTEXT v1.
+
+| SSC issue key | Protocol | Primitive | Exact logic | Authoritative reference |
+|---|---|---|---|---|
+| `minecraft_server` | `Minecraft Java Server List Ping status` | `SERVICE_PROTOCOL_IDENTIFICATION` | MATCH only for a complete status frame with packet ID zero and bounded strict JSON containing a valid version name and integer protocol. Protocol identity is the complete applicability predicate; PUBLIC_EXPOSURE_CONTEXT is not required. | https://c4k3.github.io/wiki.vg/Server_List_Ping.html |
+| `service_rdp` | `TPKT/X.224 with RDP Negotiation` | `SERVICE_PROTOCOL_IDENTIFICATION` | Protocol prerequisite: MATCH only for a complete X.224 Connection Confirm containing a legal RDP Negotiation Response or Failure; a bare Connection Confirm is INDETERMINATE. Final MATCH requires the protocol prerequisite plus PUBLIC_ROUTABLE target address and trusted EXTERNAL_PUBLIC deployment-manifest vantage through PUBLIC_EXPOSURE_CONTEXT v1. All other exposure compositions are INDETERMINATE / NOT_ASSESSED; there is no deterministic exposure NO_MATCH. | https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-rdpbcgr/13757f8f-66db-4273-9d2c-385c33b1e483 |
+
+## Wave 5C implemented pending interoperability
+
+PPTP's protocol adapter and public-exposure consumer semantics are ready, but its SSC rule remains inactive until real interoperability passes.
 
 | SSC issue key | Protocol | Current state | Closure blockers |
 |---|---|---|---|
-| `minecraft_server` | `Minecraft Java Server List Ping status` | `PARTIAL` / inactive | `IMPLEMENTED_PENDING_EXPOSURE_CONTEXT` |
-| `service_pptp` | `PPTP Start-Control-Connection` | `PARTIAL` / inactive | `IMPLEMENTED_PENDING_EXPOSURE_CONTEXT`, `IMPLEMENTED_PENDING_INTEROP` |
-| `service_rdp` | `TPKT/X.224 with RDP Negotiation` | `PARTIAL` / inactive | `IMPLEMENTED_PENDING_EXPOSURE_CONTEXT` |
+| `service_pptp` | `PPTP Start-Control-Connection` | `PARTIAL` / inactive | `IMPLEMENTED_PENDING_INTEROP` |
 
 ## Per-issue index
 
@@ -315,7 +322,7 @@ The CSV remains normative for exact evidence requirements, proposed logic, depen
 | `java_debugger` | Java Debugger Detected | `network_security` | `info` | `DIRECTLY_TESTABLE` | `PROTOCOL_PROBE` | `PARTIAL` |
 | `microsoft_exchange_0_day_vulnerability` | Product Potentially Impacted by CVE-2022-41040 & CVE-2022-41082 | `network_security` | `low` | `TESTABLE_WITH_ENRICHMENT` | `FINGERPRINT+SBOM+CVE` | `PARTIAL` |
 | `microsoft_exchange_http_api_vulnerability` | Product Potentially Impacted by PowerShell Remoting RCE | `network_security` | `low` | `TESTABLE_WITH_ENRICHMENT` | `FINGERPRINT+SBOM+CVE` | `PARTIAL` |
-| `minecraft_server` | Minecraft Server Accessible | `network_security` | `medium` | `DIRECTLY_TESTABLE` | `SERVICE_PROTOCOL_IDENTIFICATION` | `PARTIAL` |
+| `minecraft_server` | Minecraft Server Accessible | `network_security` | `medium` | `DIRECTLY_TESTABLE` | `SERVICE_PROTOCOL_IDENTIFICATION` | `SUPPORTED` |
 | `mysql_server_empty_password` | MySQL Server Running with Empty Password | `network_security` | `low` | `TESTABLE_WITH_ENRICHMENT` | `CONFIG_AUDIT` | `NOT_SUPPORTED` |
 | `open_port` | Open Port Discovered | `network_security` | `info` | `DIRECTLY_TESTABLE` | `TCP` | `PARTIAL` |
 | `potentially_vulnerable_cisco_rv_320_325` | Potentially Vulnerable Cisco RV320/RV325 Router | `network_security` | `info` | `TESTABLE_WITH_ENRICHMENT` | `FINGERPRINT+SBOM+CVE` | `PARTIAL` |
@@ -344,7 +351,7 @@ The CSV remains normative for exact evidence requirements, proposed logic, depen
 | `service_postgresql` | PostgreSQL Service Observed | `network_security` | `medium` | `DIRECTLY_TESTABLE` | `PROTOCOL_PROBE+TCP` | `PARTIAL` |
 | `service_pptp` | PPTP Service Accessible | `network_security` | `medium` | `DIRECTLY_TESTABLE` | `SERVICE_PROTOCOL_IDENTIFICATION` | `PARTIAL` |
 | `service_pulse_vpn` | Pulse Connect Secure VPN Product Observed | `network_security` | `medium` | `TESTABLE_WITH_ENRICHMENT` | `TCP+HTTP+TLS+DNS_FINGERPRINT` | `PARTIAL` |
-| `service_rdp` | RDP Service Observed | `network_security` | `medium` | `DIRECTLY_TESTABLE` | `SERVICE_PROTOCOL_IDENTIFICATION` | `PARTIAL` |
+| `service_rdp` | RDP Service Observed | `network_security` | `medium` | `DIRECTLY_TESTABLE` | `SERVICE_PROTOCOL_IDENTIFICATION` | `SUPPORTED` |
 | `service_redis` | Redis Service Observed | `network_security` | `medium` | `DIRECTLY_TESTABLE` | `SERVICE_PROTOCOL_IDENTIFICATION` | `SUPPORTED` |
 | `service_rsync` | rsync Service Observed | `network_security` | `medium` | `DIRECTLY_TESTABLE` | `SERVICE_PROTOCOL_IDENTIFICATION` | `SUPPORTED` |
 | `service_smb` | SMB Service Observed | `network_security` | `medium` | `DIRECTLY_TESTABLE` | `SERVICE_PROTOCOL_IDENTIFICATION` | `SUPPORTED` |

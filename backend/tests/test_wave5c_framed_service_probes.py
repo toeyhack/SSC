@@ -5,8 +5,10 @@ import struct
 import threading
 import time
 from contextlib import contextmanager
+from uuid import UUID
 
 import pytest
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.cli.ssc import build_parser
@@ -39,6 +41,26 @@ from app.services.service_probes import (
     run_service_probe,
 )
 from app.models.scan_models import ScanTargetTypeEnum
+from app.models.catalog_models import (
+    BreachRiskEnum,
+    CatalogFactor,
+    CatalogIssueType,
+    CatalogIssueTypeVersion,
+    CatalogSnapshot,
+    CatalogSnapshotItem,
+    SourceTypeEnum,
+)
+from app.models.rule_models import (
+    RuleEngineRule,
+    RuleEngineRuleVersion,
+    RuleSourceTypeEnum,
+    RuleTargetTypeEnum,
+)
+from app.services.public_exposure_consumers import (
+    PINNED_SSC_BASELINE_HASH,
+    PUBLIC_EXPOSURE_CONSUMER_POLICY_V2,
+    get_pinned_public_exposure_consumer,
+)
 from app.services.wave5c_rules import (
     WAVE5C_ACTIVE_KEYS,
     WAVE5C_BY_KEY,
@@ -104,6 +126,48 @@ def db():
         with Session(bind=connection, join_transaction_mode="create_savepoint") as session:
             yield session
         transaction.rollback()
+
+
+def _seed_pinned_wave5c_baseline(db: Session) -> dict[str, CatalogIssueType]:
+    factor = CatalogFactor(code="network_security", name="Network Security")
+    db.add(factor)
+    db.flush()
+    snapshot = CatalogSnapshot(
+        name="Pinned Wave 5C baseline",
+        source_type=SourceTypeEnum.SSC_API,
+        content_hash=PINNED_SSC_BASELINE_HASH,
+        normalized_schema_version="ssc.api.metadata.v2",
+        is_real_baseline=True,
+    )
+    db.add(snapshot)
+    db.flush()
+    issues = {}
+    for position, spec in enumerate(WAVE5C_BY_KEY.values()):
+        issue = CatalogIssueType(stable_key=spec.issue_key, factor_id=factor.id)
+        db.add(issue)
+        db.flush()
+        version = CatalogIssueTypeVersion(
+            issue_type_id=issue.id,
+            version_number=1,
+            name=spec.title,
+            breach_risk=BreachRiskEnum.UNKNOWN,
+            ssc_severity="medium",
+            affects_score=False,
+            source_type=SourceTypeEnum.SSC_API,
+            source_snapshot_hash=PINNED_SSC_BASELINE_HASH,
+        )
+        db.add(version)
+        db.flush()
+        issue.current_version_id = version.id
+        db.add(CatalogSnapshotItem(
+            catalog_snapshot_id=snapshot.id,
+            issue_type_version_id=version.id,
+            factor_position=0,
+            issue_position=position,
+        ))
+        issues[spec.issue_key] = issue
+    db.flush()
+    return issues
 
 
 @contextmanager
@@ -410,13 +474,107 @@ def test_wave5c_config_and_executor_pass_declared_hostname(monkeypatch):
     assert all(item[3] == "declared.example.test" for item in seen)
 
 
-def test_wave5c_rules_are_implemented_but_exposure_context_gated(db):
-    assert WAVE5C_ACTIVE_KEYS == frozenset()
-    assert set(WAVE5C_CLOSURE_BLOCKERS) == {"minecraft_server", "service_pptp", "service_rdp"}
-    assert all("IMPLEMENTED_PENDING_EXPOSURE_CONTEXT" in reasons for reasons in WAVE5C_CLOSURE_BLOCKERS.values())
-    result = activate_wave5c_rules(db, commit=False)
-    assert result["activated"] == []
-    assert set(result["inactive"]) == set(WAVE5C_BY_KEY)
-    assert active_wave5c_mappings(db) == []
+def test_wave5c_rules_close_minecraft_and_rdp_with_exact_semantics(db):
+    assert WAVE5C_ACTIVE_KEYS == frozenset({"minecraft_server", "service_rdp"})
+    assert WAVE5C_CLOSURE_BLOCKERS == {"service_pptp": ("IMPLEMENTED_PENDING_INTEROP",)}
+    minecraft = WAVE5C_BY_KEY["minecraft_server"]
+    assert minecraft.expression == {
+        "operator": "equals", "path": "tcp.evaluations.minecraft_server.matched", "value": True,
+    }
+    assert minecraft.evidence_schema["semantic_class"] == "PROTOCOL_IDENTITY_ONLY"
+    assert "public_exposure_context" not in minecraft.evidence_schema
+    rdp = WAVE5C_BY_KEY["service_rdp"]
+    assert rdp.expression == {
+        "operator": "equals",
+        "path": "tcp.evaluations.service_rdp.exposure_context.composition.matched",
+        "value": True,
+    }
+    assert rdp.evidence_schema["public_exposure_context"]["consumer_policy_version"] == (
+        PUBLIC_EXPOSURE_CONSUMER_POLICY_V2
+    )
+    assert get_pinned_public_exposure_consumer("service_pptp") is not None
     args = build_parser().parse_args(["baseline", "activate-wave5c", "--yes"])
     assert args.baseline_command == "activate-wave5c" and args.yes
+
+
+def test_wave5c_activation_requires_exact_baseline_is_idempotent_and_deactivates_pptp(db):
+    unavailable = activate_wave5c_rules(db, commit=False)["unavailable"]
+    assert set(unavailable) == {"minecraft_server", "service_rdp"}
+    issues = _seed_pinned_wave5c_baseline(db)
+
+    pptp_rule = RuleEngineRule(
+        stable_key="ssc.wave5c.service_pptp",
+        catalog_issue_type_id=issues["service_pptp"].id,
+        is_active=True,
+    )
+    db.add(pptp_rule)
+    db.flush()
+    first = activate_wave5c_rules(db, commit=False)
+    assert first["unavailable"] == {}
+    assert set(first["activated"]) == {"minecraft_server", "service_rdp"}
+    assert first["inactive"] == ["service_pptp"]
+    assert first["rules_created"] == first["rule_versions_created"] == 2
+    assert first["rules_deactivated"] == 1 and pptp_rule.is_active is False
+    mappings = active_wave5c_mappings(db)
+    assert {mapping["issue_key"] for mapping in mappings} == {"minecraft_server", "service_rdp"}
+    assert all(UUID(mapping["issue_version_id"]) == issues[mapping["issue_key"]].current_version_id for mapping in mappings)
+
+    version_count = db.scalar(select(func.count()).select_from(RuleEngineRuleVersion))
+    repeated = activate_wave5c_rules(db, commit=False)
+    assert repeated["rules_created"] == repeated["rule_versions_created"] == 0
+    assert repeated["rules_reused"] == 2 and repeated["rules_deactivated"] == 0
+    assert db.scalar(select(func.count()).select_from(RuleEngineRuleVersion)) == version_count
+
+
+def test_wave5c_activation_rejects_stale_current_version_and_does_not_churn_other_rules(db):
+    issues = _seed_pinned_wave5c_baseline(db)
+    other_rules = []
+    for position, issue_key in enumerate((
+        "service_rsync", "service_redis", "service_socks_proxy", "service_smb", "service_soap",
+        "service_ftp", "service_imap", "service_pop3", "service_ldap",
+    )):
+        rule = RuleEngineRule(stable_key=f"ssc.existing.{issue_key}", is_active=True)
+        db.add(rule)
+        db.flush()
+        version = RuleEngineRuleVersion(
+            rule_id=rule.id,
+            version_number=2,
+            name=issue_key,
+            target_type=RuleTargetTypeEnum.HOST,
+            rule_expression={"operator": "equals", "path": f"tcp.evaluations.{issue_key}.matched", "value": True},
+            evidence_schema={"immutable_fixture": position},
+            source_type=RuleSourceTypeEnum.SSC_REFERENCE,
+        )
+        db.add(version)
+        db.flush()
+        rule.current_version_id = version.id
+        other_rules.append((rule.id, version.id, version.version_number, version.rule_expression, version.evidence_schema))
+
+    initial = activate_wave5c_rules(db, commit=False)
+    assert set(initial["activated"]) == {"minecraft_server", "service_rdp"}
+    minecraft_rule = db.scalar(select(RuleEngineRule).where(
+        RuleEngineRule.stable_key == "ssc.wave5c.minecraft_server"
+    ))
+
+    minecraft = issues["minecraft_server"]
+    stale = CatalogIssueTypeVersion(
+        issue_type_id=minecraft.id,
+        version_number=2,
+        name="Stale Minecraft definition",
+        breach_risk=BreachRiskEnum.UNKNOWN,
+        ssc_severity="medium",
+        affects_score=False,
+        source_type=SourceTypeEnum.SSC_API,
+    )
+    db.add(stale)
+    db.flush()
+    minecraft.current_version_id = stale.id
+    result = activate_wave5c_rules(db, commit=False)
+    assert set(result["activated"]) == {"service_rdp"}
+    assert set(result["unavailable"]) == {"minecraft_server"}
+    assert result["rules_deactivated"] == 1 and minecraft_rule.is_active is False
+    for rule_id, version_id, number, expression, schema in other_rules:
+        rule = db.get(RuleEngineRule, rule_id)
+        version = db.get(RuleEngineRuleVersion, version_id)
+        assert rule.current_version_id == version_id and rule.is_active
+        assert (version.version_number, version.rule_expression, version.evidence_schema) == (number, expression, schema)

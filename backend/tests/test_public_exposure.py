@@ -36,6 +36,9 @@ from app.services import scan_executors
 from app.services.public_exposure_consumers import (
     PINNED_SSC_BASELINE_HASH,
     PUBLIC_EXPOSURE_CONSUMER_POLICY_VERSION,
+    PUBLIC_EXPOSURE_CONSUMER_POLICY_V1,
+    PUBLIC_EXPOSURE_CONSUMER_POLICY_V2,
+    PUBLIC_EXPOSURE_CONSUMER_REGISTRY_VERSIONS,
     PUBLIC_EXPOSURE_CONSUMERS,
     PUBLIC_EXPOSURE_REQUIRED_ISSUE_KEYS,
     get_public_exposure_consumer,
@@ -44,6 +47,7 @@ from app.services.wave3a_rules import WAVE3A_BY_KEY
 from app.services.wave3b_rules import WAVE3B_BY_KEY
 from app.services.wave5a_rules import WAVE5A_BY_KEY
 from app.services.wave5b_rules import WAVE5B_BY_KEY
+from app.services.wave5c_rules import WAVE5C_BY_KEY
 
 
 EXPECTED_TABLE_DIGEST = "69c38afc252d8462e6771653bd9a7bc8e59e6e0ee01d9e31f4fa5ed3747057d2"
@@ -57,18 +61,30 @@ EXPECTED_PUBLIC_EXPOSURE_CONSUMERS = {
     "service_imap": ("tcp", "SCANNER_TCP"),
     "service_pop3": ("tcp", "SCANNER_TCP"),
     "service_ldap": ("tcp", "SCANNER_TCP"),
+    "service_rdp": ("tcp", "SCANNER_TCP"),
+    "service_pptp": ("tcp", "SCANNER_TCP"),
 }
+V1_CONSUMERS = set(EXPECTED_PUBLIC_EXPOSURE_CONSUMERS) - {"service_rdp", "service_pptp"}
 
 
 def test_public_exposure_consumer_registry_is_exact_immutable_and_version_aware():
-    assert PUBLIC_EXPOSURE_CONSUMER_POLICY_VERSION == "ssc-public-exposure-consumers.v1"
+    assert PUBLIC_EXPOSURE_CONSUMER_POLICY_VERSION == "ssc-public-exposure-consumers.v2"
     assert PUBLIC_EXPOSURE_REQUIRED_ISSUE_KEYS == set(EXPECTED_PUBLIC_EXPOSURE_CONSUMERS)
-    assert len(PUBLIC_EXPOSURE_CONSUMERS) == 9
+    assert len(PUBLIC_EXPOSURE_CONSUMERS) == 11
+    assert set(PUBLIC_EXPOSURE_CONSUMER_REGISTRY_VERSIONS[PUBLIC_EXPOSURE_CONSUMER_POLICY_V1]) == V1_CONSUMERS
+    assert set(PUBLIC_EXPOSURE_CONSUMER_REGISTRY_VERSIONS[PUBLIC_EXPOSURE_CONSUMER_POLICY_V2]) == set(
+        EXPECTED_PUBLIC_EXPOSURE_CONSUMERS
+    )
     for issue_key, (root, source) in EXPECTED_PUBLIC_EXPOSURE_CONSUMERS.items():
         consumer = get_public_exposure_consumer(PINNED_SSC_BASELINE_HASH, issue_key)
         assert consumer is not None
         assert consumer.semantic_class == "PUBLIC_EXPOSURE_REQUIRED"
         assert (consumer.evidence_root, consumer.required_evidence_source) == (root, source)
+        expected_policy = (
+            PUBLIC_EXPOSURE_CONSUMER_POLICY_V1 if issue_key in V1_CONSUMERS
+            else PUBLIC_EXPOSURE_CONSUMER_POLICY_V2
+        )
+        assert consumer.consumer_policy_version == expected_policy
         assert consumer.expression_path == (
             f"{root}.evaluations.{issue_key}.exposure_context.composition.matched"
         )
@@ -79,12 +95,12 @@ def test_public_exposure_consumer_registry_is_exact_immutable_and_version_aware(
 def test_public_exposure_consumer_registry_fails_closed_outside_reviewed_identity():
     assert get_public_exposure_consumer("unknown-baseline", "service_rsync") is None
     assert get_public_exposure_consumer(PINNED_SSC_BASELINE_HASH, "unknown_issue") is None
-    for issue_key in ("service_vnc", "service_telnet", "mail_server_unusual_port"):
+    for issue_key in ("service_vnc", "service_telnet", "minecraft_server", "mail_server_unusual_port"):
         assert get_public_exposure_consumer(PINNED_SSC_BASELINE_HASH, issue_key) is None
 
 
 def test_registered_rules_use_composition_paths_and_unaffected_rules_remain_identity_based():
-    specs = {**WAVE3A_BY_KEY, **WAVE3B_BY_KEY, **WAVE5A_BY_KEY, **WAVE5B_BY_KEY}
+    specs = {**WAVE3A_BY_KEY, **WAVE3B_BY_KEY, **WAVE5A_BY_KEY, **WAVE5B_BY_KEY, **WAVE5C_BY_KEY}
     for issue_key, (root, _source) in EXPECTED_PUBLIC_EXPOSURE_CONSUMERS.items():
         spec = specs[issue_key]
         assert spec.expression == {
@@ -93,7 +109,11 @@ def test_registered_rules_use_composition_paths_and_unaffected_rules_remain_iden
             "value": True,
         }
         contract = spec.evidence_schema["public_exposure_context"]
-        assert contract["consumer_policy_version"] == PUBLIC_EXPOSURE_CONSUMER_POLICY_VERSION
+        expected_policy = (
+            PUBLIC_EXPOSURE_CONSUMER_POLICY_V1 if issue_key in V1_CONSUMERS
+            else PUBLIC_EXPOSURE_CONSUMER_POLICY_V2
+        )
+        assert contract["consumer_policy_version"] == expected_policy
         assert contract["required_context"] == {
             "schema_version": PUBLIC_EXPOSURE_SCHEMA_VERSION,
             "address_scope_policy_version": ADDRESS_SCOPE_POLICY_VERSION,
@@ -107,6 +127,12 @@ def test_registered_rules_use_composition_paths_and_unaffected_rules_remain_iden
         assert spec.expression["path"] == f"tcp.evaluations.{issue_key}.matched"
         assert spec.evidence_schema["schema_version"] == "ssc-wave3a-service-observation.v1"
         assert "public_exposure_context" not in spec.evidence_schema
+
+    minecraft = WAVE5C_BY_KEY["minecraft_server"]
+    assert minecraft.expression["path"] == "tcp.evaluations.minecraft_server.matched"
+    assert minecraft.evidence_schema["semantic_class"] == "PROTOCOL_IDENTITY_ONLY"
+    assert minecraft.evidence_schema["protocol_identity_is_sufficient"] is True
+    assert "public_exposure_context" not in minecraft.evidence_schema
 
     smtp = WAVE5A_BY_KEY["mail_server_unusual_port"]
     assert smtp.expression["path"] == "tcp.evaluations.mail_server_unusual_port.matched"

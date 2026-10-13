@@ -29,7 +29,12 @@ from app.services.public_exposure import (
 
 
 PINNED_SSC_BASELINE_HASH = "0fe2bc8ffb7e3f734d4e88f70b11cffa6e8e9e47e722dc62107f6ff09694eca8"
-PUBLIC_EXPOSURE_CONSUMER_POLICY_VERSION = "ssc-public-exposure-consumers.v1"
+PUBLIC_EXPOSURE_CONSUMER_POLICY_V1 = "ssc-public-exposure-consumers.v1"
+PUBLIC_EXPOSURE_CONSUMER_POLICY_V2 = "ssc-public-exposure-consumers.v2"
+# The current registry release is v2.  Existing v1 consumer contracts retain
+# their original entry-level policy version so their immutable rule definitions
+# do not churn merely because the registry gained new reviewed members.
+PUBLIC_EXPOSURE_CONSUMER_POLICY_VERSION = PUBLIC_EXPOSURE_CONSUMER_POLICY_V2
 PUBLIC_EXPOSURE_REQUIRED = "PUBLIC_EXPOSURE_REQUIRED"
 
 
@@ -40,7 +45,7 @@ class PublicExposureConsumer:
     semantic_class: str
     evidence_root: str
     required_evidence_source: str
-    consumer_policy_version: str = PUBLIC_EXPOSURE_CONSUMER_POLICY_VERSION
+    consumer_policy_version: str
 
     @property
     def expression_path(self) -> str:
@@ -50,27 +55,45 @@ class PublicExposureConsumer:
         )
 
 
-def _entry(issue_key: str, evidence_root: str, required_evidence_source: str) -> PublicExposureConsumer:
+def _entry(
+    issue_key: str,
+    evidence_root: str,
+    required_evidence_source: str,
+    consumer_policy_version: str,
+) -> PublicExposureConsumer:
     return PublicExposureConsumer(
         baseline_hash=PINNED_SSC_BASELINE_HASH,
         issue_key=issue_key,
         semantic_class=PUBLIC_EXPOSURE_REQUIRED,
         evidence_root=evidence_root,
         required_evidence_source=required_evidence_source,
+        consumer_policy_version=consumer_policy_version,
     )
 
 
-_ENTRIES = (
-    _entry("service_rsync", "tcp", "SCANNER_TCP"),
-    _entry("service_redis", "tcp", "SCANNER_TCP"),
-    _entry("service_socks_proxy", "tcp", "SCANNER_TCP"),
-    _entry("service_smb", "tcp", "SCANNER_TCP"),
-    _entry("service_soap", "http", "SCANNER_HTTP"),
-    _entry("service_ftp", "tcp", "SCANNER_TCP"),
-    _entry("service_imap", "tcp", "SCANNER_TCP"),
-    _entry("service_pop3", "tcp", "SCANNER_TCP"),
-    _entry("service_ldap", "tcp", "SCANNER_TCP"),
+_V1_ENTRIES = (
+    _entry("service_rsync", "tcp", "SCANNER_TCP", PUBLIC_EXPOSURE_CONSUMER_POLICY_V1),
+    _entry("service_redis", "tcp", "SCANNER_TCP", PUBLIC_EXPOSURE_CONSUMER_POLICY_V1),
+    _entry("service_socks_proxy", "tcp", "SCANNER_TCP", PUBLIC_EXPOSURE_CONSUMER_POLICY_V1),
+    _entry("service_smb", "tcp", "SCANNER_TCP", PUBLIC_EXPOSURE_CONSUMER_POLICY_V1),
+    _entry("service_soap", "http", "SCANNER_HTTP", PUBLIC_EXPOSURE_CONSUMER_POLICY_V1),
+    _entry("service_ftp", "tcp", "SCANNER_TCP", PUBLIC_EXPOSURE_CONSUMER_POLICY_V1),
+    _entry("service_imap", "tcp", "SCANNER_TCP", PUBLIC_EXPOSURE_CONSUMER_POLICY_V1),
+    _entry("service_pop3", "tcp", "SCANNER_TCP", PUBLIC_EXPOSURE_CONSUMER_POLICY_V1),
+    _entry("service_ldap", "tcp", "SCANNER_TCP", PUBLIC_EXPOSURE_CONSUMER_POLICY_V1),
 )
+_WAVE5C_V2_ENTRIES = (
+    _entry("service_rdp", "tcp", "SCANNER_TCP", PUBLIC_EXPOSURE_CONSUMER_POLICY_V2),
+    _entry("service_pptp", "tcp", "SCANNER_TCP", PUBLIC_EXPOSURE_CONSUMER_POLICY_V2),
+)
+_ENTRIES = _V1_ENTRIES + _WAVE5C_V2_ENTRIES
+
+# Registry releases describe exact membership.  v2 is additive: it incorporates
+# the unchanged v1 entries and adds the two reviewed Wave 5C consumers.
+PUBLIC_EXPOSURE_CONSUMER_REGISTRY_VERSIONS = MappingProxyType({
+    PUBLIC_EXPOSURE_CONSUMER_POLICY_V1: tuple(entry.issue_key for entry in _V1_ENTRIES),
+    PUBLIC_EXPOSURE_CONSUMER_POLICY_V2: tuple(entry.issue_key for entry in _ENTRIES),
+})
 
 PUBLIC_EXPOSURE_CONSUMERS = MappingProxyType(
     {(entry.baseline_hash, entry.issue_key): entry for entry in _ENTRIES}

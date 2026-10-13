@@ -56,11 +56,14 @@ and manual evidence cannot establish trusted vantage.
 
 ## Reviewed consumer status
 
-The immutable consumer registry `ssc-public-exposure-consumers.v1` is keyed by
-the attested baseline content hash and SSC stable issue key. It contains exactly
+The immutable consumer registry is keyed by the attested baseline content hash
+and SSC stable issue key. Release `ssc-public-exposure-consumers.v1` contains exactly
 `service_rsync`, `service_redis`, `service_socks_proxy`, `service_smb`,
 `service_soap`, `service_ftp`, `service_imap`, `service_pop3`, and
-`service_ldap`. Their current rules consume
+`service_ldap`. Additive release `ssc-public-exposure-consumers.v2` incorporates
+those nine unchanged v1 entry contracts and adds `service_rdp` and
+`service_pptp`; the nine existing rules remain pinned to v1 and did not receive
+new rule versions. Their current rules consume
 `<root>.evaluations.<issue>.exposure_context.composition.matched`; protocol
 identity remains independently visible but is necessary and insufficient.
 
@@ -73,8 +76,10 @@ vantage and therefore produce `INDETERMINATE` / `NOT_ASSESSED` for these rules.
 An approved external worker can produce a finding only for protocol `MATCH` +
 `PUBLIC_ROUTABLE` + trusted `EXTERNAL_PUBLIC` deployment-manifest vantage.
 
-`service_vnc` and `service_telnet` deliberately retain protocol-identity-only
-rules. `mail_server_unusual_port` is not registered and remains
-`SEPARATE_SEMANTIC_REVIEW_REQUIRED`. Wave 5C remains inactive and Oracle remains
-pending/inactive. Capability support accounting is unchanged: 39/53
-VERIFIED_DIRECT, 42/160 V1 supported, and 43/202 full supported.
+`service_vnc`, `service_telnet`, and `minecraft_server` deliberately retain
+protocol-identity-only rules. `service_rdp` is active under the exposure
+contract; `service_pptp` is consumer-ready but inactive pending real
+interoperability. `mail_server_unusual_port` is not registered and remains
+`SEPARATE_SEMANTIC_REVIEW_REQUIRED`. Oracle remains pending/inactive. Capability
+support accounting is 41/53 VERIFIED_DIRECT, 44/160 V1 supported, and 45/202
+full supported.

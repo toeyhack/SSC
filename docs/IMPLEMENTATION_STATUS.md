@@ -4,7 +4,44 @@ CLI-FIRST MVP — COMPLETE / PASS
 
 Current phase: Phase 6B - CLI-first REPORT Output
 
-PUBLIC_EXPOSURE consumer retrofit: COMPLETE / PASS (2026-10-12). Against the
+Wave 5C closure/activation: COMPLETE / PASS (2026-10-13). The exact approved
+active set is `minecraft_server` and `service_rdp`; `service_pptp` remains
+`IMPLEMENTED_PENDING_INTEROP`/PARTIAL/inactive, and Oracle remains unchanged in
+the same pending-interoperability state. Minecraft's active expression is the
+protocol-identity predicate `tcp.evaluations.minecraft_server.matched == true`
+and does not require public-exposure context. RDP's active expression consumes
+`tcp.evaluations.service_rdp.exposure_context.composition.matched == true` and
+therefore requires a protocol MATCH, PUBLIC_ROUTABLE destination, trusted
+EXTERNAL_PUBLIC deployment-manifest vantage, current policies, and SCANNER_TCP
+source. Manual, wrong-source, unknown/internal-vantage, non-public,
+protocol-indeterminate, and stale-policy cases remain NOT_ASSESSED.
+
+Because `ssc-public-exposure-consumers.v1` denotes the exact original
+nine-member registry, additive registry release
+`ssc-public-exposure-consumers.v2` incorporates those nine unchanged entry
+contracts and adds RDP/PPTP. The nine existing current rule definitions remain
+pinned to v1 and receive no rv3 churn. Closed support is **41/53
+VERIFIED_DIRECT**, **44/160 V1**, and **45/202 full baseline**. The implementation
+ceiling remains **43/53**, **46/160**, and **47/202** because PPTP and Oracle are
+implemented pending interoperability. Minecraft and RDP have no explicit
+internal-risk mapping and fail closed to UNKNOWN/non-scoring. Scoring,
+calibration, Golden Baseline taxonomy, mail-server unusual-port semantics,
+protocol parsers, schema, and migrations are unchanged.
+
+Validation used fresh isolated PostgreSQL databases
+`ssc_wave5c_closure_focus_20261013` and
+`ssc_wave5c_closure_full_final_20261013`, never pytest against `ssc_e2e`. The
+final focused Wave 5C/exposure/assessment gate passed **586 tests**. Affected
+existing-consumer and assessment/report/scoring regressions passed **56 + 302
++ 51 tests**. The one completed full backend-suite run passed **1,207 tests**
+with the existing Starlette/httpx deprecation warning. Alembic reported no new
+upgrade operations, dependency checking passed, isolated bytecode compilation
+passed, and coverage regenerated at V1 **44 SUPPORTED / 80 PARTIAL / 36
+NOT_SUPPORTED** and full **45 / 82 / 75**. No migration was added and no
+external/company target was scanned.
+
+PUBLIC_EXPOSURE consumer retrofit (historical tranche): COMPLETE / PASS
+(2026-10-12). Against the
 exact attested SSC_API snapshot
 `0fe2bc8ffb7e3f734d4e88f70b11cffa6e8e9e47e722dc62107f6ff09694eca8`,
 exactly nine supported consumers now use `PUBLIC_EXPOSURE_CONTEXT v1`:
@@ -20,9 +57,10 @@ trusted `EXTERNAL_PUBLIC` deployment-manifest vantage. Every incomplete,
 unknown, internal, non-public, stale-policy, wrong-source, or manual case is
 `INDETERMINATE` / `NOT_ASSESSED`; the retrofit introduces no exposure
 `NO_MATCH`. TCP consumers independently require `SCANNER_TCP`; SOAP requires
-`SCANNER_HTTP`. Capability accounting remains **39/53 VERIFIED_DIRECT**,
-**42/160 V1**, and **43/202 full baseline**. Wave 5C remains inactive, Oracle
-remains `IMPLEMENTED_PENDING_INTEROP`/inactive, scoring and calibration are
+`SCANNER_HTTP`. At completion of that historical tranche, capability accounting
+was **39/53 VERIFIED_DIRECT**, **42/160 V1**, and **43/202 full baseline**. Wave
+5C was still inactive; Oracle remained `IMPLEMENTED_PENDING_INTEROP`/inactive,
+scoring and calibration were
 unchanged, and `mail_server_unusual_port` remains
 `SEPARATE_SEMANTIC_REVIEW_REQUIRED` with unchanged behavior.
 

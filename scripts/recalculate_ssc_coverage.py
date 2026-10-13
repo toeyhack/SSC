@@ -104,7 +104,8 @@ def main() -> int:
                 "Wave 4A" if row["ssc_issue_key"] in WAVE4A_BY_KEY else
                 "Wave 4B" if row["ssc_issue_key"] in WAVE4B_BY_KEY else
                 "Wave 5A" if row["ssc_issue_key"] in WAVE5A_BY_KEY else
-                "Wave 5B.1"
+                "Wave 5B.1" if row["ssc_issue_key"] in WAVE5B_ACTIVE_BY_KEY else
+                "Wave 5C"
             )
             row["current_platform_support"] = "SUPPORTED"
             row["required_executor"] = spec.primitive
@@ -128,9 +129,9 @@ def main() -> int:
         row["current_platform_support"] for row in rows if row["factor"] in V1_FACTORS
     )
     feasibility = Counter(row["feasibility_category"] for row in rows)
-    if coverage != {"SUPPORTED": 43, "PARTIAL": 84, "NOT_SUPPORTED": 75}:
+    if coverage != {"SUPPORTED": 45, "PARTIAL": 82, "NOT_SUPPORTED": 75}:
         raise SystemExit(f"unexpected coverage totals: {dict(coverage)}")
-    if v1_coverage != {"SUPPORTED": 42, "PARTIAL": 82, "NOT_SUPPORTED": 36}:
+    if v1_coverage != {"SUPPORTED": 44, "PARTIAL": 80, "NOT_SUPPORTED": 36}:
         raise SystemExit(f"unexpected V1 coverage totals: {dict(v1_coverage)}")
 
     if args.write:
@@ -186,7 +187,7 @@ def render_markdown(rows, feasibility, coverage, wave1_rules, wave1_partial, wav
         "",
         f"Snapshot content hash: `{BASELINE_HASH}`",
         "Source: immutable real `SSC_API` Golden Baseline",
-        "Implementation state: Waves 1-2, Wave 3A, Wave 3B, Wave 4A, Wave 4B, Wave 5A, and Wave 5B.1 closed LDAP identification are active. Wave 5C Minecraft/PPTP/RDP protocol primitives are implemented but inactive/PARTIAL because authoritative public-target plus external-vantage context is absent; PPTP additionally lacks real interoperability. Oracle Net remains separately implemented pending real interoperability.",
+        "Implementation state: Waves 1-2, Wave 3A, Wave 3B, Wave 4A, Wave 4B, Wave 5A, Wave 5B.1 LDAP, and Wave 5C Minecraft/RDP are active. Minecraft is protocol-identity-only; RDP consumes PUBLIC_EXPOSURE_CONTEXT v1. PPTP remains implemented/inactive pending real interoperability, and Oracle Net remains separately implemented pending real interoperability.",
         "Total mapped issues: **202**",
         "",
         "> This is an independent implementation mapped to SSC taxonomy. It does not reproduce or claim knowledge of SSC collection, aggregation, severity, scoring, or proprietary detection logic. `ssc_severity` remains source metadata and is not mapped to internal risk or score impact.",
@@ -197,10 +198,10 @@ def render_markdown(rows, feasibility, coverage, wave1_rules, wave1_partial, wav
         "",
         "## Coverage summary",
         "",
-        "| Coverage | Before Wave 5B.1 | After Wave 5C implementation | Percentage after |",
+        "| Coverage | Before Wave 5C closure | After Wave 5C closure | Percentage after |",
         "|---|---:|---:|---:|",
-        f"| `SUPPORTED` | 42 | {coverage['SUPPORTED']} | {coverage['SUPPORTED']/202:.1%} |",
-        f"| `PARTIAL` | 85 | {coverage['PARTIAL']} | {coverage['PARTIAL']/202:.1%} |",
+        f"| `SUPPORTED` | 43 | {coverage['SUPPORTED']} | {coverage['SUPPORTED']/202:.1%} |",
+        f"| `PARTIAL` | 84 | {coverage['PARTIAL']} | {coverage['PARTIAL']/202:.1%} |",
         f"| `NOT_SUPPORTED` | 75 | {coverage['NOT_SUPPORTED']} | {coverage['NOT_SUPPORTED']/202:.1%} |",
         "| **Total** | **202** | **202** | **100.0%** |",
         "",
@@ -374,9 +375,23 @@ def render_markdown(rows, feasibility, coverage, wave1_rules, wave1_partial, wav
 
     lines += [
         "",
-        "## Wave 5C implemented pending closure context",
+        "## Active Wave 5C evaluator mappings",
         "",
-        "All three protocol adapters are implemented under `service-probe-adapter.v3`, but no Wave 5C SSC rule is active. Protocol identity does not prove the Golden Baseline's public/Internet exposure semantics, and the repository has no authoritative contract combining public-routable target state with approved external scan vantage. Minecraft and RDP have real loopback interoperability; PPTP remains pending real interoperability as an independent blocker.",
+        "The approved Wave 5C activation set contains `minecraft_server` and `service_rdp`, each linked to the exact attested issue version. Minecraft uses protocol identity as its complete applicability predicate. RDP requires protocol MATCH plus PUBLIC_ROUTABLE plus trusted EXTERNAL_PUBLIC deployment-manifest vantage through PUBLIC_EXPOSURE_CONTEXT v1.",
+        "",
+        "| SSC issue key | Protocol | Primitive | Exact logic | Authoritative reference |",
+        "|---|---|---|---|---|",
+    ]
+    for spec in wave5c_active_rules:
+        lines.append(
+            f"| `{spec.issue_key}` | `{spec.protocol}` | `{spec.primitive}` | {spec.logic} | {spec.reference} |"
+        )
+
+    lines += [
+        "",
+        "## Wave 5C implemented pending interoperability",
+        "",
+        "PPTP's protocol adapter and public-exposure consumer semantics are ready, but its SSC rule remains inactive until real interoperability passes.",
         "",
         "| SSC issue key | Protocol | Current state | Closure blockers |",
         "|---|---|---|---|",
