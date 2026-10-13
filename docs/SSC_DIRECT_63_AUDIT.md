@@ -24,12 +24,12 @@ The [row-level CSV](SSC_DIRECT_63_AUDIT.csv) is the audit ledger. Each row inclu
 | `NAME_VARIANT` mappings | 0 |
 | `AMBIGUOUS` mappings | 0 |
 | `NOT_FOUND` mappings | 0 |
-| Current `SUPPORTED` | 41 |
-| Current `PARTIAL` | 21 |
+| Current `SUPPORTED` | 40 |
+| Current `PARTIAL` | 22 |
 | Current `NOT_SUPPORTED` | 1 |
-| Direct backlog: verified and not supported | 12 |
+| Direct backlog: verified and not supported | 13 |
 
-The 63 include **41 of the platform’s 45 closed supported capabilities**. The other four supported issues are `spf_record_softfail`, `dmarc_record_missing`, `dmarc_contains_none`, and `subdomain_dmarc_contains_none`; they are in the 202 issue catalog but outside this dashboard list. All 41 supported rows here remain `VERIFIED_DIRECT`. Wave 5C moves closed direct support from **39/53 to 41/53** through protocol-only Minecraft and exposure-gated RDP. PPTP and Oracle remain implemented pending real interoperability, so the implementation ceiling remains **43/53**.
+The 63 include **40 of the platform’s 44 closed supported capabilities**. The other four supported issues are `spf_record_softfail`, `dmarc_record_missing`, `dmarc_contains_none`, and `subdomain_dmarc_contains_none`; they are in the 202 issue catalog but outside this dashboard list. The internal `mail_server_unusual_port` detector remains in the implementation inventory, but its SSC capability is `PARTIAL` because SSC's exact unusual-port boundary is undisclosed. Current SSC-aligned support is **40/53**. PPTP and Oracle remain implemented pending real interoperability, so the SSC-aligned implementation ceiling is **42/53**.
 
 ## By SSC factor
 
@@ -38,8 +38,8 @@ The 63 include **41 of the platform’s 45 closed supported capabilities**. The 
 | `application_security` | 22 | 16 | 6 | 0 | 16 | 5 | 1 |
 | `network_security` | 37 | 33 | 4 | 0 | 21 | 16 | 0 |
 | `dns_health` | 3 | 3 | 0 | 0 | 3 | 0 | 0 |
-| `ip_reputation` | 1 | 1 | 0 | 0 | 1 | 0 | 0 |
-| **Total** | **63** | **53** | **10** | **0** | **41** | **21** | **1** |
+| `ip_reputation` | 1 | 1 | 0 | 0 | 0 | 1 | 0 |
+| **Total** | **63** | **53** | **10** | **0** | **40** | **22** | **1** |
 
 ## By proposed scanner primitive
 
@@ -47,7 +47,7 @@ The primary implementation backlog groups direct rows by reusable primitive. Com
 
 | Primitive | Reviewed | Verified direct | Move to enrichment | Supported | Direct backlog |
 |---|---:|---:|---:|---:|---:|
-| `SERVICE_PROTOCOL` | 24 | 24 | 0 | 13 | 11 |
+| `SERVICE_PROTOCOL` | 24 | 24 | 0 | 12 | 12 |
 | `HTTP_CONTENT` | 7 | 7 | 0 | 7 | 0 |
 | `HTTP_HEADERS` | 6 | 6 | 0 | 6 | 0 |
 | `TLS_CERTIFICATE` | 5 | 5 | 0 | 5 | 0 |
@@ -64,18 +64,18 @@ The primary implementation backlog groups direct rows by reusable primitive. Com
 | `PROXY_VALIDATION` | 1 | 0 | 1 | 0 | 0 |
 | `SERVICE_PROTOCOL+PRODUCT_FINGERPRINT` | 1 | 0 | 1 | 0 | 0 |
 | `TLS_CERTIFICATE+POLICY` | 1 | 0 | 1 | 0 | 0 |
-| **Total** | **63** | **53** | **10** | **41** | **12** |
+| **Total** | **63** | **53** | **10** | **40** | **13** |
 
 ## Prioritized direct implementation backlog
 
-Only the 12 `VERIFIED_DIRECT` rows still lacking `SUPPORTED` status appear below. Priority favors shared collectors and parsers that unlock several exact catalog issues. Each later implementation batch still needs exact-version rule linkage, positive and negative tests, false-positive/unknown-boundary tests, and any required real interoperability before its coverage can become `SUPPORTED`. The order is a planning recommendation, not implementation authorization.
+Only the 13 `VERIFIED_DIRECT` rows still lacking `SUPPORTED` status appear below. Priority favors shared collectors and parsers that unlock several exact catalog issues. Each later implementation batch still needs exact-version rule linkage, positive and negative tests, false-positive/unknown-boundary tests, and any required real interoperability before its coverage can become `SUPPORTED`. The order is a planning recommendation, not implementation authorization.
 
 | Priority | Primitive | Count | Exact SSC keys and batch scope |
 |---:|---|---:|---|
-| 1 | `SERVICE_PROTOCOL` | 11 | Extend the bounded adapter framework only in separately reviewed protocol-specific groups. Wave 5B.1 closed LDAP; Wave 5C closed Minecraft and RDP. Oracle Net and PPTP are implemented pending real interoperability; PPTP's public-exposure consumer semantics are ready.<br>`service_cassandra`, `service_couchdb`, `service_dns`, `service_elasticsearch`, `service_microsoft_sql`, `service_mongodb`, `service_mysql`, `service_oracle_db`, `service_pptp`, `service_postgresql`, `upnp_accessible` |
+| 1 | `SERVICE_PROTOCOL` | 12 | Extend the bounded adapter framework only in separately reviewed protocol-specific groups. Wave 5B.1 closed LDAP; Wave 5C closed Minecraft and RDP. Oracle Net and PPTP are implemented pending real interoperability; SMTP unusual-port remains implemented under an internal proxy but is not SSC-aligned because the exact boundary is undisclosed.<br>`mail_server_unusual_port`, `service_cassandra`, `service_couchdb`, `service_dns`, `service_elasticsearch`, `service_microsoft_sql`, `service_mongodb`, `service_mysql`, `service_oracle_db`, `service_pptp`, `service_postgresql`, `upnp_accessible` |
 | 2 | `TLS_NEGOTIATION` | 1 | Use a client capable of offering every prohibited suite in the pinned policy and retain successful modern controls before making a negative claim.<br>`tls_weak_cipher` |
 
-Wave 4A completed SSH; Wave 5A completed FTP, IMAP, POP3, and unusual-port SMTP; Wave 5B.1 closes LDAP while Oracle remains pending. Wave 5C closes Minecraft through protocol identity and RDP through the composed public-exposure predicate. PPTP remains in the backlog solely for real interoperability. Algorithm or protocol evidence does not prove exploitation, authentication weakness, product version, or Internet exposure unless the reviewed rule independently composes the required exposure context.
+Wave 4A completed SSH; Wave 5A closes FTP, IMAP, and POP3. Its unusual-port SMTP detector remains implemented under `smtp-standard-ports.v1`, but the SSC capability is `PARTIAL / INTERNAL_POLICY_ONLY`. Wave 5B.1 closes LDAP while Oracle remains pending. Wave 5C closes Minecraft through protocol identity and RDP through the composed public-exposure predicate. PPTP remains in the backlog solely for real interoperability. Algorithm or protocol evidence does not prove exploitation, authentication weakness, product version, or Internet exposure unless the reviewed rule independently composes the required exposure context.
 
 ## Candidates that do not survive DIRECT review
 

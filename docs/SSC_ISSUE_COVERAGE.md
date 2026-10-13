@@ -2,7 +2,7 @@
 
 Snapshot content hash: `0fe2bc8ffb7e3f734d4e88f70b11cffa6e8e9e47e722dc62107f6ff09694eca8`
 Source: immutable real `SSC_API` Golden Baseline
-Implementation state: Waves 1-2, Wave 3A, Wave 3B, Wave 4A, Wave 4B, Wave 5A, Wave 5B.1 LDAP, and Wave 5C Minecraft/RDP are active. Minecraft is protocol-identity-only; RDP consumes PUBLIC_EXPOSURE_CONTEXT v1. PPTP remains implemented/inactive pending real interoperability, and Oracle Net remains separately implemented pending real interoperability.
+Implementation state: Waves 1-2, Wave 3A, Wave 3B, Wave 4A, Wave 4B, Wave 5A FTP/IMAP/POP3, Wave 5B.1 LDAP, and Wave 5C Minecraft/RDP are active. The SMTP unusual-port primitive remains implemented under an internal deterministic policy but is inactive/PARTIAL for SSC alignment. Minecraft is protocol-identity-only; RDP consumes PUBLIC_EXPOSURE_CONTEXT v1. PPTP remains implemented/inactive pending real interoperability, and Oracle Net remains separately implemented pending real interoperability.
 Total mapped issues: **202**
 
 > This is an independent implementation mapped to SSC taxonomy. It does not reproduce or claim knowledge of SSC collection, aggregation, severity, scoring, or proprietary detection logic. `ssc_severity` remains source metadata and is not mapped to internal risk or score impact.
@@ -15,8 +15,8 @@ Total mapped issues: **202**
 
 | Coverage | Before Wave 5C closure | After Wave 5C closure | Percentage after |
 |---|---:|---:|---:|
-| `SUPPORTED` | 43 | 45 | 22.3% |
-| `PARTIAL` | 84 | 82 | 40.6% |
+| `SUPPORTED` | 43 | 44 | 21.8% |
+| `PARTIAL` | 84 | 83 | 41.1% |
 | `NOT_SUPPORTED` | 75 | 75 | 37.1% |
 | **Total** | **202** | **202** | **100.0%** |
 
@@ -38,7 +38,7 @@ Total mapped issues: **202**
 | `dns_health` | 10 | 7 | 3 | 0 | 0 | 7 | 3 | 0 |
 | `endpoint_security` | 2 | 0 | 0 | 2 | 0 | 0 | 0 | 2 |
 | `hacker_chatter` | 2 | 0 | 0 | 2 | 0 | 0 | 0 | 2 |
-| `ip_reputation` | 26 | 1 | 1 | 24 | 0 | 1 | 1 | 24 |
+| `ip_reputation` | 26 | 1 | 1 | 24 | 0 | 0 | 2 | 24 |
 | `leaked_information` | 8 | 0 | 0 | 8 | 0 | 0 | 0 | 8 |
 | `network_security` | 68 | 42 | 20 | 5 | 1 | 21 | 40 | 7 |
 | `patching_cadence` | 21 | 0 | 21 | 0 | 0 | 0 | 8 | 13 |
@@ -149,14 +149,21 @@ The single Wave 4B rule uses stable key `ssc.wave4b.spf_record_malformed`, metho
 
 ## Active Wave 5A evaluator mappings
 
-Wave 5A uses method schema `ssc-wave5a-staged-text-service-observation.v1`, policy `ssc-wave5a-text-service-identification.v1`, source type `SSC_REFERENCE`, and immutable links to exact attested `SSC_API` issue versions. Each adapter performs one plaintext server greeting, one fixed non-authenticating command, and one bounded completion read on the same declared TCP endpoint. SMTP unusual-port evaluation additionally pins `smtp-standard-ports.v1` to 25, 465, and 587.
+The active Wave 5A FTP/IMAP/POP3 rules use method schema `ssc-wave5a-staged-text-service-public-exposure-observation.v2`, policy `ssc-wave5a-text-service-identification.v1`, source type `SSC_REFERENCE`, and immutable links to exact attested `SSC_API` issue versions. Each adapter performs one plaintext server greeting, one fixed non-authenticating command, and one bounded completion read on the same declared TCP endpoint before applying the public-exposure composition.
 
 | SSC issue key | Protocol | Primitive | Exact MATCH condition | Exact NO_MATCH boundary | INDETERMINATE boundary | Authoritative reference |
 |---|---|---|---|---|---|---|
 | `service_ftp` | `ftp` | `SERVICE_PROTOCOL_IDENTIFICATION` | MATCH only for a complete FTP 220 greeting followed by an exact NOOP command and complete FTP 200 reply, including same-code multiline termination. | No protocol-negative result is inferred from a wrong reply, arbitrary bytes, a greeting alone, or TCP reachability. | Connection refusal, timeout, reset, peer close, write/read failure, malformed or incomplete framing, unknown banner, response/line budget exhaustion, and unsupported plaintext/TLS mode are INDETERMINATE. | https://www.rfc-editor.org/rfc/rfc959.html |
 | `service_imap` | `imap` | `SERVICE_PROTOCOL_IDENTIFICATION` | MATCH only for a legal IMAP OK/PREAUTH greeting followed by one A001 CAPABILITY command, a valid untagged CAPABILITY response, and matching A001 OK completion. | No protocol-negative result is inferred from a wrong reply, arbitrary bytes, a greeting alone, or TCP reachability. | Connection refusal, timeout, reset, peer close, write/read failure, malformed or incomplete framing, unknown banner, response/line budget exhaustion, and unsupported plaintext/TLS mode are INDETERMINATE. | https://www.rfc-editor.org/rfc/rfc9051.html |
 | `service_pop3` | `pop3` | `SERVICE_PROTOCOL_IDENTIFICATION` | MATCH only for a complete POP3 +OK greeting followed by one CAPA command and a valid +OK capability response with exact dot termination. | No protocol-negative result is inferred from a wrong reply, arbitrary bytes, a greeting alone, or TCP reachability. | Connection refusal, timeout, reset, peer close, write/read failure, malformed or incomplete framing, unknown banner, response/line budget exhaustion, and unsupported plaintext/TLS mode are INDETERMINATE. | https://www.rfc-editor.org/rfc/rfc1939.html |
-| `mail_server_unusual_port` | `smtp` | `SERVICE_PROTOCOL_IDENTIFICATION` | MATCH only after a legal SMTP 220 greeting and complete 250 EHLO response positively identify SMTP, and the declared port is outside smtp-standard-ports.v1 {25,465,587}. | NO_MATCH only after the same positive SMTP exchange when the declared port is 25, 465, or 587; port alone never identifies SMTP. | Connection refusal, timeout, reset, peer close, write/read failure, malformed or incomplete framing, unknown banner, response/line budget exhaustion, and unsupported plaintext/TLS mode are INDETERMINATE. | https://www.rfc-editor.org/rfc/rfc5321.html |
+
+## Wave 5A implemented with internal policy only
+
+The SMTP protocol detector and `smtp-standard-ports.v1` remain implemented and immutable for internal observation. SSC does not disclose a deterministic unusual-port boundary, so this implementation is `PARTIAL`, has no active `SSC_REFERENCE` rule, and is not counted as exact SSC support.
+
+| SSC issue key | Protocol | Current state | Reason |
+|---|---|---|---|
+| `mail_server_unusual_port` | `smtp` | `INTERNAL_POLICY_ONLY` / `PARTIAL` | Exact SSC unusual-port classification boundary is not disclosed; smtp-standard-ports.v1 is an internal deterministic proxy. |
 
 ## Active Wave 5B.1 evaluator mappings
 
@@ -287,7 +294,7 @@ The CSV remains normative for exact evidence requirements, proposed logic, depen
 | `infected_by_targeted_attack` | Infected by Targeted Attack | `ip_reputation` | `info` | `EXTERNAL_DATA_REQUIRED` | `EXTERNAL_INTEL_INGEST` | `NOT_SUPPORTED` |
 | `ip_black_list_due_malicious_activity` | IP on blacklist due to malicious activity | `ip_reputation` | `medium` | `EXTERNAL_DATA_REQUIRED` | `EXTERNAL_INTEL_INGEST` | `NOT_SUPPORTED` |
 | `known_compromised_or_hostile_host` | Known compromised or Hostile Host | `ip_reputation` | `medium` | `EXTERNAL_DATA_REQUIRED` | `EXTERNAL_INTEL_INGEST` | `NOT_SUPPORTED` |
-| `mail_server_unusual_port` | SMTP Server on Unusual Port | `ip_reputation` | `medium` | `DIRECTLY_TESTABLE` | `SERVICE_PROTOCOL_IDENTIFICATION` | `SUPPORTED` |
+| `mail_server_unusual_port` | SMTP Server on Unusual Port | `ip_reputation` | `medium` | `DIRECTLY_TESTABLE` | `SERVICE_PROTOCOL_IDENTIFICATION` | `PARTIAL` |
 | `malicious_botnet_c_and_c_server_detected` | Malicious botnet C2 server detected | `ip_reputation` | `high` | `EXTERNAL_DATA_REQUIRED` | `EXTERNAL_INTEL_INGEST` | `NOT_SUPPORTED` |
 | `malicious_scan_detected` | Malicious Scan Detected | `ip_reputation` | `high` | `EXTERNAL_DATA_REQUIRED` | `EXTERNAL_INTEL_INGEST` | `NOT_SUPPORTED` |
 | `malicious_tor_exit_node_detected` | Malicious TOR Exit Node Detected | `ip_reputation` | `high` | `EXTERNAL_DATA_REQUIRED` | `EXTERNAL_INTEL_INGEST` | `NOT_SUPPORTED` |

@@ -16,12 +16,13 @@ from sqlalchemy.orm import Session
 from app.cli.ssc import build_parser
 from app.db.session import engine
 from app.models.catalog_models import (
+    CatalogIssueType,
     CatalogIssueTypeVersion,
     CatalogSnapshot,
     CatalogSnapshotItem,
     SourceTypeEnum,
 )
-from app.models.rule_models import RuleEngineRule
+from app.models.rule_models import RuleEngineRule, RuleEngineRuleVersion, RuleSourceTypeEnum, RuleTargetTypeEnum
 from app.services.cli_scan import scan_inventory_target
 from app.services.cli_setup import add_inventory_target
 from app.services.golden_baseline_importer import import_golden_baseline
@@ -51,7 +52,14 @@ from app.services.service_probes import (
 )
 from app.services.ssc_api_baseline import API_ORIGIN, FACTORS_ENDPOINT, ISSUES_ENDPOINT, normalize_api_payloads
 from app.services.wave3a_rules import WAVE3A_RULES
-from app.services.wave5a_rules import WAVE5A_RULES, activate_wave5a_rules, active_wave5a_mappings
+from app.services.wave5a_rules import (
+    WAVE5A_BY_KEY,
+    WAVE5A_IMPLEMENTED_KEYS,
+    WAVE5A_RULES,
+    WAVE5A_SSC_ACTIVE_KEYS,
+    activate_wave5a_rules,
+    active_wave5a_mappings,
+)
 from app.services.public_exposure_consumers import PINNED_SSC_BASELINE_HASH
 
 
@@ -175,7 +183,22 @@ def test_pop3_exact_dot_completion_and_malformed_boundaries():
         assert evaluate_staged_service_probe_responses("pop3", stages, port=110)["outcome"] == "INDETERMINATE"
 
 
-@pytest.mark.parametrize(("port", "outcome"), [(2525, "MATCH"), (25, "NO_MATCH"), (465, "NO_MATCH"), (587, "NO_MATCH")])
+@pytest.mark.parametrize(
+    ("port", "outcome"),
+    [
+        (24, "MATCH"),
+        (25, "NO_MATCH"),
+        (26, "MATCH"),
+        (366, "MATCH"),
+        (464, "MATCH"),
+        (465, "NO_MATCH"),
+        (466, "MATCH"),
+        (586, "MATCH"),
+        (587, "NO_MATCH"),
+        (588, "MATCH"),
+        (2525, "MATCH"),
+    ],
+)
 def test_smtp_identity_precedes_versioned_unusual_port_policy(port, outcome):
     greeting, _, response = EXCHANGES["smtp"]
     result = evaluate_staged_service_probe_responses("smtp", [greeting, response], port=port)
@@ -192,6 +215,19 @@ def test_smtp_greeting_ftp_and_malformed_multiline_are_not_matches():
     )["outcome"] == "INDETERMINATE"
     malformed = b"250-mail.example.test hello\r\n550 wrong-code line\r\n250 SIZE 1024\r\n"
     assert evaluate_staged_service_probe_responses("smtp", [greeting, malformed], port=2525)["outcome"] == "INDETERMINATE"
+
+
+def test_smtp_implicit_tls_is_indeterminate_and_starttls_is_not_negotiated():
+    implicit_tls = b"\x16\x03\x03\x00\x10" + b"\x00" * 16
+    assert evaluate_staged_service_probe_responses("smtp", [implicit_tls], port=465)["outcome"] == "INDETERMINATE"
+
+    greeting = EXCHANGES["smtp"][0]
+    ehlo_with_starttls = b"250-mail.example.test hello\r\n250-STARTTLS\r\n250 SIZE 1024\r\n"
+    with _staged_server(greeting, EXCHANGES["smtp"][1], ehlo_with_starttls) as (port, received):
+        result = run_service_probe("127.0.0.1", port, "smtp", timeout=1, response_limit=4096)
+    assert result["outcome"] == "MATCH"
+    assert received == [b"EHLO scanner.invalid\r\n"]
+    assert result["total_bytes_sent"] == len(b"EHLO scanner.invalid\r\n")
 
 
 @pytest.mark.parametrize("protocol", ["ftp", "imap", "pop3", "smtp"])
@@ -358,12 +394,42 @@ def _activate_pinned_test_baseline(db):
     return result
 
 
+def _create_historical_smtp_rule(db):
+    spec = WAVE5A_BY_KEY["mail_server_unusual_port"]
+    issue = db.scalar(select(CatalogIssueType).where(CatalogIssueType.stable_key == spec.issue_key))
+    rule = RuleEngineRule(stable_key=spec.rule_key, catalog_issue_type_id=issue.id, is_active=True)
+    db.add(rule)
+    db.flush()
+    version = RuleEngineRuleVersion(
+        rule_id=rule.id,
+        version_number=1,
+        catalog_issue_type_version_id=issue.current_version_id,
+        name=spec.title,
+        description=f"{spec.evidence_requirement} {spec.logic}",
+        target_type=RuleTargetTypeEnum.HOST,
+        rule_expression=spec.expression,
+        evidence_schema=spec.evidence_schema,
+        remediation=spec.remediation,
+        source_type=RuleSourceTypeEnum.SSC_REFERENCE,
+        source_reference=spec.reference,
+    )
+    db.add(version)
+    db.flush()
+    rule.current_version_id = version.id
+    db.flush()
+    return rule, version
+
+
 def test_wave5a_registry_cli_exact_activation_idempotence_and_approved_risk(db):
     assert SERVICE_PROBE_FRAMEWORK_VERSION == "service-probe-adapter.v2"
     assert MAX_SERVICE_PROBE_RESPONSE_BYTES == 4096
     assert [spec.issue_key for spec in WAVE5A_RULES] == [
         "service_ftp", "service_imap", "service_pop3", "mail_server_unusual_port",
     ]
+    assert WAVE5A_IMPLEMENTED_KEYS == {
+        "service_ftp", "service_imap", "service_pop3", "mail_server_unusual_port",
+    }
+    assert WAVE5A_SSC_ACTIVE_KEYS == {"service_ftp", "service_imap", "service_pop3"}
     assert len(WAVE3A_RULES) == 6
     assert SMTP_STANDARD_PORT_POLICY_VERSION == "smtp-standard-ports.v1"
     assert SMTP_STANDARD_PORTS == {25, 465, 587}
@@ -374,10 +440,14 @@ def test_wave5a_registry_cli_exact_activation_idempotence_and_approved_risk(db):
     assert set(activate_wave5a_rules(db, commit=False)["unavailable"]) == {
         "service_ftp", "service_imap", "service_pop3",
     }
-    _activate_pinned_test_baseline(db)
+    _pin_test_snapshot(db)
+    historical_rule, historical_version = _create_historical_smtp_rule(db)
+    activated = activate_wave5a_rules(db, commit=False)
+    assert activated["rules_deactivated"] == 1
+    assert activated["inactive"] == ["mail_server_unusual_port"]
     mappings = active_wave5a_mappings(db)
-    assert len(mappings) == 4
-    assert {item["rule_key"] for item in mappings} == {f"ssc.wave5a.{spec.issue_key}" for spec in WAVE5A_RULES}
+    assert len(mappings) == 3
+    assert {item["issue_key"] for item in mappings} == WAVE5A_SSC_ACTIVE_KEYS
     for mapping in mappings:
         version = db.get(CatalogIssueTypeVersion, UUID(mapping["issue_version_id"]))
         assert version.source_type == SourceTypeEnum.SSC_API
@@ -387,12 +457,17 @@ def test_wave5a_registry_cli_exact_activation_idempotence_and_approved_risk(db):
 
     repeated = activate_wave5a_rules(db, commit=False)
     assert repeated["rules_created"] == 0 and repeated["rule_versions_created"] == 0
-    assert repeated["rules_reused"] == 4 and repeated["unavailable"] == {}
-    assert len(active_wave5a_mappings(db)) == 4
+    assert repeated["rules_reused"] == 3 and repeated["rules_deactivated"] == 0
+    assert repeated["unavailable"] == {}
+    assert len(active_wave5a_mappings(db)) == 3
+    db.refresh(historical_rule)
+    assert historical_rule.is_active is False
+    assert historical_rule.current_version_id == historical_version.id
+    assert [version.id for version in historical_rule.versions] == [historical_version.id]
     assert db.scalar(select(RuleEngineRule).where(RuleEngineRule.stable_key == "ssc.wave3a.service_vnc")) is None
 
 
-@pytest.mark.parametrize("protocol", ["ftp", "imap", "pop3", "smtp"])
+@pytest.mark.parametrize("protocol", ["ftp", "imap", "pop3"])
 def test_wave5a_match_findings_are_visible_and_non_scoring(db, protocol, monkeypatch):
     monkeypatch.setattr("app.services.score_results.load_v1_assessment_profile", lambda _db: None)
     import_golden_baseline(db, _wave5a_baseline(), attest_real_source=True)
@@ -429,32 +504,29 @@ def test_wave5a_match_findings_are_visible_and_non_scoring(db, protocol, monkeyp
         )
     assert received == [request]
     assert result.evidence[0].summary["evaluations"][issue_key]["outcome"] == "MATCH"
-    if protocol == "smtp":
-        assert len(result.findings) == 1
-        finding = result.findings[0]
-        assert finding.ssc_issue_key == issue_key
-        assert finding.catalog_issue_type_version_id == str(rule.current_version.catalog_issue_type_version_id)
-        assert finding.breach_risk == "UNKNOWN"
-        assert finding.affects_score is False
-        assert finding.score_impact == 0
-    else:
-        assert result.findings == []
-        exposure = result.evidence[0].summary["evaluations"][issue_key]["exposure_context"]
-        assert exposure["composition"]["outcome"] == "INDETERMINATE"
-        assert exposure["composition"]["reason_code"] == "non_public_destination_not_issue_absence"
+    assert result.findings == []
+    exposure = result.evidence[0].summary["evaluations"][issue_key]["exposure_context"]
+    assert exposure["composition"]["outcome"] == "INDETERMINATE"
+    assert exposure["composition"]["reason_code"] == "non_public_destination_not_issue_absence"
 
 
-def test_wave5a_smtp_587_positive_identity_remains_no_match_and_no_finding(db, monkeypatch):
+@pytest.mark.parametrize(("smtp_port", "outcome"), [(587, "NO_MATCH"), (2525, "MATCH"), (366, "MATCH")])
+def test_inactive_wave5a_smtp_rule_retains_internal_observation_without_ssc_finding(
+    db, monkeypatch, smtp_port, outcome,
+):
     monkeypatch.setattr("app.services.score_results.load_v1_assessment_profile", lambda _db: None)
     import_golden_baseline(db, _wave5a_baseline(), attest_real_source=True)
-    _activate_pinned_test_baseline(db)
-    rule = db.scalar(select(RuleEngineRule).where(
-        RuleEngineRule.stable_key == "ssc.wave5a.mail_server_unusual_port",
-    ))
+    _pin_test_snapshot(db)
+    smtp_rule, historical_version = _create_historical_smtp_rule(db)
+    activate_wave5a_rules(db, commit=False)
+    db.refresh(smtp_rule)
+    assert smtp_rule.is_active is False
+    assert smtp_rule.current_version_id == historical_version.id
+    active_rule = db.scalar(select(RuleEngineRule).where(RuleEngineRule.stable_key == "ssc.wave5a.service_ftp"))
     suffix = uuid4().hex[:12]
     target = add_inventory_target(
         db,
-        organization="Wave 5A SMTP standard port " + suffix,
+        organization="Wave 5A SMTP internal policy " + suffix,
         domain_name=suffix + ".test",
         hostname="localhost",
         ip="127.0.0.1",
@@ -464,7 +536,7 @@ def test_wave5a_smtp_587_positive_identity_remains_no_match_and_no_finding(db, m
     )
 
     def identified_smtp(_host, port, protocol, **_kwargs):
-        assert port == 587 and protocol == "smtp"
+        assert port == smtp_port and protocol == "smtp"
         greeting, _, response = EXCHANGES["smtp"]
         return {
             "protocol": protocol,
@@ -480,12 +552,12 @@ def test_wave5a_smtp_587_positive_identity_remains_no_match_and_no_finding(db, m
         db,
         name="localhost",
         organization_id=UUID(target["organization_id"]),
-        scan_config={"executors": ["tcp"], "service_probes": [{"protocol": "smtp", "port": 587}]},
+        scan_config={"executors": ["tcp"], "service_probes": [{"protocol": "smtp", "port": smtp_port}]},
         model=ScoringDefinition(),
-        rule_keys=[rule.stable_key],
+        rule_keys=[active_rule.stable_key],
     )
     evidence = result.evidence[0].summary
     evaluation = evidence["evaluations"]["mail_server_unusual_port"]
-    assert evaluation["outcome"] == "NO_MATCH"
+    assert evaluation["outcome"] == outcome
     assert evidence["service_probes"][0]["port_policy_version"] == "smtp-standard-ports.v1"
     assert result.findings == []

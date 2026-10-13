@@ -92,6 +92,10 @@ The later exact pinned-baseline review classifies `minecraft_server` as protocol
 
 The approved closure tranche activates `minecraft_server` and `service_rdp` against exact current definitions in attested baseline `0fe2bc8ffb7e3f734d4e88f70b11cffa6e8e9e47e722dc62107f6ff09694eca8`. Minecraft remains protocol-identity-only. RDP consumes the composed `PUBLIC_EXPOSURE_CONTEXT v1` result and requires SCANNER_TCP; manual, wrong-source, unknown/internal-vantage, non-public, protocol-indeterminate, and stale-policy cases are NOT_ASSESSED. PPTP's exposure consumer is ready but it remains `IMPLEMENTED_PENDING_INTEROP`/PARTIAL/inactive. Closed coverage is 41/53 VERIFIED_DIRECT, 44/160 V1, and 45/202 full baseline. PPTP plus unchanged pending Oracle keep the implementation ceiling at 43/53, 46/160, and 47/202.
 
+## SMTP unusual-port semantic accounting correction (2026-10-13)
+
+The exact attested `mail_server_unusual_port` metadata and reviewed public SSC methodology do not disclose a deterministic standard/unusual port boundary. The positive SMTP detector and immutable internal `smtp-standard-ports.v1` policy `{25,465,587}` remain implemented, but that policy is an internal proxy rather than proven SSC provenance. The capability is therefore `PARTIAL / INTERNAL_POLICY_ONLY`; its managed `SSC_REFERENCE` rule is inactive, historical rv1 remains queryable, and it is excluded from SSC-supported mappings and `VERIFIED_DIRECT` supported accounting. Current closed coverage is **40/53 VERIFIED_DIRECT**, **44/160 V1**, and **44/202 full baseline**. The SSC-aligned implementation ceiling is **42/53**, **46/160**, and **46/202**. Wave 5C remains Minecraft+RDP active, PPTP and Oracle remain pending interoperability, and calibration remains unchanged.
+
 ## Pre-Wave 1 outcome
 
 The original 87 `DIRECTLY_TESTABLE` rows were re-reviewed against the imported issue descriptions, current executor evidence, authorization boundaries, and public standards. Twelve were over-optimistic and have been downgraded to `TESTABLE_WITH_ENRICHMENT`. No issue was upgraded.

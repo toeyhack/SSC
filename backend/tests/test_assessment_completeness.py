@@ -32,7 +32,7 @@ from app.services.wave3a_rules import WAVE3A_BY_KEY
 from app.services.wave3b_rules import WAVE3B_BY_KEY
 from app.services.wave4a_rules import WAVE4A_BY_KEY
 from app.services.wave4b_rules import WAVE4B_BY_KEY
-from app.services.wave5a_rules import WAVE5A_BY_KEY
+from app.services.wave5a_rules import WAVE5A_BY_KEY, WAVE5A_SSC_ACTIVE_BY_KEY
 from app.services.wave5b_rules import WAVE5B_ACTIVE_BY_KEY, WAVE5B_BY_KEY
 from app.services.wave5c_rules import WAVE5C_ACTIVE_BY_KEY, WAVE5C_BY_KEY
 
@@ -367,7 +367,7 @@ def test_versioned_v1_profile_resolves_exact_baseline_scope_and_capabilities(db)
     assert len(in_scope) == 160
     assert len(out_of_scope) == 42
     assert sum(item.supported_capability for item in in_scope) == 44
-    assert sum(item.supported_capability for item in profile.issues) == 45
+    assert sum(item.supported_capability for item in profile.issues) == 44
     assert next(item for item in in_scope if item.stable_key == "service_ldap").supported_capability is True
     assert next(item for item in in_scope if item.stable_key == "service_oracle_db").supported_capability is False
     assert set(WAVE5C_ACTIVE_BY_KEY) == {"minecraft_server", "service_rdp"}
@@ -376,7 +376,8 @@ def test_versioned_v1_profile_resolves_exact_baseline_scope_and_capabilities(db)
         is (key in WAVE5C_ACTIVE_BY_KEY)
         for key in WAVE5C_BY_KEY
     )
-    assert next(item for item in out_of_scope if item.stable_key == "mail_server_unusual_port").supported_capability is True
+    assert set(WAVE5A_BY_KEY) == WAVE5A_SSC_ACTIVE_BY_KEY.keys() | {"mail_server_unusual_port"}
+    assert next(item for item in out_of_scope if item.stable_key == "mail_server_unusual_port").supported_capability is False
     assert {
         code: sum(item.supported_capability for item in in_scope if item.factor_code == code)
         for code in profile.definition.in_scope_factor_codes

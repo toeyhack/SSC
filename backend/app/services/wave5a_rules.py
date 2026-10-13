@@ -182,6 +182,17 @@ WAVE5A_RULES = (
 )
 
 WAVE5A_BY_KEY = {spec.issue_key: spec for spec in WAVE5A_RULES}
+WAVE5A_IMPLEMENTED_KEYS = frozenset(WAVE5A_BY_KEY)
+WAVE5A_SSC_ACTIVE_KEYS = frozenset({"service_ftp", "service_imap", "service_pop3"})
+WAVE5A_SSC_ACTIVE_RULES = tuple(spec for spec in WAVE5A_RULES if spec.issue_key in WAVE5A_SSC_ACTIVE_KEYS)
+WAVE5A_SSC_ACTIVE_BY_KEY = {spec.issue_key: spec for spec in WAVE5A_SSC_ACTIVE_RULES}
+WAVE5A_SSC_PARTIAL_RULES = tuple(spec for spec in WAVE5A_RULES if spec.issue_key not in WAVE5A_SSC_ACTIVE_KEYS)
+WAVE5A_PARTIAL_REASONS = {
+    "mail_server_unusual_port": (
+        "Exact SSC unusual-port classification boundary is not disclosed; smtp-standard-ports.v1 is an internal "
+        "deterministic proxy."
+    ),
+}
 
 
 class Wave5AActivationError(ValueError):
@@ -189,17 +200,28 @@ class Wave5AActivationError(ValueError):
 
 
 def activate_wave5a_rules(db: Session, *, commit: bool = True) -> dict[str, Any]:
-    """Idempotently activate Wave 5A only for attested current SSC_API versions."""
+    """Activate the reviewed SSC-aligned Wave 5A set and retire partial managed rules."""
     real_versions = set(db.execute(
         select(CatalogSnapshotItem.issue_type_version_id)
         .join(CatalogSnapshot, CatalogSnapshot.id == CatalogSnapshotItem.catalog_snapshot_id)
         .where(CatalogSnapshot.source_type == SourceTypeEnum.SSC_API, CatalogSnapshot.is_real_baseline.is_(True))
     ).scalars())
     pinned_consumers = resolve_pinned_consumer_issue_versions(db)
-    counts = {"rules_created": 0, "rule_versions_created": 0, "rules_reused": 0}
+    counts = {"rules_created": 0, "rule_versions_created": 0, "rules_reused": 0, "rules_deactivated": 0}
     activated: list[str] = []
     unavailable: dict[str, str] = {}
-    for spec in WAVE5A_RULES:
+    partial_rule_keys = [spec.rule_key for spec in WAVE5A_SSC_PARTIAL_RULES]
+    if partial_rule_keys:
+        partial_rules = db.execute(
+            select(RuleEngineRule)
+            .where(RuleEngineRule.stable_key.in_(partial_rule_keys))
+            .with_for_update()
+        ).scalars()
+        for rule in partial_rules:
+            if rule.is_active:
+                rule.is_active = False
+                counts["rules_deactivated"] += 1
+    for spec in WAVE5A_SSC_ACTIVE_RULES:
         issue = db.execute(select(CatalogIssueType).where(CatalogIssueType.stable_key == spec.issue_key)).scalar_one_or_none()
         if issue is None or not issue.is_active or issue.current_version_id is None:
             unavailable[spec.issue_key] = "exact issue/current version is absent or inactive"
@@ -258,7 +280,13 @@ def activate_wave5a_rules(db: Session, *, commit: bool = True) -> dict[str, Any]
         activated.append(spec.issue_key)
     if commit:
         db.commit()
-    return {**counts, "activated": activated, "unavailable": unavailable}
+    return {
+        **counts,
+        "implemented": sorted(WAVE5A_IMPLEMENTED_KEYS),
+        "activated": activated,
+        "inactive": [spec.issue_key for spec in WAVE5A_SSC_PARTIAL_RULES],
+        "unavailable": unavailable,
+    }
 
 
 def _same_definition(version: RuleEngineRuleVersion, expected: dict[str, Any]) -> bool:
@@ -283,7 +311,7 @@ def active_wave5a_mappings(db: Session) -> list[dict[str, Any]]:
     ).all()
     mappings = []
     for rule, rule_version, issue, issue_version in rows:
-        spec = WAVE5A_BY_KEY.get(issue.stable_key)
+        spec = WAVE5A_SSC_ACTIVE_BY_KEY.get(issue.stable_key)
         consumer = get_pinned_public_exposure_consumer(issue.stable_key)
         if (
             spec is None or rule.stable_key != spec.rule_key

@@ -4,6 +4,22 @@ CLI-FIRST MVP — COMPLETE / PASS
 
 Current phase: Phase 6B - CLI-first REPORT Output
 
+SMTP unusual-port semantic accounting correction: READY FOR REVIEW
+(2026-10-13). `mail_server_unusual_port` remains implemented as a bounded
+positive-SMTP detector followed by immutable internal policy
+`smtp-standard-ports.v1` `{25,465,587}`. The exact attested SSC metadata and
+reviewed public SSC methodology do not disclose a deterministic unusual-port
+boundary, so the capability is now `PARTIAL / INTERNAL_POLICY_ONLY`, is absent
+from the approved SSC-active Wave 5A set, and is not counted as exact SSC
+support. Wave 5A reconciliation deactivates any managed
+`ssc.wave5a.mail_server_unusual_port` rule without deleting its rule or rv1 and
+without creating a replacement version. FTP, IMAP, and POP3 remain active.
+Calibration remains `UNKNOWN` / `affects_score=false`; no scoring, parser,
+protocol-acquisition, schema, or migration change is included. Current closed
+support is **40/53 VERIFIED_DIRECT**, **44/160 V1**, and **44/202 full
+baseline**. The SSC-aligned implementation ceiling is **42/53**, **46/160**,
+and **46/202**; V1 is unchanged because `ip_reputation` is outside V1.
+
 Wave 5C closure/activation: COMPLETE / PASS (2026-10-13). The exact approved
 active set is `minecraft_server` and `service_rdp`; `service_pptp` remains
 `IMPLEMENTED_PENDING_INTEROP`/PARTIAL/inactive, and Oracle remains unchanged in
@@ -20,10 +36,11 @@ Because `ssc-public-exposure-consumers.v1` denotes the exact original
 nine-member registry, additive registry release
 `ssc-public-exposure-consumers.v2` incorporates those nine unchanged entry
 contracts and adds RDP/PPTP. The nine existing current rule definitions remain
-pinned to v1 and receive no rv3 churn. Closed support is **41/53
-VERIFIED_DIRECT**, **44/160 V1**, and **45/202 full baseline**. The implementation
-ceiling remains **43/53**, **46/160**, and **47/202** because PPTP and Oracle are
-implemented pending interoperability. Minecraft and RDP have no explicit
+pinned to v1 and receive no rv3 churn. After the later SMTP semantic-accounting
+correction, closed support is **40/53 VERIFIED_DIRECT**, **44/160 V1**, and
+**44/202 full baseline**. The SSC-aligned implementation ceiling is **42/53**,
+**46/160**, and **46/202** because PPTP and Oracle remain implemented pending
+interoperability while the internal SMTP proxy is excluded. Minecraft and RDP have no explicit
 internal-risk mapping and fail closed to UNKNOWN/non-scoring. Scoring,
 calibration, Golden Baseline taxonomy, mail-server unusual-port semantics,
 protocol parsers, schema, and migrations are unchanged.
@@ -61,8 +78,8 @@ unknown, internal, non-public, stale-policy, wrong-source, or manual case is
 was **39/53 VERIFIED_DIRECT**, **42/160 V1**, and **43/202 full baseline**. Wave
 5C was still inactive; Oracle remained `IMPLEMENTED_PENDING_INTEROP`/inactive,
 scoring and calibration were
-unchanged, and `mail_server_unusual_port` remains
-`SEPARATE_SEMANTIC_REVIEW_REQUIRED` with unchanged behavior.
+unchanged, and `mail_server_unusual_port` was awaiting the separate semantic
+review that is finalized by the current correction above.
 
 Validation used fresh isolated PostgreSQL databases and a writable clone of
 the existing attested baseline, never pytest against `ssc_e2e`. The focused

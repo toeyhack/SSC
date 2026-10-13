@@ -31,7 +31,12 @@ def main() -> int:
     from app.services.wave3b_rules import WAVE3B_BY_KEY, WAVE3B_RULES
     from app.services.wave4a_rules import WAVE4A_BY_KEY, WAVE4A_RULES
     from app.services.wave4b_rules import WAVE4B_BY_KEY, WAVE4B_RULES
-    from app.services.wave5a_rules import WAVE5A_BY_KEY, WAVE5A_RULES
+    from app.services.wave5a_rules import (
+        WAVE5A_PARTIAL_REASONS,
+        WAVE5A_SSC_ACTIVE_BY_KEY,
+        WAVE5A_SSC_ACTIVE_RULES,
+        WAVE5A_SSC_PARTIAL_RULES,
+    )
     from app.services.wave5b_rules import (
         WAVE5B_ACTIVE_BY_KEY,
         WAVE5B_ACTIVE_RULES,
@@ -48,12 +53,13 @@ def main() -> int:
 
     all_by_key = {
         **WAVE1_BY_KEY, **WAVE2_BY_KEY, **WAVE3A_BY_KEY,
-        **WAVE3B_BY_KEY, **WAVE4A_BY_KEY, **WAVE4B_BY_KEY, **WAVE5A_BY_KEY,
+        **WAVE3B_BY_KEY, **WAVE4A_BY_KEY, **WAVE4B_BY_KEY, **WAVE5A_SSC_ACTIVE_BY_KEY,
         **WAVE5B_ACTIVE_BY_KEY, **WAVE5C_ACTIVE_BY_KEY,
     }
     all_partial_reasons = {
         **WAVE1_PARTIAL_REASONS,
         **WAVE2_PARTIAL_REASONS,
+        **WAVE5A_PARTIAL_REASONS,
         **WAVE5B_PARTIAL_REASONS,
         **WAVE5C_PARTIAL_REASONS,
     }
@@ -103,7 +109,7 @@ def main() -> int:
                 "Wave 3B" if row["ssc_issue_key"] in WAVE3B_BY_KEY else
                 "Wave 4A" if row["ssc_issue_key"] in WAVE4A_BY_KEY else
                 "Wave 4B" if row["ssc_issue_key"] in WAVE4B_BY_KEY else
-                "Wave 5A" if row["ssc_issue_key"] in WAVE5A_BY_KEY else
+                "Wave 5A" if row["ssc_issue_key"] in WAVE5A_SSC_ACTIVE_BY_KEY else
                 "Wave 5B.1" if row["ssc_issue_key"] in WAVE5B_ACTIVE_BY_KEY else
                 "Wave 5C"
             )
@@ -129,7 +135,7 @@ def main() -> int:
         row["current_platform_support"] for row in rows if row["factor"] in V1_FACTORS
     )
     feasibility = Counter(row["feasibility_category"] for row in rows)
-    if coverage != {"SUPPORTED": 45, "PARTIAL": 82, "NOT_SUPPORTED": 75}:
+    if coverage != {"SUPPORTED": 44, "PARTIAL": 83, "NOT_SUPPORTED": 75}:
         raise SystemExit(f"unexpected coverage totals: {dict(coverage)}")
     if v1_coverage != {"SUPPORTED": 44, "PARTIAL": 80, "NOT_SUPPORTED": 36}:
         raise SystemExit(f"unexpected V1 coverage totals: {dict(v1_coverage)}")
@@ -148,7 +154,9 @@ def main() -> int:
                 WAVE3B_RULES,
                 WAVE4A_RULES,
                 WAVE4B_RULES,
-                WAVE5A_RULES,
+                WAVE5A_SSC_ACTIVE_RULES,
+                WAVE5A_SSC_PARTIAL_RULES,
+                WAVE5A_PARTIAL_REASONS,
                 WAVE5B_ACTIVE_RULES,
                 WAVE5B_PENDING_RULES,
                 WAVE5C_ACTIVE_RULES,
@@ -174,7 +182,7 @@ def main() -> int:
     return 0
 
 
-def render_markdown(rows, feasibility, coverage, wave1_rules, wave1_partial, wave2_rules, wave2_partial, wave3a_rules, wave3b_rules, wave4a_rules, wave4b_rules, wave5a_rules, wave5b_active_rules, wave5b_pending_rules, wave5c_active_rules, wave5c_pending_rules, wave5c_blockers) -> str:
+def render_markdown(rows, feasibility, coverage, wave1_rules, wave1_partial, wave2_rules, wave2_partial, wave3a_rules, wave3b_rules, wave4a_rules, wave4b_rules, wave5a_active_rules, wave5a_partial_rules, wave5a_partial_reasons, wave5b_active_rules, wave5b_pending_rules, wave5c_active_rules, wave5c_pending_rules, wave5c_blockers) -> str:
     factors = defaultdict(Counter)
     for row in rows:
         factor = factors[row["factor"]]
@@ -187,7 +195,7 @@ def render_markdown(rows, feasibility, coverage, wave1_rules, wave1_partial, wav
         "",
         f"Snapshot content hash: `{BASELINE_HASH}`",
         "Source: immutable real `SSC_API` Golden Baseline",
-        "Implementation state: Waves 1-2, Wave 3A, Wave 3B, Wave 4A, Wave 4B, Wave 5A, Wave 5B.1 LDAP, and Wave 5C Minecraft/RDP are active. Minecraft is protocol-identity-only; RDP consumes PUBLIC_EXPOSURE_CONTEXT v1. PPTP remains implemented/inactive pending real interoperability, and Oracle Net remains separately implemented pending real interoperability.",
+        "Implementation state: Waves 1-2, Wave 3A, Wave 3B, Wave 4A, Wave 4B, Wave 5A FTP/IMAP/POP3, Wave 5B.1 LDAP, and Wave 5C Minecraft/RDP are active. The SMTP unusual-port primitive remains implemented under an internal deterministic policy but is inactive/PARTIAL for SSC alignment. Minecraft is protocol-identity-only; RDP consumes PUBLIC_EXPOSURE_CONTEXT v1. PPTP remains implemented/inactive pending real interoperability, and Oracle Net remains separately implemented pending real interoperability.",
         "Total mapped issues: **202**",
         "",
         "> This is an independent implementation mapped to SSC taxonomy. It does not reproduce or claim knowledge of SSC collection, aggregation, severity, scoring, or proprietary detection logic. `ssc_severity` remains source metadata and is not mapped to internal risk or score impact.",
@@ -332,15 +340,30 @@ def render_markdown(rows, feasibility, coverage, wave1_rules, wave1_partial, wav
         "",
         "## Active Wave 5A evaluator mappings",
         "",
-        "Wave 5A uses method schema `ssc-wave5a-staged-text-service-observation.v1`, policy `ssc-wave5a-text-service-identification.v1`, source type `SSC_REFERENCE`, and immutable links to exact attested `SSC_API` issue versions. Each adapter performs one plaintext server greeting, one fixed non-authenticating command, and one bounded completion read on the same declared TCP endpoint. SMTP unusual-port evaluation additionally pins `smtp-standard-ports.v1` to 25, 465, and 587.",
+        "The active Wave 5A FTP/IMAP/POP3 rules use method schema `ssc-wave5a-staged-text-service-public-exposure-observation.v2`, policy `ssc-wave5a-text-service-identification.v1`, source type `SSC_REFERENCE`, and immutable links to exact attested `SSC_API` issue versions. Each adapter performs one plaintext server greeting, one fixed non-authenticating command, and one bounded completion read on the same declared TCP endpoint before applying the public-exposure composition.",
         "",
         "| SSC issue key | Protocol | Primitive | Exact MATCH condition | Exact NO_MATCH boundary | INDETERMINATE boundary | Authoritative reference |",
         "|---|---|---|---|---|---|---|",
     ]
-    for spec in wave5a_rules:
+    for spec in wave5a_active_rules:
         lines.append(
             f"| `{spec.issue_key}` | `{spec.protocol}` | `{spec.primitive}` | {spec.match_condition} | "
             f"{spec.no_match_boundary} | {spec.indeterminate_boundary} | {spec.reference} |"
+        )
+
+    lines += [
+        "",
+        "## Wave 5A implemented with internal policy only",
+        "",
+        "The SMTP protocol detector and `smtp-standard-ports.v1` remain implemented and immutable for internal observation. SSC does not disclose a deterministic unusual-port boundary, so this implementation is `PARTIAL`, has no active `SSC_REFERENCE` rule, and is not counted as exact SSC support.",
+        "",
+        "| SSC issue key | Protocol | Current state | Reason |",
+        "|---|---|---|---|",
+    ]
+    for spec in wave5a_partial_rules:
+        lines.append(
+            f"| `{spec.issue_key}` | `{spec.protocol}` | `INTERNAL_POLICY_ONLY` / `PARTIAL` | "
+            f"{wave5a_partial_reasons[spec.issue_key]} |"
         )
 
     lines += [

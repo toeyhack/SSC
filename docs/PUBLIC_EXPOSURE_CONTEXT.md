@@ -80,6 +80,8 @@ An approved external worker can produce a finding only for protocol `MATCH` +
 protocol-identity-only rules. `service_rdp` is active under the exposure
 contract; `service_pptp` is consumer-ready but inactive pending real
 interoperability. `mail_server_unusual_port` is not registered and remains
-`SEPARATE_SEMANTIC_REVIEW_REQUIRED`. Oracle remains pending/inactive. Capability
-support accounting is 41/53 VERIFIED_DIRECT, 44/160 V1 supported, and 45/202
-full supported.
+`PARTIAL / INTERNAL_POLICY_ONLY`: its SMTP identity primitive and immutable
+`smtp-standard-ports.v1` proxy remain available, but SSC does not disclose the
+exact unusual-port boundary and its managed SSC rule is inactive. Oracle remains
+pending/inactive. Capability support accounting is 40/53 VERIFIED_DIRECT,
+44/160 V1 supported, and 44/202 full supported.
