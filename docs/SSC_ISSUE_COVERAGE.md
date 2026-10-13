@@ -2,7 +2,7 @@
 
 Snapshot content hash: `0fe2bc8ffb7e3f734d4e88f70b11cffa6e8e9e47e722dc62107f6ff09694eca8`
 Source: immutable real `SSC_API` Golden Baseline
-Implementation state: Waves 1-2, Wave 3A, Wave 3B, Wave 4A, Wave 4B, Wave 5A, and Wave 5B.1 closed LDAP identification are active. Wave 5C Minecraft/PPTP/RDP protocol primitives are implemented but inactive/PARTIAL because authoritative public-target plus external-vantage context is absent; PPTP additionally lacks real interoperability. Oracle Net remains separately implemented pending real interoperability.
+Implementation state: Waves 1-2, Wave 3A, Wave 3B, Wave 4A, Wave 4B, Wave 5A, and Wave 5B.1 closed LDAP are active. Nine exact reviewed consumers (`service_rsync`, `service_redis`, `service_socks_proxy`, `service_smb`, `service_soap`, `service_ftp`, `service_imap`, `service_pop3`, and `service_ldap`) now compose protocol identity with `PUBLIC_EXPOSURE_CONTEXT v1`; this changes per-run assessment eligibility, not capability support. Wave 5C Minecraft/PPTP/RDP protocol primitives remain inactive/PARTIAL; exact review classifies Minecraft as protocol-identity-only and RDP/PPTP as public-exposure-required, while PPTP additionally lacks real interoperability. Oracle Net remains separately implemented pending real interoperability.
 Total mapped issues: **202**
 
 > This is an independent implementation mapped to SSC taxonomy. It does not reproduce or claim knowledge of SSC collection, aggregation, severity, scoring, or proprietary detection logic. `ssc_severity` remains source metadata and is not mapped to internal risk or score impact.
@@ -174,9 +174,9 @@ These adapters and deterministic tests remain available, but they have no approv
 |---|---|---|---|
 | `service_oracle_db` | `Oracle Net/TNS CONNECT` | `IMPLEMENTED_PENDING_INTEROP` / `PARTIAL` | Real protocol interoperability has not been validated. |
 
-## Wave 5C implemented pending closure context
+## Wave 5C implemented pending separate activation
 
-All three protocol adapters are implemented under `service-probe-adapter.v3`, but no Wave 5C SSC rule is active. Protocol identity does not prove the Golden Baseline's public/Internet exposure semantics, and the repository has no authoritative contract combining public-routable target state with approved external scan vantage. Minecraft and RDP have real loopback interoperability; PPTP remains pending real interoperability as an independent blocker.
+All three protocol adapters are implemented under `service-probe-adapter.v3`, but no Wave 5C SSC rule is active. Exact pinned-baseline review classifies `minecraft_server` as `PROTOCOL_IDENTITY_ONLY` and `service_rdp` and `service_pptp` as `PUBLIC_EXPOSURE_REQUIRED`. The reusable exposure foundation now exists, but Wave 5C activation and semantic rule versions are deliberately outside this tranche. Minecraft and RDP have real loopback interoperability; PPTP remains pending real interoperability as an independent blocker.
 
 | SSC issue key | Protocol | Current state | Closure blockers |
 |---|---|---|---|

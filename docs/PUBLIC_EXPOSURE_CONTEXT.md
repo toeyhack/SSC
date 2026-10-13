@@ -54,9 +54,27 @@ a self-contained `exposure_context` referencing the already persisted
 `target_identity.connect_host`; the IP is not duplicated. Job `scan_config`
 and manual evidence cannot establish trusted vantage.
 
-## Foundation-only status
+## Reviewed consumer status
 
-No SSC rule consumes this evidence yet. Wave 5C stays inactive, Oracle stays
-pending/inactive, assessment coverage remains unchanged, and Wave 3A/3B/5A
-consumer reconciliation remains pending. A later reviewed tranche must select
-eligible issue semantics and change rule/evaluator integration explicitly.
+The immutable consumer registry `ssc-public-exposure-consumers.v1` is keyed by
+the attested baseline content hash and SSC stable issue key. It contains exactly
+`service_rsync`, `service_redis`, `service_socks_proxy`, `service_smb`,
+`service_soap`, `service_ftp`, `service_imap`, `service_pop3`, and
+`service_ldap`. Their current rules consume
+`<root>.evaluations.<issue>.exposure_context.composition.matched`; protocol
+identity remains independently visible but is necessary and insufficient.
+
+TCP consumers require `SCANNER_TCP`, and SOAP requires `SCANNER_HTTP`.
+Manual evidence and a wrong scanner source fail closed with
+`untrusted_observation_source`, independently of trust-key stripping. Missing
+or stale policy versions fail closed with `missing_or_stale_exposure_policy`.
+Local CLI, inline API, and ordinary/default worker execution retain `UNKNOWN`
+vantage and therefore produce `INDETERMINATE` / `NOT_ASSESSED` for these rules.
+An approved external worker can produce a finding only for protocol `MATCH` +
+`PUBLIC_ROUTABLE` + trusted `EXTERNAL_PUBLIC` deployment-manifest vantage.
+
+`service_vnc` and `service_telnet` deliberately retain protocol-identity-only
+rules. `mail_server_unusual_port` is not registered and remains
+`SEPARATE_SEMANTIC_REVIEW_REQUIRED`. Wave 5C remains inactive and Oracle remains
+pending/inactive. Capability support accounting is unchanged: 39/53
+VERIFIED_DIRECT, 42/160 V1 supported, and 43/202 full supported.

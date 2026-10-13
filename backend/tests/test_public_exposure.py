@@ -33,9 +33,86 @@ from app.services.public_exposure import (
 from app.services.scan_executors import ScanExecutorError, validate_scan_config
 from app.models.scan_models import EvidenceSourceEnum, ScanTargetTypeEnum
 from app.services import scan_executors
+from app.services.public_exposure_consumers import (
+    PINNED_SSC_BASELINE_HASH,
+    PUBLIC_EXPOSURE_CONSUMER_POLICY_VERSION,
+    PUBLIC_EXPOSURE_CONSUMERS,
+    PUBLIC_EXPOSURE_REQUIRED_ISSUE_KEYS,
+    get_public_exposure_consumer,
+)
+from app.services.wave3a_rules import WAVE3A_BY_KEY
+from app.services.wave3b_rules import WAVE3B_BY_KEY
+from app.services.wave5a_rules import WAVE5A_BY_KEY
+from app.services.wave5b_rules import WAVE5B_BY_KEY
 
 
 EXPECTED_TABLE_DIGEST = "69c38afc252d8462e6771653bd9a7bc8e59e6e0ee01d9e31f4fa5ed3747057d2"
+EXPECTED_PUBLIC_EXPOSURE_CONSUMERS = {
+    "service_rsync": ("tcp", "SCANNER_TCP"),
+    "service_redis": ("tcp", "SCANNER_TCP"),
+    "service_socks_proxy": ("tcp", "SCANNER_TCP"),
+    "service_smb": ("tcp", "SCANNER_TCP"),
+    "service_soap": ("http", "SCANNER_HTTP"),
+    "service_ftp": ("tcp", "SCANNER_TCP"),
+    "service_imap": ("tcp", "SCANNER_TCP"),
+    "service_pop3": ("tcp", "SCANNER_TCP"),
+    "service_ldap": ("tcp", "SCANNER_TCP"),
+}
+
+
+def test_public_exposure_consumer_registry_is_exact_immutable_and_version_aware():
+    assert PUBLIC_EXPOSURE_CONSUMER_POLICY_VERSION == "ssc-public-exposure-consumers.v1"
+    assert PUBLIC_EXPOSURE_REQUIRED_ISSUE_KEYS == set(EXPECTED_PUBLIC_EXPOSURE_CONSUMERS)
+    assert len(PUBLIC_EXPOSURE_CONSUMERS) == 9
+    for issue_key, (root, source) in EXPECTED_PUBLIC_EXPOSURE_CONSUMERS.items():
+        consumer = get_public_exposure_consumer(PINNED_SSC_BASELINE_HASH, issue_key)
+        assert consumer is not None
+        assert consumer.semantic_class == "PUBLIC_EXPOSURE_REQUIRED"
+        assert (consumer.evidence_root, consumer.required_evidence_source) == (root, source)
+        assert consumer.expression_path == (
+            f"{root}.evaluations.{issue_key}.exposure_context.composition.matched"
+        )
+    with pytest.raises(TypeError):
+        PUBLIC_EXPOSURE_CONSUMERS[(PINNED_SSC_BASELINE_HASH, "other")] = object()
+
+
+def test_public_exposure_consumer_registry_fails_closed_outside_reviewed_identity():
+    assert get_public_exposure_consumer("unknown-baseline", "service_rsync") is None
+    assert get_public_exposure_consumer(PINNED_SSC_BASELINE_HASH, "unknown_issue") is None
+    for issue_key in ("service_vnc", "service_telnet", "mail_server_unusual_port"):
+        assert get_public_exposure_consumer(PINNED_SSC_BASELINE_HASH, issue_key) is None
+
+
+def test_registered_rules_use_composition_paths_and_unaffected_rules_remain_identity_based():
+    specs = {**WAVE3A_BY_KEY, **WAVE3B_BY_KEY, **WAVE5A_BY_KEY, **WAVE5B_BY_KEY}
+    for issue_key, (root, _source) in EXPECTED_PUBLIC_EXPOSURE_CONSUMERS.items():
+        spec = specs[issue_key]
+        assert spec.expression == {
+            "operator": "equals",
+            "path": f"{root}.evaluations.{issue_key}.exposure_context.composition.matched",
+            "value": True,
+        }
+        contract = spec.evidence_schema["public_exposure_context"]
+        assert contract["consumer_policy_version"] == PUBLIC_EXPOSURE_CONSUMER_POLICY_VERSION
+        assert contract["required_context"] == {
+            "schema_version": PUBLIC_EXPOSURE_SCHEMA_VERSION,
+            "address_scope_policy_version": ADDRESS_SCOPE_POLICY_VERSION,
+            "vantage_policy_version": VANTAGE_POLICY_VERSION,
+            "composition_policy_version": EXPOSURE_COMPOSITION_POLICY_VERSION,
+        }
+        assert spec.evidence_schema["protocol_identity_is_sufficient"] is False
+
+    for issue_key in ("service_vnc", "service_telnet"):
+        spec = WAVE3A_BY_KEY[issue_key]
+        assert spec.expression["path"] == f"tcp.evaluations.{issue_key}.matched"
+        assert spec.evidence_schema["schema_version"] == "ssc-wave3a-service-observation.v1"
+        assert "public_exposure_context" not in spec.evidence_schema
+
+    smtp = WAVE5A_BY_KEY["mail_server_unusual_port"]
+    assert smtp.expression["path"] == "tcp.evaluations.mail_server_unusual_port.matched"
+    assert smtp.evidence_schema["schema_version"] == "ssc-wave5a-staged-text-service-observation.v1"
+    assert smtp.evidence_schema["port_policy"]["standard_tcp_ports"] == [25, 465, 587]
+    assert "public_exposure_context" not in smtp.evidence_schema
 
 
 @pytest.mark.parametrize(

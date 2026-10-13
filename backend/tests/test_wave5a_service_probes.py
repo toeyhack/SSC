@@ -15,7 +15,12 @@ from sqlalchemy.orm import Session
 
 from app.cli.ssc import build_parser
 from app.db.session import engine
-from app.models.catalog_models import CatalogIssueTypeVersion, SourceTypeEnum
+from app.models.catalog_models import (
+    CatalogIssueTypeVersion,
+    CatalogSnapshot,
+    CatalogSnapshotItem,
+    SourceTypeEnum,
+)
 from app.models.rule_models import RuleEngineRule
 from app.services.cli_scan import scan_inventory_target
 from app.services.cli_setup import add_inventory_target
@@ -47,6 +52,7 @@ from app.services.service_probes import (
 from app.services.ssc_api_baseline import API_ORIGIN, FACTORS_ENDPOINT, ISSUES_ENDPOINT, normalize_api_payloads
 from app.services.wave3a_rules import WAVE3A_RULES
 from app.services.wave5a_rules import WAVE5A_RULES, activate_wave5a_rules, active_wave5a_mappings
+from app.services.public_exposure_consumers import PINNED_SSC_BASELINE_HASH
 
 
 EXCHANGES = {
@@ -326,6 +332,32 @@ def _wave5a_baseline():
     return normalize_api_payloads(raw)
 
 
+def _pin_test_snapshot(db):
+    source = db.scalar(select(CatalogSnapshot).order_by(CatalogSnapshot.imported_at.desc()))
+    snapshot = CatalogSnapshot(
+        name=source.name, source_type=source.source_type, source_reference=source.source_reference,
+        captured_at=source.captured_at, content_hash=PINNED_SSC_BASELINE_HASH,
+        normalized_schema_version=source.normalized_schema_version,
+        normalized_payload=source.normalized_payload, raw_source=source.raw_source, is_real_baseline=True,
+    )
+    db.add(snapshot)
+    db.flush()
+    for item in source.items:
+        db.add(CatalogSnapshotItem(
+            catalog_snapshot_id=snapshot.id, issue_type_version_id=item.issue_type_version_id,
+            factor_position=item.factor_position, issue_position=item.issue_position,
+        ))
+    db.flush()
+    return snapshot
+
+
+def _activate_pinned_test_baseline(db):
+    _pin_test_snapshot(db)
+    result = activate_wave5a_rules(db, commit=False)
+    assert result["unavailable"] == {}
+    return result
+
+
 def test_wave5a_registry_cli_exact_activation_idempotence_and_approved_risk(db):
     assert SERVICE_PROBE_FRAMEWORK_VERSION == "service-probe-adapter.v2"
     assert MAX_SERVICE_PROBE_RESPONSE_BYTES == 4096
@@ -339,6 +371,10 @@ def test_wave5a_registry_cli_exact_activation_idempotence_and_approved_risk(db):
     assert args.baseline_command == "activate-wave5a" and args.yes is True
 
     import_golden_baseline(db, _wave5a_baseline(), attest_real_source=True)
+    assert set(activate_wave5a_rules(db, commit=False)["unavailable"]) == {
+        "service_ftp", "service_imap", "service_pop3",
+    }
+    _activate_pinned_test_baseline(db)
     mappings = active_wave5a_mappings(db)
     assert len(mappings) == 4
     assert {item["rule_key"] for item in mappings} == {f"ssc.wave5a.{spec.issue_key}" for spec in WAVE5A_RULES}
@@ -357,8 +393,10 @@ def test_wave5a_registry_cli_exact_activation_idempotence_and_approved_risk(db):
 
 
 @pytest.mark.parametrize("protocol", ["ftp", "imap", "pop3", "smtp"])
-def test_wave5a_match_findings_are_visible_and_non_scoring(db, protocol):
+def test_wave5a_match_findings_are_visible_and_non_scoring(db, protocol, monkeypatch):
+    monkeypatch.setattr("app.services.score_results.load_v1_assessment_profile", lambda _db: None)
     import_golden_baseline(db, _wave5a_baseline(), attest_real_source=True)
+    _activate_pinned_test_baseline(db)
     issue_key = ADAPTERS[protocol].issue_key
     rule = db.scalar(select(RuleEngineRule).where(
         RuleEngineRule.stable_key == f"ssc.wave5a.{issue_key}",
@@ -391,17 +429,25 @@ def test_wave5a_match_findings_are_visible_and_non_scoring(db, protocol):
         )
     assert received == [request]
     assert result.evidence[0].summary["evaluations"][issue_key]["outcome"] == "MATCH"
-    assert len(result.findings) == 1
-    finding = result.findings[0]
-    assert finding.ssc_issue_key == issue_key
-    assert finding.catalog_issue_type_version_id == str(rule.current_version.catalog_issue_type_version_id)
-    assert finding.breach_risk == "UNKNOWN"
-    assert finding.affects_score is False
-    assert finding.score_impact == 0
+    if protocol == "smtp":
+        assert len(result.findings) == 1
+        finding = result.findings[0]
+        assert finding.ssc_issue_key == issue_key
+        assert finding.catalog_issue_type_version_id == str(rule.current_version.catalog_issue_type_version_id)
+        assert finding.breach_risk == "UNKNOWN"
+        assert finding.affects_score is False
+        assert finding.score_impact == 0
+    else:
+        assert result.findings == []
+        exposure = result.evidence[0].summary["evaluations"][issue_key]["exposure_context"]
+        assert exposure["composition"]["outcome"] == "INDETERMINATE"
+        assert exposure["composition"]["reason_code"] == "non_public_destination_not_issue_absence"
 
 
 def test_wave5a_smtp_587_positive_identity_remains_no_match_and_no_finding(db, monkeypatch):
+    monkeypatch.setattr("app.services.score_results.load_v1_assessment_profile", lambda _db: None)
     import_golden_baseline(db, _wave5a_baseline(), attest_real_source=True)
+    _activate_pinned_test_baseline(db)
     rule = db.scalar(select(RuleEngineRule).where(
         RuleEngineRule.stable_key == "ssc.wave5a.mail_server_unusual_port",
     ))

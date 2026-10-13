@@ -25,6 +25,11 @@ from app.services.public_exposure import (
     reject_reserved_trust_keys,
     unknown_execution_context,
 )
+from app.services.public_exposure_consumers import (
+    exposure_context_uses_current_policies,
+    get_pinned_public_exposure_consumer,
+    resolve_pinned_consumer_issue_versions,
+)
 from app.services.scan_executors import (
     ScanExecutorError,
     collect_scanner_observations,
@@ -84,6 +89,10 @@ def run_scan_job(
         if job.selected_rule_ids:
             rule_stmt = rule_stmt.where(RuleEngineRule.id.in_(job.selected_rule_ids))
         active_rules = db.execute(rule_stmt).unique().scalars().all()
+        pinned_consumer_version_ids = {
+            issue_key: version.id
+            for issue_key, version in resolve_pinned_consumer_issue_versions(db).items()
+        }
 
         evaluated = 0
         finding_count = 0
@@ -112,6 +121,7 @@ def run_scan_job(
                         raise ScanEngineError(f"Rule {rule.stable_key} has an invalid pinned catalog issue version")
                 else:
                     pinned_issue_version_id = issue.current_version_id if issue else None
+                    pinned_issue_version = db.get(CatalogIssueTypeVersion, pinned_issue_version_id) if pinned_issue_version_id else None
                 assessment = {"rule_id": str(rule.id), "rule_version_id": str(version.id),
                               "catalog_issue_type_version_id": str(pinned_issue_version_id) if pinned_issue_version_id else None,
                               "factor_code": issue.factor.code if issue else "UNCATEGORIZED",
@@ -124,6 +134,31 @@ def run_scan_job(
                 evaluation = _evaluation_for_expression(version.rule_expression, evidence)
                 if evaluation is not None and evaluation.get("outcome") in {"MATCH", "NO_MATCH", "INDETERMINATE"}:
                     assessment["evaluation_outcome"] = evaluation["outcome"]
+                exposure_consumer = None
+                if (
+                    issue is not None
+                    and pinned_issue_version is not None
+                    and pinned_consumer_version_ids.get(issue.stable_key) == pinned_issue_version.id
+                ):
+                    exposure_consumer = get_pinned_public_exposure_consumer(issue.stable_key)
+                expression_evidence_source = _evidence_source_for_expression(
+                    version.rule_expression, source_by_root
+                )
+                if exposure_consumer is not None and (
+                    expression_evidence_source is None
+                    or expression_evidence_source.value != exposure_consumer.required_evidence_source
+                ):
+                    assessment["status"] = "skipped"
+                    assessment["reason_code"] = "untrusted_observation_source"
+                    skipped += 1
+                    continue
+                if exposure_consumer is not None and not exposure_context_uses_current_policies(
+                    exposure_consumer, evidence
+                ):
+                    assessment["status"] = "skipped"
+                    assessment["reason_code"] = "missing_or_stale_exposure_policy"
+                    skipped += 1
+                    continue
                 if job.collect_observations and (not isinstance(source_evidence, dict) or
                     (source_evidence.get("status") != "success" and ".evaluations." not in path and not path.endswith(".endpoint_available")) or
                     (_extract_path(evidence, path)[1] is None and version.rule_expression.get("operator") != "exists")):
@@ -393,4 +428,18 @@ def _matched_evidence(expression: dict[str, Any], evidence: dict[str, Any]) -> d
     if not isinstance(path, str):
         return evidence
     found, value = _extract_path(evidence, path)
-    return {"path": path, "found": found, "value": value}
+    matched = {"path": path, "found": found, "value": value}
+    suffix = ".exposure_context.composition.matched"
+    if path.endswith(suffix):
+        evaluation_path = path[:-len(suffix)]
+        evaluation_found, evaluation = _extract_path(evidence, evaluation_path)
+        if evaluation_found and isinstance(evaluation, dict):
+            matched["protocol_evaluation"] = {
+                key: evaluation.get(key)
+                for key in ("outcome", "matched", "policy_version")
+                if key in evaluation
+            }
+            exposure_context = evaluation.get("exposure_context")
+            if isinstance(exposure_context, dict):
+                matched["exposure_context"] = exposure_context
+    return matched

@@ -9,7 +9,12 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.db.session import engine
-from app.models.catalog_models import CatalogIssueTypeVersion, SourceTypeEnum
+from app.models.catalog_models import (
+    CatalogIssueTypeVersion,
+    CatalogSnapshot,
+    CatalogSnapshotItem,
+    SourceTypeEnum,
+)
 from app.models.rule_models import RuleEngineRule
 from app.services.cli_scan import scan_inventory_target
 from app.services.cli_setup import add_inventory_target
@@ -25,7 +30,8 @@ from app.services.scan_engine import _not_assessed_reason
 from app.services.scan_executors import HTTPExecutor, InventoryScanTarget, validate_scan_config
 from app.services.scoring_engine import ScoringDefinition
 from app.services.ssc_api_baseline import API_ORIGIN, FACTORS_ENDPOINT, ISSUES_ENDPOINT, normalize_api_payloads
-from app.services.wave3b_rules import WAVE3B_RULES, active_wave3b_mappings
+from app.services.public_exposure_consumers import PINNED_SSC_BASELINE_HASH
+from app.services.wave3b_rules import WAVE3B_RULES, activate_wave3b_rules, active_wave3b_mappings
 from app.models.scan_models import ScanTargetTypeEnum
 from tests.test_scan_executors import _http_server
 
@@ -700,6 +706,25 @@ def _wave3b_baseline():
     return normalize_api_payloads(raw)
 
 
+def _pin_test_snapshot(db):
+    source = db.scalar(select(CatalogSnapshot).order_by(CatalogSnapshot.imported_at.desc()))
+    snapshot = CatalogSnapshot(
+        name=source.name, source_type=source.source_type, source_reference=source.source_reference,
+        captured_at=source.captured_at, content_hash=PINNED_SSC_BASELINE_HASH,
+        normalized_schema_version=source.normalized_schema_version,
+        normalized_payload=source.normalized_payload, raw_source=source.raw_source, is_real_baseline=True,
+    )
+    db.add(snapshot)
+    db.flush()
+    for item in source.items:
+        db.add(CatalogSnapshotItem(
+            catalog_snapshot_id=snapshot.id, issue_type_version_id=item.issue_type_version_id,
+            factor_position=item.factor_position, issue_position=item.issue_position,
+        ))
+    db.flush()
+    return snapshot
+
+
 class FTPLinkHandler(BaseHTTPRequestHandler):
     request_count = 0
 
@@ -716,8 +741,15 @@ class FTPLinkHandler(BaseHTTPRequestHandler):
         self.wfile.write(body)
 
 
-def test_default_cli_scan_scope_exact_mapping_and_calibrated_finding_scores(db):
+def test_default_cli_scan_scope_exact_mapping_and_calibrated_finding_scores(db, monkeypatch):
+    monkeypatch.setattr("app.services.score_results.load_v1_assessment_profile", lambda _db: None)
     import_golden_baseline(db, _wave3b_baseline(), attest_real_source=True)
+    assert activate_wave3b_rules(db, commit=False)["unavailable"] == {
+        "service_soap": "current definition is not the reviewed version in the pinned attested SSC_API baseline"
+    }
+    _pin_test_snapshot(db)
+    activation = activate_wave3b_rules(db, commit=False)
+    assert activation["unavailable"] == {}
     mappings = active_wave3b_mappings(db)
     assert len(mappings) == len(WAVE3B_RULES) == 7
     assert {item["issue_key"] for item in mappings} == set(HTTP_CONTENT_ISSUE_KEYS)
@@ -735,6 +767,7 @@ def test_default_cli_scan_scope_exact_mapping_and_calibrated_finding_scores(db):
         assert issue_version.source_type == SourceTypeEnum.SSC_API
         risk = resolve_ssc_internal_risk(mapping["issue_key"])
         assert (risk.breach_risk, risk.affects_score) == expected_risks[mapping["issue_key"]]
+
 
     rule = db.scalar(select(RuleEngineRule).where(RuleEngineRule.stable_key == "ssc.wave3b.insecure_ftp"))
     suffix = uuid4().hex[:12]

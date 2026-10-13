@@ -15,7 +15,13 @@ from app.cli.ssc import build_parser
 from app.services.cli_scan import scan_inventory_target
 from app.services.cli_setup import add_inventory_target
 from app.db.session import engine
-from app.models.catalog_models import CatalogIssueType, CatalogIssueTypeVersion, SourceTypeEnum
+from app.models.catalog_models import (
+    CatalogIssueType,
+    CatalogIssueTypeVersion,
+    CatalogSnapshot,
+    CatalogSnapshotItem,
+    SourceTypeEnum,
+)
 from app.models.rule_models import RuleEngineRule
 from app.services.golden_baseline_importer import import_golden_baseline
 from app.services.internal_risk_calibration import resolve_ssc_internal_risk
@@ -48,6 +54,7 @@ from app.services.wave5b_rules import (
     activate_wave5b_rules,
     active_wave5b_mappings,
 )
+from app.services.public_exposure_consumers import PINNED_SSC_BASELINE_HASH
 
 
 def _ber(tag: int, value: bytes) -> bytes:
@@ -349,6 +356,32 @@ def _wave5b_baseline(*, attested_titles: bool = True):
     return normalize_api_payloads(raw)
 
 
+def _pin_test_snapshot(db):
+    source = db.scalar(select(CatalogSnapshot).order_by(CatalogSnapshot.imported_at.desc()))
+    snapshot = CatalogSnapshot(
+        name=source.name, source_type=source.source_type, source_reference=source.source_reference,
+        captured_at=source.captured_at, content_hash=PINNED_SSC_BASELINE_HASH,
+        normalized_schema_version=source.normalized_schema_version,
+        normalized_payload=source.normalized_payload, raw_source=source.raw_source, is_real_baseline=True,
+    )
+    db.add(snapshot)
+    db.flush()
+    for item in source.items:
+        db.add(CatalogSnapshotItem(
+            catalog_snapshot_id=snapshot.id, issue_type_version_id=item.issue_type_version_id,
+            factor_position=item.factor_position, issue_position=item.issue_position,
+        ))
+    db.flush()
+    return snapshot
+
+
+def _activate_pinned_test_baseline(db):
+    _pin_test_snapshot(db)
+    result = activate_wave5b_rules(db, commit=False)
+    assert result["unavailable"] == {}
+    return result
+
+
 def test_wave5b_registry_cli_activation_is_exact_idempotent_and_uncalibrated(db):
     assert [spec.issue_key for spec in WAVE5B_RULES] == ["service_ldap", "service_oracle_db"]
     assert WAVE5B_ACTIVE_KEYS == {"service_ldap"}
@@ -356,6 +389,8 @@ def test_wave5b_registry_cli_activation_is_exact_idempotent_and_uncalibrated(db)
     args = build_parser().parse_args(["baseline", "activate-wave5b", "--yes"])
     assert args.baseline_command == "activate-wave5b" and args.yes
     import_golden_baseline(db, _wave5b_baseline(), attest_real_source=True)
+    assert set(activate_wave5b_rules(db, commit=False)["unavailable"]) == {"service_ldap"}
+    _activate_pinned_test_baseline(db)
     mappings = active_wave5b_mappings(db)
     assert len(mappings) == 1
     assert {item["rule_key"] for item in mappings} == {"ssc.wave5b.service_ldap"}
@@ -388,8 +423,10 @@ def test_wave5b_registry_cli_activation_is_exact_idempotent_and_uncalibrated(db)
     assert repeated["rules_reused"] == 1 and repeated["rules_deactivated"] == 0
 
 
-def test_active_wave5b_match_finding_is_visible_unknown_and_non_scoring(db):
+def test_active_wave5b_match_finding_is_visible_unknown_and_non_scoring(db, monkeypatch):
+    monkeypatch.setattr("app.services.score_results.load_v1_assessment_profile", lambda _db: None)
     import_golden_baseline(db, _wave5b_baseline(), attest_real_source=True)
+    _activate_pinned_test_baseline(db)
     protocol, response = "ldap", _ldap_done()
     issue_key = ADAPTERS[protocol].issue_key
     rule = db.scalar(select(RuleEngineRule).where(
@@ -421,12 +458,10 @@ def test_active_wave5b_match_finding_is_visible_unknown_and_non_scoring(db):
             rule_keys=[rule.stable_key],
         )
     assert result.evidence[0].summary["evaluations"][issue_key]["outcome"] == "MATCH"
-    assert len(result.findings) == 1
-    finding = result.findings[0]
-    assert finding.ssc_issue_key == issue_key
-    assert finding.breach_risk == "UNKNOWN"
-    assert finding.affects_score is False
-    assert finding.score_impact == 0
+    assert result.findings == []
+    exposure = result.evidence[0].summary["evaluations"][issue_key]["exposure_context"]
+    assert exposure["composition"]["outcome"] == "INDETERMINATE"
+    assert exposure["composition"]["reason_code"] == "non_public_destination_not_issue_absence"
 
 
 def test_wave5b_activation_rejects_unattested_and_stale_current_versions(db):

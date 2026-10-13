@@ -47,7 +47,7 @@ Without enrichment, `pull-ssc` uses only `GET https://api.securityscorecard.io/m
 
 `status` works offline. `INTERNAL_ONLY` means no real SSC baseline has been recorded; all existing runtime features remain available without claiming alignment. `SSC_ALIGNED` requires at least one real imported SSC baseline with provenance. It does not imply scoring calibration. For real licensed UI/manual canonical JSON, use `python -m app.cli.import_golden_baseline --input <capture.json> --attest-real-source --json` on its first import. Never attest synthetic fixtures. Previously unattested snapshots cannot be relabeled on reuse.
 
-`activate-wave1 --yes` through `activate-wave5a --yes` reconcile their reviewed active sets against exact current issue definitions in an attested real `SSC_API` snapshot. `activate-wave5b --yes` activates LDAP but keeps Oracle inactive pending real interoperability. `activate-wave5c --yes` is intentionally a fail-closed reconciler: it deactivates any managed Wave 5C rule and reports per-key blockers because the repository lacks authoritative public-target plus approved external-vantage context; PPTP also lacks real interoperability. Protocol `MATCH` alone cannot satisfy the baseline's public-exposure semantics. Each approved evaluator version stores a foreign key to the immutable issue version; later definition changes create new versions rather than rewriting history.
+`activate-wave1 --yes` through `activate-wave5a --yes` reconcile their reviewed active sets against exact current issue definitions in an attested real `SSC_API` snapshot. Reviewed public-exposure consumers in Waves 3A, 3B, and 5A reconcile only against the pinned baseline hash and create/reuse monotonic exposure-composition rule versions. `activate-wave5b --yes` applies the same policy to LDAP but keeps Oracle inactive pending real interoperability. `activate-wave5c --yes` remains an intentionally fail-closed reconciler and activates none of Minecraft, PPTP, or RDP in this tranche; PPTP also lacks real interoperability. Each approved evaluator version stores a foreign key to the immutable issue version; later definition changes create new versions rather than rewriting history.
 
 Service probes are declared explicitly in scan configuration; neither a port number nor TCP-open state selects or identifies a protocol:
 
@@ -67,6 +67,13 @@ Service probes are declared explicitly in scan configuration; neither a port num
 ```
 
 Wave 3A protocol names are `vnc`, `rsync`, `redis`, `socks5`, `telnet`, and `smb2`. Wave 5A adds `ftp`, `imap`, `pop3`, and `smtp`; Wave 5B.1 adds `ldap` and `oracle`; Wave 5C adds `minecraft`, `pptp`, and `rdp`. Minecraft uses the declared inventory hostname, not the resolved connect address, in its status handshake. A target must retain inventory authorization, but that approval is not proof of Internet exposure or external vantage. At most six probes run; response and outbound caps remain 4096 and 1024 bytes. v3 probes share one monotonic connect/write/read deadline and read only complete declared framing. Probes do not authenticate, enumerate data, relay traffic, continue negotiated TLS, or establish sessions. Unsupported TLS and all malformed/incomplete Wave 5C responses remain `INDETERMINATE`.
+
+For the nine registered public-exposure consumers, a local CLI scan, inline API
+run, or default worker has `UNKNOWN` vantage. Protocol identity may still be
+recorded, but the SSC issue is `NOT_ASSESSED` and creates no finding. Only an
+approved external worker with a trusted deployment manifest and a
+public-routable pinned target can complete the positive exposure predicate.
+Manual protocol-shaped evidence cannot satisfy these rules.
 
 SSH negotiation is configured separately on the same TCP executor so it does not overload Wave 3A service-probe evidence:
 

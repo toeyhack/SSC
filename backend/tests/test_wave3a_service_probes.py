@@ -10,7 +10,12 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.db.session import engine
-from app.models.catalog_models import CatalogIssueTypeVersion, SourceTypeEnum
+from app.models.catalog_models import (
+    CatalogIssueTypeVersion,
+    CatalogSnapshot,
+    CatalogSnapshotItem,
+    SourceTypeEnum,
+)
 from app.models.rule_models import RuleEngineRule
 from app.models.scan_models import ScanTargetTypeEnum
 from app.outputs.report import render_html
@@ -30,7 +35,11 @@ from app.services.service_probes import (
 from app.services.ssc_api_baseline import API_ORIGIN, FACTORS_ENDPOINT, ISSUES_ENDPOINT, normalize_api_payloads
 from app.services.wave1_rules import WAVE1_RULES
 from app.services.wave2_rules import WAVE2_RULES
-from app.services.wave3a_rules import WAVE3A_RULES, active_wave3a_mappings
+from app.services.public_exposure_consumers import (
+    PINNED_SSC_BASELINE_HASH,
+    PUBLIC_EXPOSURE_REQUIRED_ISSUE_KEYS,
+)
+from app.services.wave3a_rules import WAVE3A_RULES, activate_wave3a_rules, active_wave3a_mappings
 
 
 def _smb2_response() -> bytes:
@@ -228,8 +237,40 @@ def _wave3a_baseline():
     return normalize_api_payloads(raw)
 
 
-def test_wave3a_exact_version_activation_and_end_to_end_finding(db):
+def _pin_test_snapshot(db):
+    source = db.scalar(select(CatalogSnapshot).order_by(CatalogSnapshot.imported_at.desc()))
+    snapshot = CatalogSnapshot(
+        name=source.name,
+        source_type=source.source_type,
+        source_reference=source.source_reference,
+        captured_at=source.captured_at,
+        content_hash=PINNED_SSC_BASELINE_HASH,
+        normalized_schema_version=source.normalized_schema_version,
+        normalized_payload=source.normalized_payload,
+        raw_source=source.raw_source,
+        is_real_baseline=True,
+    )
+    db.add(snapshot)
+    db.flush()
+    for item in source.items:
+        db.add(CatalogSnapshotItem(
+            catalog_snapshot_id=snapshot.id,
+            issue_type_version_id=item.issue_type_version_id,
+            factor_position=item.factor_position,
+            issue_position=item.issue_position,
+        ))
+    db.flush()
+    return snapshot
+
+
+def test_wave3a_exact_version_activation_and_end_to_end_finding(db, monkeypatch):
+    monkeypatch.setattr("app.services.score_results.load_v1_assessment_profile", lambda _db: None)
     import_golden_baseline(db, _wave3a_baseline(), attest_real_source=True)
+    unavailable = activate_wave3a_rules(db, commit=False)["unavailable"]
+    assert set(unavailable) == (set(PUBLIC_EXPOSURE_REQUIRED_ISSUE_KEYS) & {spec.issue_key for spec in WAVE3A_RULES})
+    _pin_test_snapshot(db)
+    activation = activate_wave3a_rules(db, commit=False)
+    assert activation["unavailable"] == {}
     mappings = active_wave3a_mappings(db)
     assert len(mappings) == len(WAVE3A_RULES) == 6
     assert {item["issue_key"] for item in mappings} == {spec.issue_key for spec in WAVE3A_RULES}
@@ -237,6 +278,7 @@ def test_wave3a_exact_version_activation_and_end_to_end_finding(db):
         issue_version = db.get(CatalogIssueTypeVersion, UUID(mapping["issue_version_id"]))
         assert issue_version.source_type == SourceTypeEnum.SSC_API
         assert mapping["primitive"] == "SERVICE_PROTOCOL_IDENTIFICATION"
+
 
     rule = db.scalar(select(RuleEngineRule).where(RuleEngineRule.stable_key == "ssc.wave3a.service_vnc"))
     assert rule.current_version.catalog_issue_type_version_id == rule.catalog_issue_type.current_version_id

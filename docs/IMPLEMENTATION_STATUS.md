@@ -4,7 +4,41 @@ CLI-FIRST MVP — COMPLETE / PASS
 
 Current phase: Phase 6B - CLI-first REPORT Output
 
-Wave 5C bounded framed service identification: IMPLEMENTED / INACTIVE (2026-10-08). Exactly `minecraft_server`, `service_pptp`, and `service_rdp` now have protocol builders, incremental completion parsers, v3 acquisition wiring, executor target pinning, compact evidence, and an independently gated implementation registry. The repository has no authoritative contract proving both that a target is public-routable/Internet-facing and that an observation came from an approved external/public scan vantage. Protocol identity, inventory approval, connectivity, DNS, port number, and loopback interoperability do not prove those facts. Therefore all three stable `ssc.wave5c.*` keys remain inactive and `PARTIAL` with `IMPLEMENTED_PENDING_EXPOSURE_CONTEXT`; reconciliation deactivates any stale managed Wave 5C rule and creates no active mapping. No public-exposure field or schema migration was invented.
+PUBLIC_EXPOSURE consumer retrofit: COMPLETE / PASS (2026-10-12). Against the
+exact attested SSC_API snapshot
+`0fe2bc8ffb7e3f734d4e88f70b11cffa6e8e9e47e722dc62107f6ff09694eca8`,
+exactly nine supported consumers now use `PUBLIC_EXPOSURE_CONTEXT v1`:
+`service_rsync`, `service_redis`, `service_socks_proxy`, `service_smb`,
+`service_soap`, `service_ftp`, `service_imap`, `service_pop3`, and
+`service_ldap`. Registry `ssc-public-exposure-consumers.v1` is immutable and
+version-aware by baseline hash plus stable issue key. Each consumer received a
+new monotonic rule version while historical rv1 remained queryable; VNC,
+Telnet, and unusual-port SMTP definitions remained unchanged.
+
+The final positive predicate is protocol `MATCH` plus `PUBLIC_ROUTABLE` plus a
+trusted `EXTERNAL_PUBLIC` deployment-manifest vantage. Every incomplete,
+unknown, internal, non-public, stale-policy, wrong-source, or manual case is
+`INDETERMINATE` / `NOT_ASSESSED`; the retrofit introduces no exposure
+`NO_MATCH`. TCP consumers independently require `SCANNER_TCP`; SOAP requires
+`SCANNER_HTTP`. Capability accounting remains **39/53 VERIFIED_DIRECT**,
+**42/160 V1**, and **43/202 full baseline**. Wave 5C remains inactive, Oracle
+remains `IMPLEMENTED_PENDING_INTEROP`/inactive, scoring and calibration are
+unchanged, and `mail_server_unusual_port` remains
+`SEPARATE_SEMANTIC_REVIEW_REQUIRED` with unchanged behavior.
+
+Validation used fresh isolated PostgreSQL databases and a writable clone of
+the existing attested baseline, never pytest against `ssc_e2e`. The focused
+registry/rule/exposure gate passed **464 tests**, and the separate
+assessment/scoring/report/calibration/Wave 5C regression gate passed **539
+tests**. The one complete backend-suite run passed **1,194 tests** with only
+the two existing dependency deprecation warnings. Exact-baseline
+reconciliation created nine rv2 versions from nine rv1 currents, preserved
+all rv1 rows, and created zero versions on repeat. Dependency checking,
+isolated bytecode compilation, model-aware Alembic check, and `git diff
+--check` passed. No migration was added and no external/company target was
+scanned.
+
+Wave 5C bounded framed service identification: IMPLEMENTED / INACTIVE (2026-10-08). Exactly `minecraft_server`, `service_pptp`, and `service_rdp` now have protocol builders, incremental completion parsers, v3 acquisition wiring, executor target pinning, compact evidence, and an independently gated implementation registry. The later exact-baseline semantic review established `minecraft_server` as protocol-identity-only and `service_rdp` and `service_pptp` as public-exposure-required. This consumer retrofit does not activate or modify Wave 5C: all three stable `ssc.wave5c.*` keys remain inactive/PARTIAL, and PPTP additionally remains `IMPLEMENTED_PENDING_INTEROP`.
 
 Minecraft sends only one endpoint-aware Java status handshake (`protocol=-1`, declared hostname/port, status state) followed by one status request and accepts only a complete bounded packet-ID-zero JSON response with a valid version object. PPTP sends one fixed 156-byte SCCRQ and accepts structurally valid 156-byte SCCRP success or protocol-specific rejection results, then stops before calls, GRE, PPP, or authentication. RDP sends the fixed 19-byte TPKT/X.224/RDP negotiation request and accepts only a Connection Confirm containing a legal negotiation response or failure; a bare X.224 confirm is indeterminate, and the client never continues into TLS, NLA, CredSSP, MCS, authentication, or a session. Wave 5C v1 defines no deterministic `NO_MATCH`. All three reuse `service-probe-adapter.v3`, one monotonic connect/write/read deadline, the six-probe cap, 4096-byte response cap, and 1024-byte outbound cap.
 

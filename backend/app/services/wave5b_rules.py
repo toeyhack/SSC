@@ -27,9 +27,16 @@ from app.services.service_probes import (
     MAX_SERVICE_PROBE_OUTBOUND_BYTES,
     MAX_SERVICE_PROBE_RESPONSE_BYTES,
 )
+from app.services.public_exposure_consumers import (
+    get_pinned_public_exposure_consumer,
+    public_exposure_rule_expression,
+    public_exposure_schema_contract,
+    resolve_pinned_consumer_issue_versions,
+)
 
 
 METHOD_VERSION = "ssc-wave5b-database-service-observation.v1"
+PUBLIC_EXPOSURE_METHOD_VERSION = "ssc-wave5b-database-service-public-exposure-observation.v2"
 
 
 @dataclass(frozen=True)
@@ -69,10 +76,20 @@ class Wave5BRuleSpec:
 
     @property
     def logic(self) -> str:
+        if get_pinned_public_exposure_consumer(self.issue_key) is not None:
+            return (
+                f"Protocol prerequisite: {self.match_condition} Final MATCH requires the protocol prerequisite plus "
+                "PUBLIC_ROUTABLE target address and trusted EXTERNAL_PUBLIC deployment-manifest vantage through "
+                "PUBLIC_EXPOSURE_CONTEXT v1. All other exposure compositions are INDETERMINATE / NOT_ASSESSED; "
+                "there is no deterministic exposure NO_MATCH."
+            )
         return f"{self.match_condition} {self.no_match_boundary} {self.indeterminate_boundary}"
 
     @property
     def expression(self) -> dict[str, Any]:
+        exposure_expression = public_exposure_rule_expression(self.issue_key)
+        if exposure_expression is not None:
+            return exposure_expression
         return {
             "operator": "equals",
             "path": f"tcp.evaluations.{self.issue_key}.matched",
@@ -81,8 +98,9 @@ class Wave5BRuleSpec:
 
     @property
     def evidence_schema(self) -> dict[str, Any]:
-        return {
-            "schema_version": METHOD_VERSION,
+        consumer = get_pinned_public_exposure_consumer(self.issue_key)
+        schema = {
+            "schema_version": PUBLIC_EXPOSURE_METHOD_VERSION if consumer is not None else METHOD_VERSION,
             "framework_version": DATABASE_PROBE_FRAMEWORK_VERSION,
             "policy_version": WAVE5B_SERVICE_POLICY_VERSION,
             "builder_version": DATABASE_PROBE_BUILDER_VERSION,
@@ -101,6 +119,16 @@ class Wave5BRuleSpec:
             "tls_mode": "plaintext-only; no implicit TLS, TCPS, StartTLS, or redirect following",
             "outcomes": ["MATCH", "INDETERMINATE"],
         }
+        if consumer is not None:
+            schema["protocol_identity_requirement"] = self.evidence_requirement
+            schema["protocol_match_condition"] = self.match_condition
+            schema["protocol_identity_is_sufficient"] = False
+            schema["public_exposure_context"] = public_exposure_schema_contract(consumer)
+            schema["required_observation"] = (
+                f"{self.evidence_requirement} Protocol/service identity is necessary but insufficient; the final SSC "
+                "evaluation additionally requires PUBLIC_EXPOSURE_CONTEXT v1."
+            )
+        return schema
 
 
 WAVE5B_RULES = (
@@ -147,6 +175,7 @@ def activate_wave5b_rules(db: Session, *, commit: bool = True) -> dict[str, Any]
         .join(CatalogSnapshot, CatalogSnapshot.id == CatalogSnapshotItem.catalog_snapshot_id)
         .where(CatalogSnapshot.source_type == SourceTypeEnum.SSC_API, CatalogSnapshot.is_real_baseline.is_(True))
     ).scalars())
+    pinned_consumers = resolve_pinned_consumer_issue_versions(db)
     counts = {"rules_created": 0, "rule_versions_created": 0, "rules_reused": 0, "rules_deactivated": 0}
     activated: list[str] = []
     unavailable: dict[str, str] = {}
@@ -167,7 +196,17 @@ def activate_wave5b_rules(db: Session, *, commit: bool = True) -> dict[str, Any]
             unavailable[spec.issue_key] = "exact issue/current version is absent or inactive"
             continue
         issue_version = db.get(CatalogIssueTypeVersion, issue.current_version_id)
-        if issue_version is None or issue_version.source_type != SourceTypeEnum.SSC_API or issue_version.id not in real_versions:
+        consumer = get_pinned_public_exposure_consumer(spec.issue_key)
+        expected_consumer_version = pinned_consumers.get(spec.issue_key)
+        if consumer is not None and (
+            issue_version is None or expected_consumer_version is None
+            or issue_version.id != expected_consumer_version.id
+        ):
+            unavailable[spec.issue_key] = "current definition is not the reviewed version in the pinned attested SSC_API baseline"
+            continue
+        if consumer is None and (
+            issue_version is None or issue_version.source_type != SourceTypeEnum.SSC_API or issue_version.id not in real_versions
+        ):
             unavailable[spec.issue_key] = "current definition is not part of an attested real SSC_API baseline"
             continue
         rule = db.execute(
@@ -228,6 +267,9 @@ def active_wave5b_mappings(db: Session) -> list[dict[str, Any]]:
         .join(CatalogSnapshot, CatalogSnapshot.id == CatalogSnapshotItem.catalog_snapshot_id)
         .where(CatalogSnapshot.source_type == SourceTypeEnum.SSC_API, CatalogSnapshot.is_real_baseline.is_(True))
     ).scalars())
+    pinned_consumer_ids = {
+        version.id for version in resolve_pinned_consumer_issue_versions(db).values()
+    }
     rows = db.execute(
         select(RuleEngineRule, RuleEngineRuleVersion, CatalogIssueType, CatalogIssueTypeVersion)
         .join(RuleEngineRuleVersion, RuleEngineRule.current_version_id == RuleEngineRuleVersion.id)
@@ -238,11 +280,13 @@ def active_wave5b_mappings(db: Session) -> list[dict[str, Any]]:
     mappings = []
     for rule, rule_version, issue, issue_version in rows:
         spec = WAVE5B_ACTIVE_BY_KEY.get(issue.stable_key)
+        consumer = get_pinned_public_exposure_consumer(issue.stable_key)
         if (
             spec is None or rule.stable_key != spec.rule_key
             or issue_version.issue_type_id != issue.id
             or issue_version.source_type != SourceTypeEnum.SSC_API
             or issue_version.id not in real_versions
+            or (consumer is not None and issue_version.id not in pinned_consumer_ids)
             or rule_version.rule_expression != spec.expression
             or rule_version.evidence_schema != spec.evidence_schema
         ):

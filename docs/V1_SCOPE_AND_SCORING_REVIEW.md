@@ -4,7 +4,7 @@ Review date: 2026-09-23
 
 Golden Baseline: immutable real `SSC_API` snapshot `0fe2bc8ffb7e3f734d4e88f70b11cffa6e8e9e47e722dc62107f6ff09694eca8`
 
-Implementation state updated 2026-10-06: Waves 1–5A, 42 active exact SSC evaluator mappings; all 42 have separately approved internal-risk calibration
+Implementation state updated 2026-10-12: 42 active V1 exact SSC evaluator mappings remain supported; nine reviewed public-exposure consumers now require versioned exposure composition per run without changing calibration or capability counts
 
 This review originally changed product scope documentation only. The V1 Assessment Completeness Fix implemented on 2026-09-23 applies the correction specified here without changing the Golden Baseline, scanner primitives, rule activation, penalty arithmetic, factor weights, or SSC severity.
 
@@ -95,7 +95,7 @@ Wave 4B promotes only `spf_record_malformed`. It strictly selects records beginn
 
 Wave 5A promotes `service_ftp`, `service_imap`, `service_pop3`, and `mail_server_unusual_port`. Each explicitly declared endpoint receives one bounded plaintext TCP connection with a server greeting, one fixed non-authenticating command, and one completion read under a shared deadline and byte/line budgets. FTP requires NOOP/200, IMAP requires untagged CAPABILITY plus matching A001 OK, POP3 requires a dot-terminated CAPA result, and SMTP requires EHLO/250 before applying `smtp-standard-ports.v1` `{25,465,587}`. Greeting-only, malformed, truncated, timed-out, reset, TLS-only, or budget-exhausted evidence remains `INDETERMINATE`; verified SMTP on a standard policy port is the only new issue-specific `NO_MATCH`. Calibration v1.4 explicitly assigns all four keys UNKNOWN/non-scoring: deterministic service identity supports inventory, attack-surface visibility, and follow-up assessment, but does not establish a demonstrated vulnerability, unsafe authentication or transport, public exposure, unauthorized access, relay abuse, or compromise.
 
-Wave 5C implements `minecraft_server`, `service_pptp`, and `service_rdp` protocol identification but promotes none of them. Their attested definitions require public/Internet exposure, while the repository has no authoritative contract proving both a public-routable target and an approved external/public scan vantage. All remain inactive with `IMPLEMENTED_PENDING_EXPOSURE_CONTEXT`; PPTP additionally remains `IMPLEMENTED_PENDING_INTEROP`. V1 support therefore stays 42/160, and these uncalibrated implementation-only keys fail closed to UNKNOWN/non-scoring if evaluated.
+Wave 5C implements `minecraft_server`, `service_pptp`, and `service_rdp` protocol identification but promotes none of them in this tranche. Exact attested review classifies Minecraft as protocol-identity-only and RDP/PPTP as public-exposure-required. The exposure foundation can support a later RDP/PPTP consumer tranche, but Wave 5C activation remains separate and PPTP additionally remains `IMPLEMENTED_PENDING_INTEROP`. V1 support therefore stays 42/160, and these uncalibrated implementation-only keys fail closed to UNKNOWN/non-scoring if evaluated.
 
 ## Recommended next primitives
 
