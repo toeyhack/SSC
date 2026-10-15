@@ -4,6 +4,60 @@ CLI-FIRST MVP — COMPLETE / PASS
 
 Current phase: Phase 6B - CLI-first REPORT Output
 
+Wave 5D bounded HTTP exact-product identification: READY FOR REVIEW
+(2026-10-15). The HTTP executor now accepts at most four distinct explicitly
+declared `http_product_probes`, uses only their declared HTTP/HTTPS scheme, and
+sends a bounded unauthenticated `GET /` with at most one strictly contained
+redirect. Pure parsing in `service_probe_http_product.py` rejects duplicate JSON
+keys, malformed/invalid UTF-8 and non-finite JSON, unsupported encodings,
+incomplete or oversized bodies, excessive headers, and all configured JSON
+structural limits. Compact evidence retains only hashes, counts, booleans,
+classes, transport facts, and immutable policy versions.
+
+`service_couchdb` requires the exact Apache welcome, a syntactically valid
+version, and exact Apache Software Foundation vendor marker. It is
+`SUPPORTED`/active after official `couchdb:3.4.3` loopback interoperability at
+digest
+`sha256:d9b6609989f1d47822e84005946cecc2fd49e4be5e4f35da960d4379f6c60de0`.
+The scanner sent one unauthenticated `GET /`; the fixture access log contained
+no secondary request. `service_elasticsearch` implements the exact
+`X-Elastic-Product`, typed root/build/Lucene/compatibility structure, and
+tagline contract plus deterministic OpenSearch discrimination, but remains
+`IMPLEMENTED_PENDING_INTEROP`/PARTIAL/inactive. At the pre-container resource
+gate only approximately 1.4 GiB RAM was available, so neither Elasticsearch nor
+OpenSearch was started and no real interoperability is claimed.
+
+Additive consumer registry `ssc-public-exposure-consumers.v3` preserves all v1
+and v2 entry contracts and adds CouchDB and Elasticsearch as `SCANNER_HTTP`
+consumers. Only an exact product MATCH composed with PUBLIC_ROUTABLE address and
+trusted EXTERNAL_PUBLIC manifest vantage can satisfy either SSC rule; all other
+compositions remain INDETERMINATE/NOT_ASSESSED. The exact active Wave 5D set is
+therefore only `ssc.wave5d.service_couchdb`; the managed Elasticsearch key is
+inactive. Closed support is **41/53 VERIFIED_DIRECT**, **45/160 V1**, and
+**45/202 full baseline**. With both Wave 5D implementations plus pending PPTP
+and Oracle, the implementation ceiling is **44/53**, **48/160**, and **48/202**.
+Both Wave 5D issues remain uncalibrated `UNKNOWN` / `affects_score=false`.
+SMTP unusual-port remains `INTERNAL_POLICY_ONLY`; PPTP and Oracle remain
+pending/inactive. No scoring, calibration, schema, migration, or prior-wave
+semantic change is included.
+
+Validation used fresh isolated databases `ssc_wave5d_focus_20261015` and
+`ssc_wave5d_full_20261015`, plus isolated attested-baseline clone
+`ssc_wave5d_activation_20261015`; pytest never targeted `ssc_e2e`. Exact
+read-only baseline verification resolved both current definitions to the
+required titles, `network_security`, `SSC_API`, and hash
+`0fe2bc8ffb7e3f734d4e88f70b11cffa6e8e9e47e722dc62107f6ff09694eca8`.
+Reconciliation activated only CouchDB and created no new version on repeat.
+The focused/partitioned regression gates passed all **1,294 collected tests**
+(including **198** Wave 5D/exposure/profile tests, **367** Wave 3A/5A/5B,
+**466** Wave 5C, **83** calibration/executor/scoring/report, and **180**
+complementary regressions). The single full-suite invocation was terminated by
+the command environment after about 27% and produced no final pytest summary;
+it was not rerun in order to preserve the exactly-once constraint. Alembic
+reported no new upgrade operations, dependency checking and isolated bytecode
+compilation passed, generated coverage is V1 **45/160** and full **45/202**,
+and `git diff --check` passed.
+
 SMTP unusual-port semantic accounting correction: READY FOR REVIEW
 (2026-10-13). `mail_server_unusual_port` remains implemented as a bounded
 positive-SMTP detector followed by immutable internal policy

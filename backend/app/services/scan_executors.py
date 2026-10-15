@@ -50,6 +50,15 @@ from app.services.service_probes import (
     evaluate_service_probe_response,
     run_service_probe,
 )
+from app.services.service_probe_http_product import (
+    DEFAULT_HTTP_PRODUCT_DEADLINE_SECONDS,
+    MAX_HTTP_PRODUCT_DEADLINE_SECONDS,
+    MAX_HTTP_PRODUCT_ENDPOINTS,
+    MAX_HTTP_PRODUCT_RESPONSE_BYTES,
+    PRODUCT_ISSUE_KEYS,
+    aggregate_http_product_evaluations,
+    evaluate_http_product_response,
+)
 from app.services.ssh_negotiation import (
     MAX_SSH_ENDPOINTS,
     SSH_COLLECTOR_VERSION,
@@ -146,6 +155,7 @@ class HTTPExecutor(BaseExecutor):
             set(http_ports), set(https_ports), resource_limit,
         )
         attempts = [_compact_attempt(result) for result in raw_attempts]
+        product_evaluations = self._collect_product_observations(target, config)
 
         if selected is None and attempts:
             selected = attempts[0]
@@ -154,7 +164,11 @@ class HTTPExecutor(BaseExecutor):
         cookies = selected.get("cookies") if isinstance(selected.get("cookies"), list) else []
         redirect_chain = selected.get("redirect_chain") if isinstance(selected.get("redirect_chain"), list) else []
 
-        evaluations = {**_evaluate_http_wave1(attempts), **evaluate_http_content(attempts)}
+        evaluations = {
+            **_evaluate_http_wave1(attempts),
+            **evaluate_http_content(attempts),
+            **product_evaluations,
+        }
         evidence = {
             "executor": self.executor_name,
             "status": "success",
@@ -201,6 +215,51 @@ class HTTPExecutor(BaseExecutor):
             evidence["error"] = selected.get("error", "http_connection_failed")
             evidence["status"] = "error"
         return ExecutorObservation(self.evidence_source, evidence)
+
+    def _collect_product_observations(
+        self,
+        target: InventoryScanTarget,
+        config: dict[str, Any],
+    ) -> dict[str, dict[str, Any]]:
+        probes = _http_product_probes_config(config)
+        deadline = _float_config(
+            config,
+            "http_product_deadline_seconds",
+            DEFAULT_HTTP_PRODUCT_DEADLINE_SECONDS,
+            minimum=0.1,
+            maximum=MAX_HTTP_PRODUCT_DEADLINE_SECONDS,
+        )
+        by_product: dict[str, list[dict[str, Any]]] = {}
+        for probe in probes:
+            by_product.setdefault(probe["product"], []).append(probe)
+        evaluations: dict[str, dict[str, Any]] = {}
+        for product, endpoints in by_product.items():
+            allowed = {(item["scheme"], item["port"]) for item in endpoints}
+            product_results: list[dict[str, Any]] = []
+            for endpoint in endpoints:
+                result = self._request_chain(
+                    target,
+                    endpoint["scheme"],
+                    endpoint["port"],
+                    "/",
+                    deadline,
+                    1,
+                    MAX_HTTP_PRODUCT_RESPONSE_BYTES,
+                    {port for scheme, port in allowed if scheme == "http"},
+                    {port for scheme, port in allowed if scheme == "https"},
+                    product_request=True,
+                    product_endpoints=allowed,
+                    chain_deadline_seconds=deadline,
+                )
+                evaluated = evaluate_http_product_response(product, result)
+                product_results.append(evaluated)
+                if evaluated["outcome"] == "MATCH":
+                    evaluated["stop_reason"] = "product_match_stop"
+                    break
+            evaluations[PRODUCT_ISSUE_KEYS[product]] = aggregate_http_product_evaluations(
+                product, product_results
+            )
+        return evaluations
 
     def _complete_sri_observations(
         self,
@@ -282,7 +341,11 @@ class HTTPExecutor(BaseExecutor):
         *,
         required_origin: tuple[str, str, int] | None = None,
         request_budget: dict[str, int] | None = None,
+        product_request: bool = False,
+        product_endpoints: set[tuple[str, int]] | None = None,
+        chain_deadline_seconds: float | None = None,
     ) -> dict[str, Any]:
+        chain_started = time.monotonic()
         url_hostname = f"[{target.hostname}]" if ":" in target.hostname else target.hostname
         url = f"{scheme}://{url_hostname}:{port}{initial_path}"
         redirect_chain: list[dict[str, Any]] = []
@@ -325,6 +388,16 @@ class HTTPExecutor(BaseExecutor):
                 last_result["error"] = "redirect credentials are not allowed"
                 last_result["stop_reason"] = "redirect_credentials_rejected"
                 return last_result
+            if product_request and (
+                product_endpoints is None
+                or (parsed.scheme, port_number) not in product_endpoints
+                or (parsed.path or "/") != "/"
+                or bool(parsed.query)
+                or bool(parsed.fragment)
+            ):
+                last_result["error"] = "product redirect is outside the exact declared root endpoint"
+                last_result["stop_reason"] = "product_redirect_rejected"
+                return last_result
             if required_origin is not None and _normalized_http_origin(parsed) != required_origin:
                 last_result["error"] = "SRI resource redirect changed origin"
                 last_result["stop_reason"] = "sri_cross_origin_redirect_blocked"
@@ -337,14 +410,22 @@ class HTTPExecutor(BaseExecutor):
                 request_budget["remaining"] -= 1
                 request_budget["used"] += 1
             try:
+                request_timeout = timeout
+                if chain_deadline_seconds is not None:
+                    request_timeout = min(timeout, chain_deadline_seconds - (time.monotonic() - chain_started))
+                    if request_timeout <= 0:
+                        last_result["error"] = "TimeoutError"
+                        last_result["stop_reason"] = "chain_deadline_exceeded"
+                        return last_result
                 result = self._single_request(
                     target=target,
                     scheme=parsed.scheme,
                     port=port_number,
                     path=parsed.path or "/",
                     query=parsed.query,
-                    timeout=timeout,
+                    timeout=request_timeout,
                     response_size_limit=response_size_limit,
+                    product_request=product_request,
                 )
             except (OSError, TimeoutError, ssl.SSLError, http.client.HTTPException) as exc:
                 last_result["error"] = exc.__class__.__name__
@@ -352,9 +433,12 @@ class HTTPExecutor(BaseExecutor):
                 return last_result
 
             if parsed.scheme == "https":
+                trust_timeout = timeout
+                if chain_deadline_seconds is not None:
+                    trust_timeout = min(timeout, chain_deadline_seconds - (time.monotonic() - chain_started))
                 result["certificate_trusted"] = _certificate_trust(
-                    target.connect_host, target.hostname, port_number, timeout
-                )
+                    target.connect_host, target.hostname, port_number, trust_timeout
+                ) if trust_timeout > 0 else None
 
             location = result.get("location")
             location_scheme = None
@@ -380,6 +464,7 @@ class HTTPExecutor(BaseExecutor):
                 "request_path": initial_path,
                 "start_url": url,
                 "terminal_scheme": parsed.scheme,
+                "terminal_port": port_number,
             }
 
             if result["status_code"] not in {301, 302, 303, 307, 308} or not location:
@@ -400,6 +485,7 @@ class HTTPExecutor(BaseExecutor):
         query: str,
         timeout: float,
         response_size_limit: int,
+        product_request: bool = False,
     ) -> dict[str, Any]:
         path_and_query = f"{path}?{query}" if query else path
         connection = http.client.HTTPConnection(target.hostname, port, timeout=timeout)
@@ -416,21 +502,27 @@ class HTTPExecutor(BaseExecutor):
         else:
             connection.sock = raw_socket
         try:
+            request_headers = {
+                "Host": (f"[{target.hostname}]" if ":" in target.hostname else target.hostname) + (f":{port}" if port not in {80, 443} else ""),
+                "User-Agent": USER_AGENT,
+                "Accept": "application/json" if product_request else "*/*",
+                "Accept-Encoding": "identity",
+                "Connection": "close" if product_request else "keep-alive",
+            }
+            if not product_request:
+                request_headers["Range"] = f"bytes=0-{max(response_size_limit - 1, 0)}"
+                request_headers.pop("Connection")
+            started = time.monotonic()
             connection.request(
                 "GET",
                 path_and_query,
-                headers={
-                    "Host": (f"[{target.hostname}]" if ":" in target.hostname else target.hostname) + (f":{port}" if port not in {80, 443} else ""),
-                    "User-Agent": USER_AGENT,
-                    "Accept": "*/*",
-                    "Accept-Encoding": "identity",
-                    "Range": f"bytes=0-{max(response_size_limit - 1, 0)}",
-                },
+                headers=request_headers,
             )
             response = connection.getresponse()
             captured = response.read(response_size_limit + 1)
             body_truncated = len(captured) > response_size_limit or response.status == 206
             body = captured[:response_size_limit]
+            raw_headers = response.getheaders()
             normalized_headers, cookies = _normalize_http_headers(response)
             content_type = _first_header(normalized_headers, "content-type")
             content_encodings = _header_values(normalized_headers, "content-encoding")
@@ -442,8 +534,8 @@ class HTTPExecutor(BaseExecutor):
                 body, content_type, document_url,
                 body_complete=body_complete,
                 content_encoding=content_encoding,
-            )
-            meta_policies = _extract_csp_meta(body, content_type) if body_complete else []
+            ) if not product_request else None
+            meta_policies = _extract_csp_meta(body, content_type) if body_complete and not product_request else []
             header_fingerprint = "\n".join(
                 f"{name}:{value}" for name in sorted(normalized_headers)
                 for value in normalized_headers[name]
@@ -462,7 +554,10 @@ class HTTPExecutor(BaseExecutor):
                 "csp_meta_policies": meta_policies,
                 "content": content,
                 "_body": body,
+                "_header_pairs": raw_headers if product_request else None,
                 "location": response.getheader("Location"),
+                "elapsed_ms": int((time.monotonic() - started) * 1000),
+                "completion_reason": "response_complete" if body_complete else "response_truncated",
             }
         finally:
             connection.close()
@@ -2225,6 +2320,13 @@ def validate_scan_config(config: dict[str, Any] | None) -> dict[str, Any]:
         _float_config(config, key, default, low, high)
     _float_config(config, "service_probe_timeout_seconds", config.get("connect_timeout_seconds", 3.), .1, 15.)
     _float_config(config, "ssh_timeout_seconds", config.get("connect_timeout_seconds", 3.), .1, 15.)
+    _float_config(
+        config,
+        "http_product_deadline_seconds",
+        DEFAULT_HTTP_PRODUCT_DEADLINE_SECONDS,
+        .1,
+        MAX_HTTP_PRODUCT_DEADLINE_SECONDS,
+    )
     for key, default, low, high in (("redirect_limit", 5, 0, 10), ("response_size_limit_bytes", 65536, 1024, 262144), ("dns_server_port", 53, 1, 65535), ("tls_port", 443, 1, 65535)):
         _int_config(config, key, default, low, high)
     _int_config(
@@ -2233,8 +2335,42 @@ def validate_scan_config(config: dict[str, Any] | None) -> dict[str, Any]:
     )
     _int_config(config, "service_probe_response_limit_bytes", 4096, 64, MAX_SERVICE_PROBE_RESPONSE_BYTES)
     config["service_probes"] = _service_probes_config(config)
+    config["http_product_probes"] = _http_product_probes_config(config)
     config["ssh_ports"] = _ports_config(config, "ssh_ports", [], MAX_SSH_ENDPOINTS)
     return config
+
+
+def _http_product_probes_config(config: dict[str, Any]) -> list[dict[str, Any]]:
+    raw = config.get("http_product_probes", [])
+    if raw is None:
+        raw = []
+    if not isinstance(raw, list):
+        raise ScanExecutorError(
+            f"scan_config.http_product_probes must be a list of at most {MAX_HTTP_PRODUCT_ENDPOINTS} endpoints"
+        )
+    normalized: list[dict[str, Any]] = []
+    seen: set[tuple[str, str, int]] = set()
+    for item in raw:
+        if not isinstance(item, dict) or set(item) != {"product", "scheme", "port"}:
+            raise ScanExecutorError(
+                "each HTTP product probe must contain exactly product, scheme and port"
+            )
+        product, scheme, port = item["product"], item["scheme"], item["port"]
+        if not isinstance(product, str) or product.casefold() not in PRODUCT_ISSUE_KEYS:
+            raise ScanExecutorError("HTTP product probe product is unsupported")
+        if not isinstance(scheme, str) or scheme.casefold() not in {"http", "https"}:
+            raise ScanExecutorError("HTTP product probe scheme must be http or https")
+        if isinstance(port, bool) or not isinstance(port, int) or not 1 <= port <= 65535:
+            raise ScanExecutorError("HTTP product probe port must be an integer from 1 to 65535")
+        identity = (product.casefold(), scheme.casefold(), port)
+        if identity not in seen:
+            normalized.append({"product": identity[0], "scheme": identity[1], "port": port})
+            seen.add(identity)
+        if len(normalized) > MAX_HTTP_PRODUCT_ENDPOINTS:
+            raise ScanExecutorError(
+                f"scan_config.http_product_probes must contain at most {MAX_HTTP_PRODUCT_ENDPOINTS} distinct endpoints"
+            )
+    return normalized
 
 
 def _service_probes_config(config: dict[str, Any]) -> list[dict[str, Any]]:

@@ -50,11 +50,18 @@ def main() -> int:
         WAVE5C_PARTIAL_REASONS,
         WAVE5C_PENDING_RULES,
     )
+    from app.services.wave5d_rules import (
+        WAVE5D_ACTIVE_BY_KEY,
+        WAVE5D_ACTIVE_RULES,
+        WAVE5D_CLOSURE_BLOCKERS,
+        WAVE5D_PARTIAL_REASONS,
+        WAVE5D_PENDING_RULES,
+    )
 
     all_by_key = {
         **WAVE1_BY_KEY, **WAVE2_BY_KEY, **WAVE3A_BY_KEY,
         **WAVE3B_BY_KEY, **WAVE4A_BY_KEY, **WAVE4B_BY_KEY, **WAVE5A_SSC_ACTIVE_BY_KEY,
-        **WAVE5B_ACTIVE_BY_KEY, **WAVE5C_ACTIVE_BY_KEY,
+        **WAVE5B_ACTIVE_BY_KEY, **WAVE5C_ACTIVE_BY_KEY, **WAVE5D_ACTIVE_BY_KEY,
     }
     all_partial_reasons = {
         **WAVE1_PARTIAL_REASONS,
@@ -62,6 +69,7 @@ def main() -> int:
         **WAVE5A_PARTIAL_REASONS,
         **WAVE5B_PARTIAL_REASONS,
         **WAVE5C_PARTIAL_REASONS,
+        **WAVE5D_PARTIAL_REASONS,
     }
 
     mappings = []
@@ -76,6 +84,7 @@ def main() -> int:
         from app.services.wave5a_rules import active_wave5a_mappings
         from app.services.wave5b_rules import active_wave5b_mappings
         from app.services.wave5c_rules import active_wave5c_mappings
+        from app.services.wave5d_rules import active_wave5d_mappings
         with SessionLocal() as db:
             mappings = (
                 active_wave1_mappings(db) + active_wave2_mappings(db)
@@ -84,6 +93,7 @@ def main() -> int:
                 + active_wave5a_mappings(db)
                 + active_wave5b_mappings(db)
                 + active_wave5c_mappings(db)
+                + active_wave5d_mappings(db)
             )
         active_keys = {item["issue_key"] for item in mappings}
         expected = set(all_by_key)
@@ -111,7 +121,8 @@ def main() -> int:
                 "Wave 4B" if row["ssc_issue_key"] in WAVE4B_BY_KEY else
                 "Wave 5A" if row["ssc_issue_key"] in WAVE5A_SSC_ACTIVE_BY_KEY else
                 "Wave 5B.1" if row["ssc_issue_key"] in WAVE5B_ACTIVE_BY_KEY else
-                "Wave 5C"
+                "Wave 5C" if row["ssc_issue_key"] in WAVE5C_ACTIVE_BY_KEY else
+                "Wave 5D"
             )
             row["current_platform_support"] = "SUPPORTED"
             row["required_executor"] = spec.primitive
@@ -135,9 +146,9 @@ def main() -> int:
         row["current_platform_support"] for row in rows if row["factor"] in V1_FACTORS
     )
     feasibility = Counter(row["feasibility_category"] for row in rows)
-    if coverage != {"SUPPORTED": 44, "PARTIAL": 83, "NOT_SUPPORTED": 75}:
+    if coverage != {"SUPPORTED": 45, "PARTIAL": 82, "NOT_SUPPORTED": 75}:
         raise SystemExit(f"unexpected coverage totals: {dict(coverage)}")
-    if v1_coverage != {"SUPPORTED": 44, "PARTIAL": 80, "NOT_SUPPORTED": 36}:
+    if v1_coverage != {"SUPPORTED": 45, "PARTIAL": 79, "NOT_SUPPORTED": 36}:
         raise SystemExit(f"unexpected V1 coverage totals: {dict(v1_coverage)}")
 
     if args.write:
@@ -162,6 +173,9 @@ def main() -> int:
                 WAVE5C_ACTIVE_RULES,
                 WAVE5C_PENDING_RULES,
                 WAVE5C_CLOSURE_BLOCKERS,
+                WAVE5D_ACTIVE_RULES,
+                WAVE5D_PENDING_RULES,
+                WAVE5D_CLOSURE_BLOCKERS,
             ),
             encoding="utf-8",
         )
@@ -182,7 +196,7 @@ def main() -> int:
     return 0
 
 
-def render_markdown(rows, feasibility, coverage, wave1_rules, wave1_partial, wave2_rules, wave2_partial, wave3a_rules, wave3b_rules, wave4a_rules, wave4b_rules, wave5a_active_rules, wave5a_partial_rules, wave5a_partial_reasons, wave5b_active_rules, wave5b_pending_rules, wave5c_active_rules, wave5c_pending_rules, wave5c_blockers) -> str:
+def render_markdown(rows, feasibility, coverage, wave1_rules, wave1_partial, wave2_rules, wave2_partial, wave3a_rules, wave3b_rules, wave4a_rules, wave4b_rules, wave5a_active_rules, wave5a_partial_rules, wave5a_partial_reasons, wave5b_active_rules, wave5b_pending_rules, wave5c_active_rules, wave5c_pending_rules, wave5c_blockers, wave5d_active_rules, wave5d_pending_rules, wave5d_blockers) -> str:
     factors = defaultdict(Counter)
     for row in rows:
         factor = factors[row["factor"]]
@@ -195,7 +209,7 @@ def render_markdown(rows, feasibility, coverage, wave1_rules, wave1_partial, wav
         "",
         f"Snapshot content hash: `{BASELINE_HASH}`",
         "Source: immutable real `SSC_API` Golden Baseline",
-        "Implementation state: Waves 1-2, Wave 3A, Wave 3B, Wave 4A, Wave 4B, Wave 5A FTP/IMAP/POP3, Wave 5B.1 LDAP, and Wave 5C Minecraft/RDP are active. The SMTP unusual-port primitive remains implemented under an internal deterministic policy but is inactive/PARTIAL for SSC alignment. Minecraft is protocol-identity-only; RDP consumes PUBLIC_EXPOSURE_CONTEXT v1. PPTP remains implemented/inactive pending real interoperability, and Oracle Net remains separately implemented pending real interoperability.",
+        "Implementation state: Waves 1-2, Wave 3A, Wave 3B, Wave 4A, Wave 4B, Wave 5A FTP/IMAP/POP3, Wave 5B.1 LDAP, Wave 5C Minecraft/RDP, and Wave 5D Apache CouchDB are active. SMTP unusual-port remains INTERNAL_POLICY_ONLY. Elasticsearch, PPTP, and Oracle remain implemented/inactive pending real interoperability.",
         "Total mapped issues: **202**",
         "",
         "> This is an independent implementation mapped to SSC taxonomy. It does not reproduce or claim knowledge of SSC collection, aggregation, severity, scoring, or proprietary detection logic. `ssc_severity` remains source metadata and is not mapped to internal risk or score impact.",
@@ -206,10 +220,10 @@ def render_markdown(rows, feasibility, coverage, wave1_rules, wave1_partial, wav
         "",
         "## Coverage summary",
         "",
-        "| Coverage | Before Wave 5C closure | After Wave 5C closure | Percentage after |",
+        "| Coverage | Before Wave 5D closure | After Wave 5D closure | Percentage after |",
         "|---|---:|---:|---:|",
-        f"| `SUPPORTED` | 43 | {coverage['SUPPORTED']} | {coverage['SUPPORTED']/202:.1%} |",
-        f"| `PARTIAL` | 84 | {coverage['PARTIAL']} | {coverage['PARTIAL']/202:.1%} |",
+        f"| `SUPPORTED` | 44 | {coverage['SUPPORTED']} | {coverage['SUPPORTED']/202:.1%} |",
+        f"| `PARTIAL` | 83 | {coverage['PARTIAL']} | {coverage['PARTIAL']/202:.1%} |",
         f"| `NOT_SUPPORTED` | 75 | {coverage['NOT_SUPPORTED']} | {coverage['NOT_SUPPORTED']/202:.1%} |",
         "| **Total** | **202** | **202** | **100.0%** |",
         "",
@@ -424,6 +438,21 @@ def render_markdown(rows, feasibility, coverage, wave1_rules, wave1_partial, wav
         lines.append(
             f"| `{spec.issue_key}` | `{spec.protocol}` | `PARTIAL` / inactive | {blockers} |"
         )
+
+    lines += [
+        "",
+        "## Wave 5D exact HTTP product identification",
+        "",
+        "Apache CouchDB is active after official loopback interoperability. Elasticsearch remains inactive pending official Elasticsearch and real OpenSearch interoperability. Both require exact-product identity plus PUBLIC_EXPOSURE_CONTEXT v1.",
+        "",
+        "| SSC issue key | Product | Current state | Closure blockers |",
+        "|---|---|---|---|",
+    ]
+    for spec in wave5d_active_rules:
+        lines.append(f"| `{spec.issue_key}` | `{spec.product}` | `SUPPORTED` / active | none |")
+    for spec in wave5d_pending_rules:
+        blockers = ", ".join(f"`{value}`" for value in wave5d_blockers[spec.issue_key])
+        lines.append(f"| `{spec.issue_key}` | `{spec.product}` | `PARTIAL` / inactive | {blockers} |")
 
     lines += [
         "",

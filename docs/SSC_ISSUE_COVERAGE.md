@@ -2,7 +2,7 @@
 
 Snapshot content hash: `0fe2bc8ffb7e3f734d4e88f70b11cffa6e8e9e47e722dc62107f6ff09694eca8`
 Source: immutable real `SSC_API` Golden Baseline
-Implementation state: Waves 1-2, Wave 3A, Wave 3B, Wave 4A, Wave 4B, Wave 5A FTP/IMAP/POP3, Wave 5B.1 LDAP, and Wave 5C Minecraft/RDP are active. The SMTP unusual-port primitive remains implemented under an internal deterministic policy but is inactive/PARTIAL for SSC alignment. Minecraft is protocol-identity-only; RDP consumes PUBLIC_EXPOSURE_CONTEXT v1. PPTP remains implemented/inactive pending real interoperability, and Oracle Net remains separately implemented pending real interoperability.
+Implementation state: Waves 1-2, Wave 3A, Wave 3B, Wave 4A, Wave 4B, Wave 5A FTP/IMAP/POP3, Wave 5B.1 LDAP, Wave 5C Minecraft/RDP, and Wave 5D Apache CouchDB are active. SMTP unusual-port remains INTERNAL_POLICY_ONLY. Elasticsearch, PPTP, and Oracle remain implemented/inactive pending real interoperability.
 Total mapped issues: **202**
 
 > This is an independent implementation mapped to SSC taxonomy. It does not reproduce or claim knowledge of SSC collection, aggregation, severity, scoring, or proprietary detection logic. `ssc_severity` remains source metadata and is not mapped to internal risk or score impact.
@@ -13,10 +13,10 @@ Total mapped issues: **202**
 
 ## Coverage summary
 
-| Coverage | Before Wave 5C closure | After Wave 5C closure | Percentage after |
+| Coverage | Before Wave 5D closure | After Wave 5D closure | Percentage after |
 |---|---:|---:|---:|
-| `SUPPORTED` | 43 | 44 | 21.8% |
-| `PARTIAL` | 84 | 83 | 41.1% |
+| `SUPPORTED` | 44 | 45 | 22.3% |
+| `PARTIAL` | 83 | 82 | 40.6% |
 | `NOT_SUPPORTED` | 75 | 75 | 37.1% |
 | **Total** | **202** | **202** | **100.0%** |
 
@@ -40,7 +40,7 @@ Total mapped issues: **202**
 | `hacker_chatter` | 2 | 0 | 0 | 2 | 0 | 0 | 0 | 2 |
 | `ip_reputation` | 26 | 1 | 1 | 24 | 0 | 0 | 2 | 24 |
 | `leaked_information` | 8 | 0 | 0 | 8 | 0 | 0 | 0 | 8 |
-| `network_security` | 68 | 42 | 20 | 5 | 1 | 21 | 40 | 7 |
+| `network_security` | 68 | 42 | 20 | 5 | 1 | 22 | 39 | 7 |
 | `patching_cadence` | 21 | 0 | 21 | 0 | 0 | 0 | 8 | 13 |
 | `social_engineering` | 1 | 0 | 0 | 1 | 0 | 0 | 0 | 1 |
 
@@ -198,6 +198,15 @@ PPTP's protocol adapter and public-exposure consumer semantics are ready, but it
 |---|---|---|---|
 | `service_pptp` | `PPTP Start-Control-Connection` | `PARTIAL` / inactive | `IMPLEMENTED_PENDING_INTEROP` |
 
+## Wave 5D exact HTTP product identification
+
+Apache CouchDB is active after official loopback interoperability. Elasticsearch remains inactive pending official Elasticsearch and real OpenSearch interoperability. Both require exact-product identity plus PUBLIC_EXPOSURE_CONTEXT v1.
+
+| SSC issue key | Product | Current state | Closure blockers |
+|---|---|---|---|
+| `service_couchdb` | `couchdb` | `SUPPORTED` / active | none |
+| `service_elasticsearch` | `elasticsearch` | `PARTIAL` / inactive | `IMPLEMENTED_PENDING_INTEROP`, `REAL_OPENSEARCH_REJECTION_PENDING` |
+
 ## Per-issue index
 
 The CSV remains normative for exact evidence requirements, proposed logic, dependencies, references, and notes.
@@ -337,7 +346,7 @@ The CSV remains normative for exact evidence requirements, proposed logic, depen
 | `remote_access` | Remote Access Service Observed | `network_security` | `low` | `TESTABLE_WITH_ENRICHMENT` | `TCP+HTTP+TLS+DNS_FINGERPRINT` | `PARTIAL` |
 | `service_cassandra` | Apache Cassandra Service Observed | `network_security` | `medium` | `DIRECTLY_TESTABLE` | `PROTOCOL_PROBE+TCP` | `PARTIAL` |
 | `service_cloud_provider` | Cloud Provider Service Used | `network_security` | `info` | `TESTABLE_WITH_ENRICHMENT` | `TCP+HTTP+TLS+DNS_FINGERPRINT` | `PARTIAL` |
-| `service_couchdb` | Apache CouchDB Service Observed | `network_security` | `medium` | `DIRECTLY_TESTABLE` | `PROTOCOL_PROBE+TCP` | `PARTIAL` |
+| `service_couchdb` | Apache CouchDB Service Observed | `network_security` | `medium` | `DIRECTLY_TESTABLE` | `HTTP_EXACT_PRODUCT_IDENTIFICATION` | `SUPPORTED` |
 | `service_dns` | DNS Server Accessible | `network_security` | `medium` | `DIRECTLY_TESTABLE` | `PROTOCOL_PROBE+TCP` | `PARTIAL` |
 | `service_elasticsearch` | Elasticsearch Service Observed | `network_security` | `medium` | `DIRECTLY_TESTABLE` | `PROTOCOL_PROBE+TCP` | `PARTIAL` |
 | `service_ftp` | FTP Service Observed | `network_security` | `medium` | `DIRECTLY_TESTABLE` | `SERVICE_PROTOCOL_IDENTIFICATION` | `SUPPORTED` |

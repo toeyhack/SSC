@@ -196,6 +196,8 @@ def _scanner_observation(issue_key, source, *, protocol_outcome="MATCH", stale=F
         ("service_rsync", EvidenceSourceEnum.SCANNER_TCP),
         ("service_soap", EvidenceSourceEnum.SCANNER_HTTP),
         ("service_rdp", EvidenceSourceEnum.SCANNER_TCP),
+        ("service_couchdb", EvidenceSourceEnum.SCANNER_HTTP),
+        ("service_elasticsearch", EvidenceSourceEnum.SCANNER_HTTP),
     ],
 )
 def test_external_public_scanner_match_creates_explained_finding(db, monkeypatch, issue_key, source):
@@ -238,15 +240,23 @@ def test_minecraft_protocol_match_creates_finding_without_external_vantage(db, m
     "execution_context",
     [local_cli_execution_context(), api_inline_execution_context(), unknown_execution_context()],
 )
-@pytest.mark.parametrize("issue_key", ["service_rsync", "service_rdp"])
+@pytest.mark.parametrize(
+    ("issue_key", "source"),
+    [
+        ("service_rsync", EvidenceSourceEnum.SCANNER_TCP),
+        ("service_rdp", EvidenceSourceEnum.SCANNER_TCP),
+        ("service_couchdb", EvidenceSourceEnum.SCANNER_HTTP),
+        ("service_elasticsearch", EvidenceSourceEnum.SCANNER_HTTP),
+    ],
+)
 def test_unknown_local_api_and_default_worker_vantage_are_not_assessed(
-    db, monkeypatch, execution_context, issue_key
+    db, monkeypatch, execution_context, issue_key, source
 ):
     job = _seed_job(db, issue_key)
     monkeypatch.setattr(
         scan_engine,
         "collect_scanner_observations",
-        _scanner_observation(issue_key, EvidenceSourceEnum.SCANNER_TCP),
+        _scanner_observation(issue_key, source),
     )
     run = run_scan_job(db, job.id, execution_context)
     assessment = run.summary["rule_assessments"][0]
@@ -263,16 +273,24 @@ def test_unknown_local_api_and_default_worker_vantage_are_not_assessed(
         ("8.8.8.8", _external_context(), "INDETERMINATE"),
     ],
 )
-@pytest.mark.parametrize("issue_key", ["service_rsync", "service_rdp"])
+@pytest.mark.parametrize(
+    ("issue_key", "source"),
+    [
+        ("service_rsync", EvidenceSourceEnum.SCANNER_TCP),
+        ("service_rdp", EvidenceSourceEnum.SCANNER_TCP),
+        ("service_couchdb", EvidenceSourceEnum.SCANNER_HTTP),
+        ("service_elasticsearch", EvidenceSourceEnum.SCANNER_HTTP),
+    ],
+)
 def test_internal_vantage_non_public_target_and_protocol_indeterminate_are_not_assessed(
-    db, monkeypatch, address, context, protocol_outcome, issue_key
+    db, monkeypatch, address, context, protocol_outcome, issue_key, source
 ):
     job = _seed_job(db, issue_key, address=address)
     monkeypatch.setattr(
         scan_engine,
         "collect_scanner_observations",
         _scanner_observation(
-            issue_key, EvidenceSourceEnum.SCANNER_TCP, protocol_outcome=protocol_outcome
+            issue_key, source, protocol_outcome=protocol_outcome
         ),
     )
     run = run_scan_job(db, job.id, context)
@@ -281,29 +299,39 @@ def test_internal_vantage_non_public_target_and_protocol_indeterminate_are_not_a
 
 
 @pytest.mark.parametrize(
-    ("source", "stale", "reason"),
+    ("issue_key", "right_source", "wrong_source"),
     [
-        (EvidenceSourceEnum.SCANNER_TCP, True, "missing_or_stale_exposure_policy"),
-        (EvidenceSourceEnum.SCANNER_HTTP, False, "untrusted_observation_source"),
+        ("service_rsync", EvidenceSourceEnum.SCANNER_TCP, EvidenceSourceEnum.SCANNER_HTTP),
+        ("service_rdp", EvidenceSourceEnum.SCANNER_TCP, EvidenceSourceEnum.SCANNER_HTTP),
+        ("service_couchdb", EvidenceSourceEnum.SCANNER_HTTP, EvidenceSourceEnum.SCANNER_TCP),
+        ("service_elasticsearch", EvidenceSourceEnum.SCANNER_HTTP, EvidenceSourceEnum.SCANNER_TCP),
     ],
 )
-@pytest.mark.parametrize("issue_key", ["service_rsync", "service_rdp"])
-def test_stale_policy_and_wrong_scanner_source_fail_closed(db, monkeypatch, source, stale, reason, issue_key):
+@pytest.mark.parametrize("stale", [True, False])
+def test_stale_policy_and_wrong_scanner_source_fail_closed(
+    db, monkeypatch, issue_key, right_source, wrong_source, stale
+):
     job = _seed_job(db, issue_key)
+    source = right_source if stale else wrong_source
     monkeypatch.setattr(
         scan_engine,
         "collect_scanner_observations",
         _scanner_observation(issue_key, source, stale=stale),
     )
     run = run_scan_job(db, job.id, _external_context())
-    assert run.summary["rule_assessments"][0]["reason_code"] == reason
+    expected = "missing_or_stale_exposure_policy" if stale else "untrusted_observation_source"
+    assert run.summary["rule_assessments"][0]["reason_code"] == expected
     assert run.summary["findings_created"] == 0
 
 
-@pytest.mark.parametrize("issue_key", ["service_rsync", "service_rdp"])
+@pytest.mark.parametrize(
+    "issue_key",
+    ["service_rsync", "service_rdp", "service_couchdb", "service_elasticsearch"],
+)
 def test_manual_protocol_shaped_match_is_rejected_by_source_identity(db, issue_key):
+    consumer = get_pinned_public_exposure_consumer(issue_key)
     evidence = {
-        "tcp": {
+        consumer.evidence_root: {
             "evaluations": {
                 issue_key: {"outcome": "MATCH", "matched": True},
             }

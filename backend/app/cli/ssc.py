@@ -99,6 +99,11 @@ def build_parser():
         help="Reconcile Wave 5C rules; exposure/vantage-gated keys remain inactive",
     )
     activate5c.add_argument("--yes", action="store_true", help="Confirm reconciliation of the reviewed evaluator definitions")
+    activate5d = baseline_commands.add_parser(
+        "activate-wave5d",
+        help="Reconcile Wave 5D exact HTTP product rules; interop-pending products remain inactive",
+    )
+    activate5d.add_argument("--yes", action="store_true", help="Confirm reconciliation of the reviewed evaluator definitions")
     return parser
 
 
