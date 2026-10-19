@@ -1,0 +1,8 @@
+.:15353 {
+    bind 127.0.0.1
+    errors
+    log
+    template IN A invalid. {
+        rcode NXDOMAIN
+    }
+}

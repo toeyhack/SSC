@@ -470,3 +470,29 @@ def attach_exposure_contexts(
             protocol_outcome,
         )
     return evidence
+
+
+def attach_exposure_context_for_issue(
+    evidence: dict[str, Any],
+    pinned_address: str,
+    execution_context: ExecutionContext,
+    issue_key: str,
+) -> dict[str, Any]:
+    """Attach trusted exposure context to one explicitly reviewed evaluation."""
+    evaluations = evidence.get("evaluations")
+    if not isinstance(evaluations, dict):
+        return evidence
+    evaluation = evaluations.get(issue_key)
+    if not isinstance(evaluation, dict):
+        return evidence
+    protocol_outcome = (
+        ProtocolOutcome.MATCH
+        if evaluation.get("outcome") == "MATCH" and evaluation.get("matched") is True
+        else ProtocolOutcome.INDETERMINATE
+    )
+    evaluation["exposure_context"] = build_public_exposure_context(
+        pinned_address,
+        execution_context,
+        protocol_outcome,
+    )
+    return evidence

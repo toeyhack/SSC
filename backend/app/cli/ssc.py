@@ -104,6 +104,11 @@ def build_parser():
         help="Reconcile Wave 5D exact HTTP product rules; interop-pending products remain inactive",
     )
     activate5d.add_argument("--yes", action="store_true", help="Confirm reconciliation of the reviewed evaluator definitions")
+    activate5e = baseline_commands.add_parser(
+        "activate-wave5e",
+        help="Activate the reviewed bounded DNS service public-exposure rule",
+    )
+    activate5e.add_argument("--yes", action="store_true", help="Confirm activation of the reviewed evaluator definition")
     return parser
 
 

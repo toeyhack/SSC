@@ -91,6 +91,14 @@ def run(args) -> int:
                 result = activate_wave5d_rules(db)
             print(json.dumps(result, indent=2))
             return 0 if not result["unavailable"] else 3
+        if args.baseline_command == "activate-wave5e":
+            if not args.yes:
+                raise ValueError("Review the Wave 5E DNS identity and public-exposure gates, then pass --yes to activate")
+            from app.services.wave5e_rules import activate_wave5e_rules
+            with SessionLocal() as db:
+                result = activate_wave5e_rules(db)
+            print(json.dumps(result, indent=2))
+            return 0 if not result["unavailable"] else 3
         if args.baseline_command == "discover-details":
             result = discover_issue_details()
             print(json.dumps(result, indent=2))

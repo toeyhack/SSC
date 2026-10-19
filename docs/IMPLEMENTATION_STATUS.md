@@ -4,6 +4,64 @@ CLI-FIRST MVP — COMPLETE / PASS
 
 Current phase: Phase 6B - CLI-first REPORT Output
 
+Wave 5E bounded DNS service identification: READY FOR REVIEW
+(2026-10-16). `service_dns` now uses one explicit opt-in direct-service path
+inside the existing DNS executor and the single `SCANNER_DNS` / `dns`
+observation tree. At most two distinct `{transport, port}` tuples are accepted.
+Each tuple targets only the approved HOST inventory target's pinned numeric
+address; `dns_server_host` remains resolver-only for unchanged SPF, DMARC, and
+bounded related DNS-health acquisition. Missing or empty
+`dns_service_probes` generates no direct service traffic and no
+`service_dns` evaluation.
+
+Pure protocol logic in `service_probe_dns.py` builds the fixed
+`ssc-dns-service-probe-v1.invalid. A IN` query with RD=0, one question, no
+EDNS/DNSSEC/ECS/cookies/additional section, and a fresh cryptographically
+random transaction ID per attempt. UDP sends one request with no retry and
+accepts at most 512 bytes from the exact pinned address and declared port. TCP
+uses the standard two-byte length prefix, one connection/request, and a
+12..4096-byte body limit. A complete correlated response with QUERY opcode,
+exact echoed question, valid framing/sections, and reviewed RCODE
+NOERROR/NXDOMAIN/REFUSED/SERVFAIL/NOTIMP proves protocol identity; FORMERR does
+so only with the exact echoed question. A valid TC=1 UDP response is sufficient
+without fallback. Every failure or unsupported shape is INDETERMINATE; Wave 5E
+defines no protocol NO_MATCH.
+
+Additive registry `ssc-public-exposure-consumers.v4` preserves exact v1/v2/v3
+membership and adds only `service_dns` at evidence root `dns`, required source
+`SCANNER_DNS`. Issue-filtered attachment decorates only
+`dns.evaluations.service_dns`; SPF/DMARC evaluations do not receive service
+exposure context. Active rule `ssc.wave5e.service_dns` is pinned to exact
+issue-version `9f512eaa-08d1-4441-86de-170c1f755f82` in attested baseline
+`0fe2bc8ffb7e3f734d4e88f70b11cffa6e8e9e47e722dc62107f6ff09694eca8`.
+Final MATCH requires DNS identity plus PUBLIC_ROUTABLE pinned destination plus
+trusted EXTERNAL_PUBLIC deployment-manifest vantage; every other composition
+is INDETERMINATE/NOT_ASSESSED.
+
+Real `CoreDNS-1.14.7` interoperability ran only on `127.0.0.1:15353`, with no
+forwarding or upstream resolver. UDP and TCP each returned NXDOMAIN and
+matched; CoreDNS logged exactly one 50-byte fixed query per transport and no
+secondary request. Deterministic loopback integration also proved a
+protocol-valid REFUSED response matches over both UDP and TCP. Validation used
+fresh isolated databases `ssc_wave5e_focus_20261016`,
+`ssc_wave5e_activation_20261016`, and `ssc_wave5e_full_20261016`; pytest never
+targeted `ssc_e2e`. Focused Wave 5E tests passed **46** with the opt-in real
+fixture skipped, the affected scanner/exposure/profile gate passed **227**, and
+prior-wave/scoring/report regressions passed **942**. The single final full
+backend suite under UID 1000 passed **1,350 tests** with **1** opt-in CoreDNS
+skip and two existing deprecation warnings. Real CoreDNS separately passed
+**1** test. Exact activation and repeat reconciliation passed, and
+database-backed coverage resolved V1 **46/160** and full **46/202**.
+
+Closed support is now **42/53 VERIFIED_DIRECT**, **46/160 V1**, and **46/202
+full baseline**. The SSC-aligned implementation ceiling, including unchanged
+pending Elasticsearch, PPTP, and Oracle, is **45/53**, **49/160**, and
+**49/202**. SMTP unusual-port remains `PARTIAL / INTERNAL_POLICY_ONLY` and
+inactive as SSC_REFERENCE. `service_dns` remains unconfigured internal risk
+`UNKNOWN` / `affects_score=false`; no scoring or calibration change was made.
+Alembic reports no new upgrade operations, dependency checking and isolated
+bytecode compilation pass, and no migration was added.
+
 Wave 5D bounded HTTP exact-product identification: READY FOR REVIEW
 (2026-10-15). The HTTP executor now accepts at most four distinct explicitly
 declared `http_product_probes`, uses only their declared HTTP/HTTPS scheme, and

@@ -39,6 +39,7 @@ from app.services.public_exposure_consumers import (
     PUBLIC_EXPOSURE_CONSUMER_POLICY_V1,
     PUBLIC_EXPOSURE_CONSUMER_POLICY_V2,
     PUBLIC_EXPOSURE_CONSUMER_POLICY_V3,
+    PUBLIC_EXPOSURE_CONSUMER_POLICY_V4,
     PUBLIC_EXPOSURE_CONSUMER_REGISTRY_VERSIONS,
     PUBLIC_EXPOSURE_CONSUMERS,
     PUBLIC_EXPOSURE_REQUIRED_ISSUE_KEYS,
@@ -50,6 +51,7 @@ from app.services.wave5a_rules import WAVE5A_BY_KEY
 from app.services.wave5b_rules import WAVE5B_BY_KEY
 from app.services.wave5c_rules import WAVE5C_BY_KEY
 from app.services.wave5d_rules import WAVE5D_BY_KEY
+from app.services.wave5e_rules import WAVE5E_BY_KEY
 
 
 EXPECTED_TABLE_DIGEST = "69c38afc252d8462e6771653bd9a7bc8e59e6e0ee01d9e31f4fa5ed3747057d2"
@@ -67,19 +69,22 @@ EXPECTED_PUBLIC_EXPOSURE_CONSUMERS = {
     "service_pptp": ("tcp", "SCANNER_TCP"),
     "service_couchdb": ("http", "SCANNER_HTTP"),
     "service_elasticsearch": ("http", "SCANNER_HTTP"),
+    "service_dns": ("dns", "SCANNER_DNS"),
 }
+V4_CONSUMERS = {"service_dns"}
 V3_CONSUMERS = {"service_couchdb", "service_elasticsearch"}
-V2_CONSUMERS = set(EXPECTED_PUBLIC_EXPOSURE_CONSUMERS) - V3_CONSUMERS
+V2_CONSUMERS = set(EXPECTED_PUBLIC_EXPOSURE_CONSUMERS) - V3_CONSUMERS - V4_CONSUMERS
 V1_CONSUMERS = V2_CONSUMERS - {"service_rdp", "service_pptp"}
 
 
 def test_public_exposure_consumer_registry_is_exact_immutable_and_version_aware():
-    assert PUBLIC_EXPOSURE_CONSUMER_POLICY_VERSION == "ssc-public-exposure-consumers.v3"
+    assert PUBLIC_EXPOSURE_CONSUMER_POLICY_VERSION == "ssc-public-exposure-consumers.v4"
     assert PUBLIC_EXPOSURE_REQUIRED_ISSUE_KEYS == set(EXPECTED_PUBLIC_EXPOSURE_CONSUMERS)
-    assert len(PUBLIC_EXPOSURE_CONSUMERS) == 13
+    assert len(PUBLIC_EXPOSURE_CONSUMERS) == 14
     assert set(PUBLIC_EXPOSURE_CONSUMER_REGISTRY_VERSIONS[PUBLIC_EXPOSURE_CONSUMER_POLICY_V1]) == V1_CONSUMERS
     assert set(PUBLIC_EXPOSURE_CONSUMER_REGISTRY_VERSIONS[PUBLIC_EXPOSURE_CONSUMER_POLICY_V2]) == V2_CONSUMERS
-    assert set(PUBLIC_EXPOSURE_CONSUMER_REGISTRY_VERSIONS[PUBLIC_EXPOSURE_CONSUMER_POLICY_V3]) == set(EXPECTED_PUBLIC_EXPOSURE_CONSUMERS)
+    assert set(PUBLIC_EXPOSURE_CONSUMER_REGISTRY_VERSIONS[PUBLIC_EXPOSURE_CONSUMER_POLICY_V3]) == V1_CONSUMERS | V2_CONSUMERS | V3_CONSUMERS
+    assert set(PUBLIC_EXPOSURE_CONSUMER_REGISTRY_VERSIONS[PUBLIC_EXPOSURE_CONSUMER_POLICY_V4]) == set(EXPECTED_PUBLIC_EXPOSURE_CONSUMERS)
     for issue_key, (root, source) in EXPECTED_PUBLIC_EXPOSURE_CONSUMERS.items():
         consumer = get_public_exposure_consumer(PINNED_SSC_BASELINE_HASH, issue_key)
         assert consumer is not None
@@ -88,7 +93,8 @@ def test_public_exposure_consumer_registry_is_exact_immutable_and_version_aware(
         expected_policy = (
             PUBLIC_EXPOSURE_CONSUMER_POLICY_V1 if issue_key in V1_CONSUMERS
             else PUBLIC_EXPOSURE_CONSUMER_POLICY_V2 if issue_key in V2_CONSUMERS
-            else PUBLIC_EXPOSURE_CONSUMER_POLICY_V3
+            else PUBLIC_EXPOSURE_CONSUMER_POLICY_V3 if issue_key in V3_CONSUMERS
+            else PUBLIC_EXPOSURE_CONSUMER_POLICY_V4
         )
         assert consumer.consumer_policy_version == expected_policy
         assert consumer.expression_path == (
@@ -106,7 +112,7 @@ def test_public_exposure_consumer_registry_fails_closed_outside_reviewed_identit
 
 
 def test_registered_rules_use_composition_paths_and_unaffected_rules_remain_identity_based():
-    specs = {**WAVE3A_BY_KEY, **WAVE3B_BY_KEY, **WAVE5A_BY_KEY, **WAVE5B_BY_KEY, **WAVE5C_BY_KEY, **WAVE5D_BY_KEY}
+    specs = {**WAVE3A_BY_KEY, **WAVE3B_BY_KEY, **WAVE5A_BY_KEY, **WAVE5B_BY_KEY, **WAVE5C_BY_KEY, **WAVE5D_BY_KEY, **WAVE5E_BY_KEY}
     for issue_key, (root, _source) in EXPECTED_PUBLIC_EXPOSURE_CONSUMERS.items():
         spec = specs[issue_key]
         assert spec.expression == {
@@ -118,7 +124,8 @@ def test_registered_rules_use_composition_paths_and_unaffected_rules_remain_iden
         expected_policy = (
             PUBLIC_EXPOSURE_CONSUMER_POLICY_V1 if issue_key in V1_CONSUMERS
             else PUBLIC_EXPOSURE_CONSUMER_POLICY_V2 if issue_key in V2_CONSUMERS
-            else PUBLIC_EXPOSURE_CONSUMER_POLICY_V3
+            else PUBLIC_EXPOSURE_CONSUMER_POLICY_V3 if issue_key in V3_CONSUMERS
+            else PUBLIC_EXPOSURE_CONSUMER_POLICY_V4
         )
         assert contract["consumer_policy_version"] == expected_policy
         assert contract["required_context"] == {

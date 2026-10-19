@@ -31,9 +31,23 @@ from app.models.models import Domain, Host, Organization
 from app.models.scan_models import EvidenceSourceEnum, ScanJobTarget, ScanTargetTypeEnum
 from app.services.public_exposure import (
     ExecutionContext,
+    attach_exposure_context_for_issue,
     attach_exposure_contexts,
     reject_reserved_trust_keys,
     unknown_execution_context,
+)
+from app.services.service_probe_dns import (
+    DNS_SERVICE_ATTEMPT_TIMEOUT_SECONDS,
+    DNS_SERVICE_ISSUE_KEY,
+    DNS_SERVICE_TOTAL_DEADLINE_SECONDS,
+    MAX_DNS_SERVICE_ENDPOINTS,
+    MAX_DNS_TCP_RESPONSE_BYTES,
+    MAX_DNS_UDP_RESPONSE_BYTES,
+    aggregate_dns_service_attempts,
+    build_dns_service_query,
+    evaluate_tcp_dns_frame,
+    evaluate_udp_dns_response,
+    indeterminate_dns_attempt,
 )
 from app.services.http_content import (
     complete_sri_candidate,
@@ -619,6 +633,15 @@ class DNSExecutor(BaseExecutor):
     executor_name = "dns"
 
     def collect(self, target: InventoryScanTarget, config: dict[str, Any]) -> ExecutorObservation:
+        service_probes = _dns_service_probes_config(config)
+        service_target: InventoryScanTarget | None = None
+        if service_probes:
+            if target.target_type != ScanTargetTypeEnum.HOST:
+                raise ScanExecutorError("dns_service_probes require an approved HOST inventory target")
+            # In normal scan execution load_authorized_scan_target has already
+            # pinned this value.  Rechecking a numeric address is side-effect
+            # free and keeps direct executor use inside the same safety boundary.
+            service_target = _pin_target(target)
         timeout = _float_config(config, "dns_timeout_seconds", 3.0, minimum=0.1, maximum=15.0)
         server_host = config.get("dns_server_host")
         if server_host:
@@ -658,6 +681,10 @@ class DNSExecutor(BaseExecutor):
         spf_records = _spf_records(root_txt)
         dmarc_records = dmarc_txt["records"]
         error = root_txt.get("error_class") or root_txt.get("error") or dmarc_txt.get("error")
+        service_attempts: list[dict[str, Any]] = []
+        if service_target is not None:
+            service_attempts = _collect_dns_service_attempts(service_target, service_probes)
+            evaluations[DNS_SERVICE_ISSUE_KEY] = aggregate_dns_service_attempts(service_attempts)
         evidence = {
             "executor": self.executor_name,
             "status": "success",
@@ -682,10 +709,205 @@ class DNSExecutor(BaseExecutor):
             "evaluations": evaluations,
             "policy_version": WAVE2_EMAIL_POLICY_VERSION,
         }
+        if service_target is not None:
+            evidence["target_identity"]["connect_host"] = service_target.connect_host
+            evidence["service_probes"] = service_attempts
         if error:
             evidence["error"] = error
             evidence["status"] = "error"
         return ExecutorObservation(self.evidence_source, evidence)
+
+
+def _collect_dns_service_attempts(
+    target: InventoryScanTarget,
+    probes: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    attempts: list[dict[str, Any]] = []
+    total_deadline = time.monotonic() + DNS_SERVICE_TOTAL_DEADLINE_SECONDS
+    for probe in probes:
+        remaining = total_deadline - time.monotonic()
+        if remaining <= 0:
+            attempts.append(indeterminate_dns_attempt(
+                transport=probe["transport"],
+                port=probe["port"],
+                reason_code="total_deadline_exhausted",
+                elapsed_ms=0,
+            ))
+            continue
+        attempt_deadline = min(
+            total_deadline,
+            time.monotonic() + min(DNS_SERVICE_ATTEMPT_TIMEOUT_SECONDS, remaining),
+        )
+        if probe["transport"] == "udp":
+            attempt = _run_dns_udp_probe(target.connect_host, probe["port"], attempt_deadline)
+        else:
+            attempt = _run_dns_tcp_probe(target.connect_host, probe["port"], attempt_deadline)
+        attempts.append(attempt)
+        if attempt.get("outcome") == "MATCH":
+            break
+    return attempts
+
+
+def _run_dns_udp_probe(connect_host: str, port: int, deadline: float) -> dict[str, Any]:
+    started = time.monotonic()
+    observed_at = datetime.now(timezone.utc).isoformat()
+    query, transaction_id = build_dns_service_query()
+    family, destination = _numeric_socket_destination(connect_host, port)
+    sock: socket.socket | None = None
+    try:
+        sock = socket.socket(family, socket.SOCK_DGRAM)
+        sock.settimeout(_dns_remaining(deadline))
+        sent = sock.sendto(query, destination)
+        if sent != len(query):
+            return indeterminate_dns_attempt(
+                transport="udp", port=port, reason_code="udp_request_partial",
+                elapsed_ms=_elapsed_ms(started), observed_at=observed_at,
+            )
+        sock.settimeout(_dns_remaining(deadline))
+        oversized = False
+        if hasattr(sock, "recvmsg"):
+            wire, _ancillary, flags, source = sock.recvmsg(MAX_DNS_UDP_RESPONSE_BYTES + 1)
+            oversized = len(wire) > MAX_DNS_UDP_RESPONSE_BYTES or bool(flags & getattr(socket, "MSG_TRUNC", 0))
+        else:  # pragma: no cover - recvmsg is available on supported Unix workers
+            wire, source = sock.recvfrom(MAX_DNS_UDP_RESPONSE_BYTES + 1)
+            oversized = len(wire) > MAX_DNS_UDP_RESPONSE_BYTES
+        source_match = _dns_source_matches(source, connect_host, port)
+        return evaluate_udp_dns_response(
+            wire,
+            expected_transaction_id=transaction_id,
+            port=port,
+            source_match=source_match,
+            elapsed_ms=_elapsed_ms(started),
+            observed_at=observed_at,
+            oversized=oversized,
+        )
+    except (TimeoutError, socket.timeout):
+        reason = "udp_timeout"
+    except (ConnectionRefusedError, ConnectionResetError, OSError):
+        reason = "udp_socket_error"
+    finally:
+        if sock is not None:
+            sock.close()
+    return indeterminate_dns_attempt(
+        transport="udp", port=port, reason_code=reason,
+        elapsed_ms=_elapsed_ms(started), observed_at=observed_at,
+    )
+
+
+def _run_dns_tcp_probe(connect_host: str, port: int, deadline: float) -> dict[str, Any]:
+    started = time.monotonic()
+    observed_at = datetime.now(timezone.utc).isoformat()
+    query, transaction_id = build_dns_service_query()
+    request = len(query).to_bytes(2, "big") + query
+    family, destination = _numeric_socket_destination(connect_host, port)
+    sock: socket.socket | None = None
+    try:
+        sock = socket.socket(family, socket.SOCK_STREAM)
+        sock.settimeout(_dns_remaining(deadline))
+        sock.connect(destination)
+        source_match = _dns_source_matches(sock.getpeername(), connect_host, port)
+        sock.settimeout(_dns_remaining(deadline))
+        sock.sendall(request)
+        prefix, prefix_complete = _dns_recv_exact(sock, 2, deadline)
+        if not prefix_complete:
+            return indeterminate_dns_attempt(
+                transport="tcp", port=port, reason_code="tcp_length_prefix_partial",
+                elapsed_ms=_elapsed_ms(started), observed_at=observed_at,
+                source_match=source_match,
+            )
+        declared = int.from_bytes(prefix, "big")
+        if declared == 0 or declared < 12 or declared > MAX_DNS_TCP_RESPONSE_BYTES:
+            return evaluate_tcp_dns_frame(
+                prefix,
+                expected_transaction_id=transaction_id,
+                port=port,
+                source_match=source_match,
+                elapsed_ms=_elapsed_ms(started),
+                observed_at=observed_at,
+            )
+        body, body_complete = _dns_recv_exact(sock, declared, deadline)
+        frame = prefix + body
+        if not body_complete:
+            return evaluate_tcp_dns_frame(
+                frame,
+                expected_transaction_id=transaction_id,
+                port=port,
+                source_match=source_match,
+                elapsed_ms=_elapsed_ms(started),
+                observed_at=observed_at,
+            )
+        return evaluate_tcp_dns_frame(
+            frame,
+            expected_transaction_id=transaction_id,
+            port=port,
+            source_match=source_match,
+            elapsed_ms=_elapsed_ms(started),
+            observed_at=observed_at,
+        )
+    except (TimeoutError, socket.timeout):
+        reason = "tcp_timeout"
+    except ConnectionRefusedError:
+        reason = "tcp_connection_refused"
+    except (ConnectionResetError, BrokenPipeError):
+        reason = "tcp_connection_reset"
+    except OSError:
+        reason = "tcp_socket_error"
+    finally:
+        if sock is not None:
+            sock.close()
+    return indeterminate_dns_attempt(
+        transport="tcp", port=port, reason_code=reason,
+        elapsed_ms=_elapsed_ms(started), observed_at=observed_at,
+    )
+
+
+def _dns_recv_exact(sock: socket.socket, count: int, deadline: float) -> tuple[bytes, bool]:
+    chunks: list[bytes] = []
+    remaining = count
+    while remaining:
+        sock.settimeout(_dns_remaining(deadline))
+        chunk = sock.recv(remaining)
+        if not chunk:
+            return b"".join(chunks), False
+        chunks.append(chunk)
+        remaining -= len(chunk)
+    return b"".join(chunks), True
+
+
+def _numeric_socket_destination(connect_host: str, port: int) -> tuple[int, tuple]:
+    try:
+        address = ipaddress.ip_address(connect_host)
+    except ValueError as exc:
+        raise ScanExecutorError("direct DNS service target must be a pinned numeric address") from exc
+    if isinstance(address, ipaddress.IPv4Address):
+        return socket.AF_INET, (str(address), port)
+    if address.scope_id is not None:
+        raise ScanExecutorError("scoped IPv6 addresses are prohibited for direct DNS service probes")
+    return socket.AF_INET6, (str(address), port, 0, 0)
+
+
+def _dns_source_matches(source: tuple, connect_host: str, port: int) -> bool:
+    try:
+        source_address = ipaddress.ip_address(source[0])
+        expected = ipaddress.ip_address(connect_host)
+        if isinstance(source_address, ipaddress.IPv6Address) and source_address.ipv4_mapped is not None:
+            source_address = source_address.ipv4_mapped
+        if isinstance(expected, ipaddress.IPv6Address) and expected.ipv4_mapped is not None:
+            expected = expected.ipv4_mapped
+        return source_address == expected and source[1] == port
+    except (IndexError, TypeError, ValueError):
+        return False
+
+
+def _dns_remaining(deadline: float) -> float:
+    remaining = deadline - time.monotonic()
+    if remaining <= 0:
+        raise TimeoutError("DNS service attempt deadline exhausted")
+    return remaining
+
+
+def _elapsed_ms(started: float) -> int:
+    return max(0, int((time.monotonic() - started) * 1000))
 
 
 class TCPExecutor(BaseExecutor):
@@ -841,6 +1063,16 @@ def collect_scanner_observations(
             EvidenceSourceEnum.SCANNER_TCP,
         }:
             attach_exposure_contexts(observation.evidence, target.connect_host, execution_context)
+        elif observation.evidence_source == EvidenceSourceEnum.SCANNER_DNS:
+            pinned_address = observation.evidence.get("target_identity", {}).get("connect_host")
+            if not isinstance(pinned_address, str):
+                pinned_address = target.connect_host
+            attach_exposure_context_for_issue(
+                observation.evidence,
+                pinned_address,
+                execution_context,
+                DNS_SERVICE_ISSUE_KEY,
+            )
         observations.append(observation)
     return observations
 
@@ -849,7 +1081,9 @@ def load_authorized_scan_target(db: Session, target: ScanJobTarget) -> Inventory
     config = validate_scan_config(target.scan_config)
     inventory_target = _load_inventory_scan_target(db, target)
     # TXT-only domains need no A/AAAA record. Resolve only targets receiving connections.
-    if any(name in {"http", "tls", "tcp"} for name in config["executors"]):
+    if config["dns_service_probes"] and inventory_target.target_type != ScanTargetTypeEnum.HOST:
+        raise ScanExecutorError("dns_service_probes require an approved HOST inventory target")
+    if any(name in {"http", "tls", "tcp"} for name in config["executors"]) or config["dns_service_probes"]:
         inventory_target = _pin_target(inventory_target)
     return inventory_target
 
@@ -2336,6 +2570,9 @@ def validate_scan_config(config: dict[str, Any] | None) -> dict[str, Any]:
     _int_config(config, "service_probe_response_limit_bytes", 4096, 64, MAX_SERVICE_PROBE_RESPONSE_BYTES)
     config["service_probes"] = _service_probes_config(config)
     config["http_product_probes"] = _http_product_probes_config(config)
+    config["dns_service_probes"] = _dns_service_probes_config(config)
+    if config["dns_service_probes"] and "dns" not in config["executors"]:
+        raise ScanExecutorError("dns_service_probes require the dns executor")
     config["ssh_ports"] = _ports_config(config, "ssh_ports", [], MAX_SSH_ENDPOINTS)
     return config
 
@@ -2398,6 +2635,35 @@ def _service_probes_config(config: dict[str, Any]) -> list[dict[str, Any]]:
         if identity not in seen:
             normalized.append(value)
             seen.add(identity)
+    return normalized
+
+
+def _dns_service_probes_config(config: dict[str, Any]) -> list[dict[str, Any]]:
+    raw = config.get("dns_service_probes", [])
+    if raw is None:
+        raw = []
+    if not isinstance(raw, list):
+        raise ScanExecutorError(
+            f"scan_config.dns_service_probes must be a list of at most {MAX_DNS_SERVICE_ENDPOINTS} distinct tuples"
+        )
+    normalized: list[dict[str, Any]] = []
+    seen: set[tuple[str, int]] = set()
+    for item in raw:
+        if not isinstance(item, dict) or set(item) != {"transport", "port"}:
+            raise ScanExecutorError("each DNS service probe must contain exactly transport and port")
+        transport, port = item["transport"], item["port"]
+        if not isinstance(transport, str) or transport not in {"udp", "tcp"}:
+            raise ScanExecutorError("DNS service probe transport must be exactly udp or tcp")
+        if isinstance(port, bool) or not isinstance(port, int) or not 1 <= port <= 65535:
+            raise ScanExecutorError("DNS service probe port must be an integer from 1 to 65535")
+        identity = (transport, port)
+        if identity not in seen:
+            normalized.append({"transport": transport, "port": port})
+            seen.add(identity)
+        if len(normalized) > MAX_DNS_SERVICE_ENDPOINTS:
+            raise ScanExecutorError(
+                f"scan_config.dns_service_probes must contain at most {MAX_DNS_SERVICE_ENDPOINTS} distinct tuples"
+            )
     return normalized
 
 
