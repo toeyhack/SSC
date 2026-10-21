@@ -4,6 +4,17 @@ Baseline content hash: `0fe2bc8ffb7e3f734d4e88f70b11cffa6e8e9e47e722dc62107f6ff0
 Review date: 2026-09-20  
 Scope: analysis/design only; no scanner, rule, score, or Golden Baseline change.
 
+## Wave 5F semantic supersession (2026-10-21)
+
+The original quality-gate row for `upnp_accessible` below is preserved as a
+historical review result, but its protocol-valid SSDP/UPnP rationale is no
+longer the current SSC-level conclusion. Wave 5F classifies the issue as
+`NOT_REPRODUCIBLE_FROM_AUTHORITATIVE_SEMANTICS`: a standards-valid root-device
+response can establish bounded protocol identity only, while the exact SSC
+finding predicate is undisclosed. Device-description retrieval and public
+exposure are not established requirements. No SSC-aligned rule, exposure
+consumer, or implementation-ceiling credit follows from the historical row.
+
 ## Wave 1 implementation update (2026-09-21)
 
 The quality gate below remains the authority for issue selection. Wave 1 implemented only `HTTP_HEADERS`, `HTTP_REDIRECT`, and `TLS_CERTIFICATE`. Activation was verified against an isolated clone of the attested real SSC API baseline with the hash above: **14** exact issue definitions received active deterministic evaluators and immutable rule-version-to-issue-version links.

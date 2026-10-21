@@ -2,7 +2,7 @@
 
 Snapshot content hash: `0fe2bc8ffb7e3f734d4e88f70b11cffa6e8e9e47e722dc62107f6ff09694eca8`
 Source: immutable real `SSC_API` Golden Baseline
-Implementation state: Waves 1-2, Wave 3A, Wave 3B, Wave 4A, Wave 4B, Wave 5A FTP/IMAP/POP3, Wave 5B.1 LDAP, Wave 5C Minecraft/RDP, Wave 5D Apache CouchDB, and Wave 5E DNS are active. SMTP unusual-port remains INTERNAL_POLICY_ONLY. Elasticsearch, PPTP, and Oracle remain implemented/inactive pending real interoperability.
+Implementation state: Waves 1-2, Wave 3A, Wave 3B, Wave 4A, Wave 4B, Wave 5A FTP/IMAP/POP3, Wave 5B.1 LDAP, Wave 5C Minecraft/RDP, Wave 5D Apache CouchDB, and Wave 5E DNS are active. Wave 5F classifies UPnP as NOT_REPRODUCIBLE from authoritative SSC semantics; its protocol-identity primitive is designable but not implemented. SMTP unusual-port remains INTERNAL_POLICY_ONLY. Elasticsearch, PPTP, and Oracle remain implemented/inactive pending real interoperability.
 Total mapped issues: **202**
 
 > This is an independent implementation mapped to SSC taxonomy. It does not reproduce or claim knowledge of SSC collection, aggregation, severity, scoring, or proprietary detection logic. `ssc_severity` remains source metadata and is not mapped to internal risk or score impact.
@@ -20,14 +20,14 @@ Total mapped issues: **202**
 | `NOT_SUPPORTED` | 75 | 75 | 37.1% |
 | **Total** | **202** | **202** | **100.0%** |
 
-### Feasibility (unchanged)
+### Feasibility after Wave 5F semantic reconciliation
 
 | Category | Count | Percentage |
 |---|---:|---:|
-| `DIRECTLY_TESTABLE` | 75 | 37.1% |
+| `DIRECTLY_TESTABLE` | 74 | 36.6% |
 | `TESTABLE_WITH_ENRICHMENT` | 81 | 40.1% |
 | `EXTERNAL_DATA_REQUIRED` | 42 | 20.8% |
-| `NOT_REPRODUCIBLE` | 4 | 2.0% |
+| `NOT_REPRODUCIBLE` | 5 | 2.5% |
 
 ### Coverage by SSC factor
 
@@ -40,7 +40,7 @@ Total mapped issues: **202**
 | `hacker_chatter` | 2 | 0 | 0 | 2 | 0 | 0 | 0 | 2 |
 | `ip_reputation` | 26 | 1 | 1 | 24 | 0 | 0 | 2 | 24 |
 | `leaked_information` | 8 | 0 | 0 | 8 | 0 | 0 | 0 | 8 |
-| `network_security` | 68 | 42 | 20 | 5 | 1 | 23 | 38 | 7 |
+| `network_security` | 68 | 41 | 20 | 5 | 2 | 23 | 38 | 7 |
 | `patching_cadence` | 21 | 0 | 21 | 0 | 0 | 0 | 8 | 13 |
 | `social_engineering` | 1 | 0 | 0 | 1 | 0 | 0 | 0 | 1 |
 
@@ -399,7 +399,7 @@ The CSV remains normative for exact evidence requirements, proposed logic, depen
 | `tlscert_weak_signature` | Certificate Signed With Weak Algorithm | `network_security` | `low` | `DIRECTLY_TESTABLE` | `TLS_CERTIFICATE` | `SUPPORTED` |
 | `tor_server` | TOR Server Detected | `network_security` | `high` | `EXTERNAL_DATA_REQUIRED` | `EXTERNAL_INTEL_INGEST` | `NOT_SUPPORTED` |
 | `tor_traffic_detected` | Tor Traffic Detected | `network_security` | `low` | `EXTERNAL_DATA_REQUIRED` | `EXTERNAL_INTEL_INGEST` | `NOT_SUPPORTED` |
-| `upnp_accessible` | UPnP Accessible | `network_security` | `medium` | `DIRECTLY_TESTABLE` | `PROTOCOL_PROBE` | `PARTIAL` |
+| `upnp_accessible` | UPnP Accessible | `network_security` | `medium` | `NOT_REPRODUCIBLE` | `None` | `PARTIAL` |
 | `uses_go_daddy_infrastructure` | Website Uses GoDaddy TLS Certificates | `network_security` | `info` | `TESTABLE_WITH_ENRICHMENT` | `TLS_CERTIFICATE+CA_REGISTRY_ENRICHMENT` | `PARTIAL` |
 | `patching_analysis_high` | High-severity CVE patching analyzed | `patching_cadence` | `info` | `TESTABLE_WITH_ENRICHMENT` | `FINGERPRINT+SBOM+CVE_ANALYTICS` | `NOT_SUPPORTED` |
 | `patching_analysis_low` | Low-severity CVE patching analyzed | `patching_cadence` | `info` | `TESTABLE_WITH_ENRICHMENT` | `FINGERPRINT+SBOM+CVE_ANALYTICS` | `NOT_SUPPORTED` |

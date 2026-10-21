@@ -4,6 +4,46 @@ CLI-FIRST MVP — COMPLETE / PASS
 
 Current phase: Phase 6B - CLI-first REPORT Output
 
+Wave 5F UPnP semantic reconciliation: READY FOR REVIEW
+(2026-10-21). Exact issue `upnp_accessible`, issue-version
+`1dd2a422-1c87-4490-a4d2-b190a19f8ae9`, version 1, title `UPnP Accessible`,
+factor `network_security`, severity `medium`, is
+`NOT_REPRODUCIBLE_FROM_AUTHORITATIVE_SEMANTICS`. The attested SSC metadata
+describes UPnP and associated risk but does not disclose whether its finding
+requires any SSDP responder, standards-valid root-device discovery,
+device-description retrieval, public Internet accessibility, or another
+narrower/composed predicate. Protocol identity therefore cannot be represented
+as the exact SSC finding, and the risk narrative does not establish a
+public-exposure requirement.
+
+A future independent protocol-identity primitive is designable around one
+zero-retry exact-target unicast M-SEARCH to UDP port 1900 with
+`ST: upnp:rootdevice`, without multicast or broadcast. A strict
+standards-shaped root-device response could establish bounded UPnP identity
+only. Device-description GET is not required for that primitive. `LOCATION`
+may be parsed structurally but is not followed, avoiding a response-directed
+outbound request and unnecessary SSRF boundary. This is design knowledge, not
+implemented or SSC-aligned capability.
+
+No UPnP rule exists or is active, and `upnp_accessible` is not a
+`PUBLIC_EXPOSURE_CONTEXT` consumer. A clean future direct UDP path would need a
+semantically valid `SCANNER_UDP` source with evidence root `udp` and executor
+`udp`; the existing `SCANNER_DNS`, `SCANNER_HTTP`, and `SCANNER_TCP` sources
+must not be reused. Adding that source would require a database CHECK-constraint
+migration, so both the source and migration are intentionally deferred while
+the SSC predicate remains unresolved. Current capability stays `PARTIAL`, with
+calibration `UNKNOWN` / `affects_score=false`.
+
+The reviewed direct-candidate inventory still contains `upnp_accessible`, but
+that membership is not SSC-aligned support. Closed support remains **42/53
+VERIFIED_DIRECT**, **46/160 V1**, and **46/202 full baseline**. The unchanged
+SSC-aligned implementation ceiling remains **45/53**, **49/160**, and
+**49/202**; this design review adds nothing to it. Elasticsearch, PPTP, and
+Oracle remain `IMPLEMENTED_PENDING_INTEROP` / `PARTIAL` / inactive. SMTP
+unusual-port remains `PARTIAL / INTERNAL_POLICY_ONLY` and inactive as
+`SSC_REFERENCE`. No scanner, rule, evidence-source registry, exposure-consumer
+registry, scoring, calibration, schema, or migration change is included.
+
 Wave 5E bounded DNS service identification: READY FOR REVIEW
 (2026-10-16). `service_dns` now uses one explicit opt-in direct-service path
 inside the existing DNS executor and the single `SCANNER_DNS` / `dns`
