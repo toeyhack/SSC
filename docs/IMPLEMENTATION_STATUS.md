@@ -4,6 +4,61 @@ CLI-FIRST MVP — COMPLETE / PASS
 
 Current phase: Phase 6B - CLI-first REPORT Output
 
+Wave 2 TLS weak-cipher closure: READY FOR REVIEW
+(2026-10-21). Exact issue `tls_weak_cipher`, issue-version
+`013168ec-2848-49eb-8d22-0f49ac2beb56`, version 1, from the attested real
+`SSC_API` baseline
+`0fe2bc8ffb7e3f734d4e88f70b11cffa6e8e9e47e722dc62107f6ff09694eca8`
+is now `SUPPORTED` / `CLOSED`. Activation fails closed unless that exact issue
+version and snapshot hash are current.
+
+The additive `tls-raw-clienthello.v1` primitive uses three bounded
+prohibited-only ClientHello partitions for TLS 1.0, 1.1, and 1.2. Its static
+90-entry numeric catalog `ssc-tls-weak-cipher-catalog.2026-08-11.v1` has
+SHA-256
+`a4cdf405202a6492600e3c8794874b7e37f8cc64e40d9929374d8ef18991570a`
+and is independent of OpenSSL cipher/provider availability. It exactly expands
+the reviewed SSC below-128-bit strength, disclosed name-family, and twelve
+exact-suite criteria over assigned IANA suite identifiers; SCSV, GREASE,
+reserved, private, unassigned, and TLS 1.3 values are excluded.
+
+MATCH requires a complete valid correlated ServerHello that selects a suite
+from the offered prohibited-only partition. NO_MATCH requires complete coverage
+of all three partitions, a reviewed fatal rejection for each, and a successful
+comparable strong TLS 1.2 control. Timeout, reset, EOF, malformed, truncated,
+oversized, ambiguous-alert, incomplete-partition, invalid-selection, and failed
+control evidence remain INDETERMINATE/NOT_ASSESSED. The scanner performs at
+most four one-request connections per configured endpoint, with no retry,
+authentication, certificate validation, application request, early data,
+resumption, or renegotiation. Existing `tls_weak_protocol`, Wave 1 certificate,
+and historical Wave 2 v1 evidence semantics are unchanged.
+
+The rule uses additive method
+`ssc-wave2-tls-weak-cipher-observation.v2` and policy
+`ssc-wave2-tls-weak-cipher-policy.v2`; all prior Wave 2 rules retain their exact
+v1 evidence schemas. The older provider-derived broad internal policy helper is
+retained only for historical compatibility and is not called by normal SSC
+scan execution. `SCANNER_TLS` and evidence root `tls` are reused; there is no
+new evidence source or migration. Internal risk remains unconfigured
+`UNKNOWN` / `affects_score=false`, with no scoring or calibration change.
+
+Validation used isolated PostgreSQL databases
+`ssc_tls_weak_cipher_focus_20261021` and
+`ssc_tls_weak_cipher_full_20261021`, never the manual `ssc_e2e` database.
+The finalized focused gate passed **115 tests**. The one complete backend-suite
+run passed **1,380 tests** with **1** existing opt-in skip and the existing
+Starlette/httpx deprecation warning. Isolated bytecode compilation, dependency
+checking, deterministic coverage regeneration, and exact Golden-version
+idempotent activation passed. No external target or container was used, no
+migration was added, and the Golden Baseline was not changed.
+
+Closed support is now **43/53 VERIFIED_DIRECT**, **47/160 V1**, and **47/202
+full baseline**. The SSC-aligned implementation ceiling, including unchanged
+pending Elasticsearch, PPTP, and Oracle, is **46/53**, **50/160**, and
+**50/202**. UPnP remains `NOT_REPRODUCIBLE` / `PARTIAL`; SMTP unusual-port
+remains `INTERNAL_POLICY_ONLY` / `PARTIAL`; Wave 5G database candidates are
+unchanged.
+
 Wave 5F UPnP semantic reconciliation: READY FOR REVIEW
 (2026-10-21). Exact issue `upnp_accessible`, issue-version
 `1dd2a422-1c87-4490-a4d2-b190a19f8ae9`, version 1, title `UPnP Accessible`,

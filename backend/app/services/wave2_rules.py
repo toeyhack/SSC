@@ -23,6 +23,11 @@ from app.models.rule_models import (
 METHOD_VERSION = "ssc-wave2-observation.v1"
 TLS_POLICY_VERSION = "ssc-wave2-tls-policy.v1"
 EMAIL_POLICY_VERSION = "ssc-wave2-email-policy.v1"
+TLS_WEAK_CIPHER_METHOD_VERSION = "ssc-wave2-tls-weak-cipher-observation.v2"
+TLS_WEAK_CIPHER_POLICY_VERSION = "ssc-wave2-tls-weak-cipher-policy.v2"
+TLS_WEAK_CIPHER_ISSUE_VERSION_ID = "013168ec-2848-49eb-8d22-0f49ac2beb56"
+TLS_WEAK_CIPHER_ISSUE_VERSION_NUMBER = 1
+GOLDEN_BASELINE_HASH = "0fe2bc8ffb7e3f734d4e88f70b11cffa6e8e9e47e722dc62107f6ff09694eca8"
 
 
 @dataclass(frozen=True)
@@ -37,6 +42,10 @@ class Wave2RuleSpec:
     remediation: str
     reference: str
     policy_version: str
+    method_version: str = METHOD_VERSION
+    required_issue_version_id: str | None = None
+    required_issue_version_number: int | None = None
+    required_snapshot_hash: str | None = None
 
     @property
     def rule_key(self) -> str:
@@ -53,7 +62,7 @@ class Wave2RuleSpec:
     @property
     def evidence_schema(self) -> dict[str, Any]:
         return {
-            "schema_version": METHOD_VERSION,
+            "schema_version": self.method_version,
             "policy_version": self.policy_version,
             "primitive": self.primitive,
             "issue_key": self.issue_key,
@@ -85,6 +94,22 @@ WAVE2_RULES = (
         "For every approved TLS port: bounded, version-pinned TLS 1.0, 1.1, 1.2 and 1.3 attempts with offered/negotiated versions, cipher, outcome and error class.",
         "MATCH only when TLS 1.0 or TLS 1.1 completes negotiation; NO_MATCH requires definitive rejection of both weak versions and a successful TLS 1.2 or TLS 1.3 control; otherwise INDETERMINATE.",
         "Disable TLS 1.0 and TLS 1.1, retain TLS 1.2/1.3 with current configurations, and verify every exposed TLS endpoint.",
+    ),
+    Wave2RuleSpec(
+        issue_key="tls_weak_cipher",
+        primitive="TLS_CIPHER_NEGOTIATION",
+        evidence_root="tls",
+        target_type=RuleTargetTypeEnum.HOST,
+        title="TLS Service Supports Weak Cipher Suite",
+        evidence_requirement="Three bounded prohibited-only raw ClientHello partitions for TLS 1.0, 1.1, and 1.2 using the immutable provider-independent SSC catalog, with strict correlated ServerHello or fatal-alert evidence and at most one strong control.",
+        logic="MATCH when a valid ServerHello selects an offered frozen-catalog suite; NO_MATCH requires complete catalog coverage, conclusive rejection of all three partitions, and a successful comparable strong control; otherwise INDETERMINATE.",
+        remediation="Disable every suite in the reviewed SSC weak-cipher catalog and retain only reviewed modern TLS configurations.",
+        reference="https://support.securityscorecard.com/hc/en-us/articles/115003260246-TLS-Service-Supports-Weak-Cipher-Suite; https://www.iana.org/assignments/tls-parameters/; https://www.rfc-editor.org/rfc/rfc5246.html",
+        policy_version=TLS_WEAK_CIPHER_POLICY_VERSION,
+        method_version=TLS_WEAK_CIPHER_METHOD_VERSION,
+        required_issue_version_id=TLS_WEAK_CIPHER_ISSUE_VERSION_ID,
+        required_issue_version_number=TLS_WEAK_CIPHER_ISSUE_VERSION_NUMBER,
+        required_snapshot_hash=GOLDEN_BASELINE_HASH,
     ),
     _email(
         "spf_record_missing", "SPF Record Missing",
@@ -134,7 +159,6 @@ WAVE2_BY_KEY = {spec.issue_key: spec for spec in WAVE2_RULES}
 
 WAVE2_PARTIAL_REASONS = {
     "tls_ocsp_stapling": "Python's current TLS socket interface does not expose the server's stapled OCSP bytes for cryptographic parsing and freshness/signature validation.",
-    "tls_weak_cipher": "The runtime can positively prove acceptance from constrained handshakes, but its OpenSSL provider cannot offer every prohibited legacy suite; a conclusive negative would be a weak proxy.",
     "dkim_record_detected": "Selector discovery requires an approved selector inventory or authorized message sample; selectors are not safely enumerable from DNS.",
     "dkim_weak_signature": "The platform has no authorized message/selector evidence from which to verify the signature algorithm and selected key.",
     "dkim_insufficient_key_length": "The platform has no approved selector inventory or authorized message sample, so an exhaustive key-size observation cannot be made.",
@@ -162,6 +186,9 @@ def activate_wave2_rules(db: Session, *, commit: bool = True) -> dict[str, Any]:
         issue_version = db.get(CatalogIssueTypeVersion, issue.current_version_id)
         if issue_version is None or issue_version.source_type != SourceTypeEnum.SSC_API or issue_version.id not in real_versions:
             unavailable[spec.issue_key] = "current definition is not part of an attested real SSC_API baseline"
+            continue
+        if not _required_issue_version_matches(spec, issue_version):
+            unavailable[spec.issue_key] = "current definition does not match the exact reviewed Golden issue version"
             continue
         rule = db.execute(select(RuleEngineRule).where(RuleEngineRule.stable_key == spec.rule_key).with_for_update()).scalar_one_or_none()
         if rule is None:
@@ -222,6 +249,7 @@ def active_wave2_mappings(db: Session) -> list[dict[str, Any]]:
         spec = WAVE2_BY_KEY.get(issue.stable_key)
         if (spec is None or rule.stable_key != spec.rule_key or issue_version.issue_type_id != issue.id
                 or issue_version.source_type != SourceTypeEnum.SSC_API or issue_version.id not in real_versions
+                or not _required_issue_version_matches(spec, issue_version)
                 or rule_version.rule_expression != spec.expression or rule_version.evidence_schema != spec.evidence_schema):
             continue
         mappings.append({
@@ -235,3 +263,13 @@ def active_wave2_mappings(db: Session) -> list[dict[str, Any]]:
             "primitive": spec.primitive,
         })
     return sorted(mappings, key=lambda item: item["issue_key"])
+
+
+def _required_issue_version_matches(spec: Wave2RuleSpec, issue_version: CatalogIssueTypeVersion) -> bool:
+    if spec.required_issue_version_id is not None and str(issue_version.id) != spec.required_issue_version_id:
+        return False
+    if spec.required_issue_version_number is not None and issue_version.version_number != spec.required_issue_version_number:
+        return False
+    if spec.required_snapshot_hash is not None and issue_version.source_snapshot_hash != spec.required_snapshot_hash:
+        return False
+    return True

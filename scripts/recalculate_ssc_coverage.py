@@ -151,9 +151,9 @@ def main() -> int:
         row["current_platform_support"] for row in rows if row["factor"] in V1_FACTORS
     )
     feasibility = Counter(row["feasibility_category"] for row in rows)
-    if coverage != {"SUPPORTED": 46, "PARTIAL": 81, "NOT_SUPPORTED": 75}:
+    if coverage != {"SUPPORTED": 47, "PARTIAL": 80, "NOT_SUPPORTED": 75}:
         raise SystemExit(f"unexpected coverage totals: {dict(coverage)}")
-    if v1_coverage != {"SUPPORTED": 46, "PARTIAL": 78, "NOT_SUPPORTED": 36}:
+    if v1_coverage != {"SUPPORTED": 47, "PARTIAL": 77, "NOT_SUPPORTED": 36}:
         raise SystemExit(f"unexpected V1 coverage totals: {dict(v1_coverage)}")
 
     if args.write:
@@ -215,7 +215,7 @@ def render_markdown(rows, feasibility, coverage, wave1_rules, wave1_partial, wav
         "",
         f"Snapshot content hash: `{BASELINE_HASH}`",
         "Source: immutable real `SSC_API` Golden Baseline",
-        "Implementation state: Waves 1-2, Wave 3A, Wave 3B, Wave 4A, Wave 4B, Wave 5A FTP/IMAP/POP3, Wave 5B.1 LDAP, Wave 5C Minecraft/RDP, Wave 5D Apache CouchDB, and Wave 5E DNS are active. Wave 5F classifies UPnP as NOT_REPRODUCIBLE from authoritative SSC semantics; its protocol-identity primitive is designable but not implemented. SMTP unusual-port remains INTERNAL_POLICY_ONLY. Elasticsearch, PPTP, and Oracle remain implemented/inactive pending real interoperability.",
+        "Implementation state: Waves 1-2, Wave 3A, Wave 3B, Wave 4A, Wave 4B, Wave 5A FTP/IMAP/POP3, Wave 5B.1 LDAP, Wave 5C Minecraft/RDP, Wave 5D Apache CouchDB, and Wave 5E DNS are active. Wave 2 now includes provider-independent tls_weak_cipher policy v2. Wave 5F classifies UPnP as NOT_REPRODUCIBLE from authoritative SSC semantics; its protocol-identity primitive is designable but not implemented. SMTP unusual-port remains INTERNAL_POLICY_ONLY. Elasticsearch, PPTP, and Oracle remain implemented/inactive pending real interoperability.",
         "Total mapped issues: **202**",
         "",
         "> This is an independent implementation mapped to SSC taxonomy. It does not reproduce or claim knowledge of SSC collection, aggregation, severity, scoring, or proprietary detection logic. `ssc_severity` remains source metadata and is not mapped to internal risk or score impact.",
@@ -226,10 +226,10 @@ def render_markdown(rows, feasibility, coverage, wave1_rules, wave1_partial, wav
         "",
         "## Coverage summary",
         "",
-        "| Coverage | Before Wave 5E closure | After Wave 5E closure | Percentage after |",
+        "| Coverage | Before tls_weak_cipher closure | After closure | Percentage after |",
         "|---|---:|---:|---:|",
-        f"| `SUPPORTED` | 45 | {coverage['SUPPORTED']} | {coverage['SUPPORTED']/202:.1%} |",
-        f"| `PARTIAL` | 82 | {coverage['PARTIAL']} | {coverage['PARTIAL']/202:.1%} |",
+        f"| `SUPPORTED` | 46 | {coverage['SUPPORTED']} | {coverage['SUPPORTED']/202:.1%} |",
+        f"| `PARTIAL` | 81 | {coverage['PARTIAL']} | {coverage['PARTIAL']/202:.1%} |",
         f"| `NOT_SUPPORTED` | 75 | {coverage['NOT_SUPPORTED']} | {coverage['NOT_SUPPORTED']/202:.1%} |",
         "| **Total** | **202** | **202** | **100.0%** |",
         "",
@@ -281,7 +281,7 @@ def render_markdown(rows, feasibility, coverage, wave1_rules, wave1_partial, wav
         "",
         "## Active Wave 2 evaluator mappings",
         "",
-        "Every listed rule uses stable key `ssc.wave2.<issue-key>`, method schema `ssc-wave2-observation.v1`, source type `SSC_REFERENCE`, and a rule-version foreign key to the exact current issue definition from an attested real `SSC_API` snapshot. TLS and email policy versions are retained independently in the rule evidence schema.",
+        "Every listed rule uses stable key `ssc.wave2.<issue-key>`, source type `SSC_REFERENCE`, and a rule-version foreign key to the exact current issue definition from an attested real `SSC_API` snapshot. Existing rules retain method schema `ssc-wave2-observation.v1`; `tls_weak_cipher` uses additive method `ssc-wave2-tls-weak-cipher-observation.v2` and policy `ssc-wave2-tls-weak-cipher-policy.v2` without reinterpreting historical evidence.",
         "",
         "| SSC issue key | Primitive | Exact positive condition | Authoritative reference |",
         "|---|---|---|---|",

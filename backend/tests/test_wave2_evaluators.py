@@ -3,12 +3,20 @@ import json
 from uuid import UUID, uuid4
 
 import pytest
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.db.session import engine
-from app.models.catalog_models import CatalogIssueTypeVersion, SourceTypeEnum
-from app.models.rule_models import RuleEngineRule
+from app.models.catalog_models import (
+    BreachRiskEnum,
+    CatalogFactor,
+    CatalogIssueType,
+    CatalogIssueTypeVersion,
+    CatalogSnapshot,
+    CatalogSnapshotItem,
+    SourceTypeEnum,
+)
+from app.models.rule_models import RuleEngineRule, RuleEngineRuleVersion
 from app.outputs.report import render_html
 from app.services.cli_scan import scan_inventory_target
 from app.services.cli_setup import add_inventory_target
@@ -26,7 +34,13 @@ from app.services.scan_executors import (
 )
 from app.services.scoring_engine import ScoringDefinition
 from app.services.ssc_api_baseline import API_ORIGIN, FACTORS_ENDPOINT, ISSUES_ENDPOINT, normalize_api_payloads
-from app.services.wave2_rules import WAVE2_RULES, active_wave2_mappings
+from app.services.wave2_rules import (
+    GOLDEN_BASELINE_HASH,
+    TLS_WEAK_CIPHER_ISSUE_VERSION_ID,
+    WAVE2_RULES,
+    activate_wave2_rules,
+    active_wave2_mappings,
+)
 
 
 @pytest.fixture
@@ -59,11 +73,9 @@ def test_tls_handshake_evaluators_positive_negative_and_insufficient_boundaries(
             "TLSv1.0": {"accepted": True}, "TLSv1.1": {"accepted": False},
             "TLSv1.2": {"accepted": True}, "TLSv1.3": {"accepted": True},
         },
-        "weak_cipher_catalog_complete": True,
-        "weak_cipher_catalog_hash": "abc",
-        "weak_cipher_attempts": [{"accepted": True, "negotiated_cipher": "ADH-AES128-GCM-SHA256"}],
     }
-    result = _evaluate_tls_handshake(positive)
+    weak_positive = {"catalog_complete": True, "attempts": [{"matched": True, "suite_class": "ssc_prohibited"}]}
+    result = _evaluate_tls_handshake(positive, weak_positive)
     assert result["tls_weak_protocol"]["matched"] is True
     assert result["tls_weak_cipher"]["matched"] is True
     assert result["tls_weak_protocol"]["policy_version"] == WAVE2_TLS_POLICY_VERSION
@@ -73,29 +85,28 @@ def test_tls_handshake_evaluators_positive_negative_and_insufficient_boundaries(
             "TLSv1.0": {"accepted": False}, "TLSv1.1": {"accepted": False},
             "TLSv1.2": {"accepted": True}, "TLSv1.3": {"accepted": True},
         },
-        "weak_cipher_catalog_complete": True,
-        "weak_cipher_catalog_hash": "abc",
-        "weak_cipher_attempts": [{"accepted": False}, {"accepted": False}],
     }
-    result = _evaluate_tls_handshake(negative)
+    rejected = [
+        {"partition_id": key, "suite_class": "ssc_prohibited", "matched": False, "definitive_rejection": True}
+        for key in ("tls10", "tls11", "tls12")
+    ]
+    weak_negative = {"catalog_complete": True, "attempts": rejected, "control": {"matched": True}}
+    result = _evaluate_tls_handshake(negative, weak_negative)
     assert result["tls_weak_protocol"]["matched"] is False
     assert result["tls_weak_cipher"]["matched"] is False
 
     insufficient = {**negative, "protocols": {key: {"accepted": None} for key in negative["protocols"]}}
-    insufficient["weak_cipher_attempts"] = [{"accepted": None}]
-    result = _evaluate_tls_handshake(insufficient)
+    result = _evaluate_tls_handshake(insufficient, {"catalog_complete": True, "attempts": rejected[:-1], "control": None})
     assert result["tls_weak_protocol"]["matched"] is None
     assert result["tls_weak_cipher"]["matched"] is None
 
-    incomplete_but_positive = {**positive, "weak_cipher_catalog_complete": False}
-    assert _evaluate_tls_handshake(incomplete_but_positive)["tls_weak_cipher"]["matched"] is True
-    incomplete_negative = {**negative, "weak_cipher_catalog_complete": False}
-    assert _evaluate_tls_handshake(incomplete_negative)["tls_weak_cipher"]["matched"] is None
+    assert _evaluate_tls_handshake(positive, {"catalog_complete": False, "attempts": weak_positive["attempts"]})["tls_weak_cipher"]["matched"] is True
+    assert _evaluate_tls_handshake(negative, {"catalog_complete": False, "attempts": rejected, "control": {"matched": True}})["tls_weak_cipher"]["matched"] is None
     aggregated = _aggregate_evaluations([{"evaluations": result}])
     assert aggregated["tls_weak_protocol"]["policy_version"] == WAVE2_TLS_POLICY_VERSION
 
 
-def test_tls_collector_actively_probes_four_versions_and_constrained_cipher_groups(monkeypatch):
+def test_tls_protocol_collector_remains_four_version_pinned_attempts(monkeypatch):
     calls = []
 
     def fake_attempt(_host, _name, _port, _timeout, *, version_name, cipher_name=None):
@@ -110,16 +121,10 @@ def test_tls_collector_actively_probes_four_versions_and_constrained_cipher_grou
         }
 
     monkeypatch.setattr("app.services.scan_executors._tls_attempt", fake_attempt)
-    monkeypatch.setattr("app.services.scan_executors._weak_cipher_catalog", lambda: ([{
-        "name": "ADH-AES128-GCM-SHA256", "protocol": "TLSv1.2", "strength_bits": 128,
-        "aead": True, "symmetric": "aes-128-gcm", "kea": "kx-dhe", "auth": "auth-null",
-        "policy_reasons": ["anonymous_authentication"],
-    }], "hash"))
     evidence = _collect_tls_handshake_evidence("127.0.0.1", "example.test", 443, 1.0)
     assert set(evidence["protocols"]) == {"TLSv1.0", "TLSv1.1", "TLSv1.2", "TLSv1.3"}
-    assert evidence["weak_cipher_attempts"][-1]["offered_ciphers"] == ["ADH-AES128-GCM-SHA256"]
-    assert evidence["weak_cipher_catalog_complete"] is False
-    assert calls[:4] == [("TLSv1.0", None), ("TLSv1.1", None), ("TLSv1.2", None), ("TLSv1.3", None)]
+    assert "weak_cipher_attempts" not in evidence
+    assert calls == [("TLSv1.0", None), ("TLSv1.1", None), ("TLSv1.2", None), ("TLSv1.3", None)]
 
 
 def test_email_evaluators_positive_negative_malformed_and_false_positive_boundaries(monkeypatch):
@@ -200,8 +205,9 @@ def _wave2_baseline():
 def test_real_baseline_exact_linkage_observation_finding_and_report(db, monkeypatch):
     import_golden_baseline(db, _wave2_baseline(), attest_real_source=True)
     mappings = active_wave2_mappings(db)
-    assert len(mappings) == len(WAVE2_RULES) == 7
-    assert {item["issue_key"] for item in mappings} == {spec.issue_key for spec in WAVE2_RULES}
+    assert len(WAVE2_RULES) == 8
+    assert len(mappings) == 7
+    assert {item["issue_key"] for item in mappings} == {spec.issue_key for spec in WAVE2_RULES} - {"tls_weak_cipher"}
     for mapping in mappings:
         issue_version = db.get(CatalogIssueTypeVersion, UUID(mapping["issue_version_id"]))
         assert issue_version.source_type == SourceTypeEnum.SSC_API
@@ -254,3 +260,61 @@ def test_real_baseline_exact_linkage_observation_finding_and_report(db, monkeypa
     )
     assert negative.findings == []
     assert negative.evidence[0].summary["evaluations"]["dmarc_contains_none"]["outcome"] == "NO_MATCH"
+
+
+def test_tls_weak_cipher_exact_golden_activation_is_idempotent(db):
+    factor = CatalogFactor(code="network_security", name="Network Security")
+    snapshot = CatalogSnapshot(
+        name="Pinned tls_weak_cipher activation fixture",
+        source_type=SourceTypeEnum.SSC_API,
+        content_hash=GOLDEN_BASELINE_HASH,
+        normalized_schema_version="ssc.api.metadata.v2",
+        is_real_baseline=True,
+    )
+    db.add_all([factor, snapshot])
+    db.flush()
+    issue = CatalogIssueType(stable_key="tls_weak_cipher", factor_id=factor.id)
+    db.add(issue)
+    db.flush()
+    version = CatalogIssueTypeVersion(
+        id=UUID(TLS_WEAK_CIPHER_ISSUE_VERSION_ID),
+        issue_type_id=issue.id,
+        version_number=1,
+        name="TLS Service Supports Weak Cipher Suite",
+        breach_risk=BreachRiskEnum.UNKNOWN,
+        ssc_severity="medium",
+        affects_score=False,
+        source_type=SourceTypeEnum.SSC_API,
+        source_snapshot_hash=GOLDEN_BASELINE_HASH,
+    )
+    db.add(version)
+    db.flush()
+    issue.current_version_id = version.id
+    db.add(CatalogSnapshotItem(
+        catalog_snapshot_id=snapshot.id,
+        issue_type_version_id=version.id,
+        factor_position=1,
+        issue_position=1,
+    ))
+    db.flush()
+
+    first = activate_wave2_rules(db, commit=False)
+    assert first["activated"] == ["tls_weak_cipher"]
+    assert set(first["unavailable"]) == {spec.issue_key for spec in WAVE2_RULES} - {"tls_weak_cipher"}
+    version_count = db.scalar(select(func.count()).select_from(RuleEngineRuleVersion))
+    second = activate_wave2_rules(db, commit=False)
+    assert second["rules_created"] == second["rule_versions_created"] == 0
+    assert second["rules_reused"] == 1
+    assert db.scalar(select(func.count()).select_from(RuleEngineRuleVersion)) == version_count
+    assert active_wave2_mappings(db) == [{
+        "issue_key": "tls_weak_cipher",
+        "issue_version_id": TLS_WEAK_CIPHER_ISSUE_VERSION_ID,
+        "issue_version_number": 1,
+        "ssc_severity": "medium",
+        "rule_key": "ssc.wave2.tls_weak_cipher",
+        "rule_version_id": str(db.scalar(select(RuleEngineRule).where(
+            RuleEngineRule.stable_key == "ssc.wave2.tls_weak_cipher",
+        )).current_version_id),
+        "rule_version_number": 1,
+        "primitive": "TLS_CIPHER_NEGOTIATION",
+    }]

@@ -73,6 +73,22 @@ from app.services.service_probe_http_product import (
     aggregate_http_product_evaluations,
     evaluate_http_product_response,
 )
+from app.services.service_probe_tls_cipher import (
+    ATTEMPT_TIMEOUT_SECONDS as TLS_CIPHER_ATTEMPT_TIMEOUT_SECONDS,
+    CATALOG_SHA256 as TLS_WEAK_CIPHER_CATALOG_SHA256,
+    CATALOG_VERSION as TLS_WEAK_CIPHER_CATALOG_VERSION,
+    ENDPOINT_DEADLINE_SECONDS as TLS_CIPHER_ENDPOINT_DEADLINE_SECONDS,
+    ISSUE_KEY as TLS_WEAK_CIPHER_ISSUE_KEY,
+    MAX_ATTEMPTS_PER_ENDPOINT as MAX_TLS_CIPHER_ATTEMPTS_PER_ENDPOINT,
+    MAX_RESPONSE_BYTES as MAX_TLS_CIPHER_RESPONSE_BYTES,
+    METHOD_VERSION as TLS_WEAK_CIPHER_METHOD_VERSION,
+    POLICY_VERSION as TLS_WEAK_CIPHER_POLICY_VERSION,
+    PROBE_VERSION as TLS_WEAK_CIPHER_PROBE_VERSION,
+    build_prohibited_partitions,
+    build_strong_control,
+    evaluate_endpoint_observation as evaluate_tls_weak_cipher_endpoint,
+    parse_tls_response,
+)
 from app.services.ssh_negotiation import (
     MAX_SSH_ENDPOINTS,
     SSH_COLLECTOR_VERSION,
@@ -598,17 +614,21 @@ class TLSExecutor(BaseExecutor):
             handshake = _collect_tls_handshake_evidence(
                 target.connect_host, target.hostname, port, timeout,
             )
+            weak_cipher = _collect_ssc_tls_weak_cipher_evidence(
+                target.connect_host, target.hostname, port, timeout,
+            )
             result = {
                 "port": port,
                 **metadata,
                 "handshake_observation": handshake,
+                "weak_cipher_observation": weak_cipher,
                 # Backwards-compatible summaries; exact Wave 2 evidence is above.
                 "tls10_supported": handshake["protocols"]["TLSv1.0"].get("accepted"),
                 "tls11_supported": handshake["protocols"]["TLSv1.1"].get("accepted"),
             }
             result["evaluations"] = {
                 **metadata.get("evaluations", {}),
-                **_evaluate_tls_handshake(handshake),
+                **_evaluate_tls_handshake(handshake, weak_cipher),
             }
             results.append(result)
         selected = next((result for result in results if result.get("endpoint_available")), results[0])
@@ -622,6 +642,7 @@ class TLSExecutor(BaseExecutor):
             "evaluations": _aggregate_evaluations(results),
             "policy_version": WAVE1_POLICY_VERSION,
             "handshake_policy_version": WAVE2_TLS_POLICY_VERSION,
+            "weak_cipher_policy_version": TLS_WEAK_CIPHER_POLICY_VERSION,
         }
         if not selected.get("endpoint_available"):
             evidence["error"] = selected.get("certificate_error", "tls_connection_failed")
@@ -2075,6 +2096,11 @@ def _tls_attempt(
 
 
 def _weak_cipher_catalog() -> tuple[list[dict[str, Any]], str]:
+    """Legacy internal-policy catalog retained for historical v1 evidence only.
+
+    Normal scan execution no longer calls this provider-derived helper for the
+    SSC tls_weak_cipher rule.
+    """
     context = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
     context.set_ciphers("ALL:@SECLEVEL=0")
     catalog = []
@@ -2121,47 +2147,179 @@ def _collect_tls_handshake_evidence(host: str, server_name: str, port: int, time
         version: _tls_attempt(host, server_name, port, timeout, version_name=version)
         for version in _TLS_VERSION_NAMES
     }
-    catalog, catalog_hash = _weak_cipher_catalog()
-    offered_names = [cipher["name"] for cipher in catalog]
-    cipher_attempts = []
-    for version in ("TLSv1.0", "TLSv1.1", "TLSv1.2"):
-        protocol_result = protocols[version]
-        if protocol_result.get("accepted") is False:
-            attempt = {
-                "offered_version": version, "offered_ciphers": offered_names,
-                "outcome": "PROTOCOL_REJECTED", "accepted": False,
-                "negotiated_version": None, "negotiated_cipher": None,
-                "error_class": protocol_result.get("error_class"),
-                "error_reason": protocol_result.get("error_reason"),
-            }
-        elif not offered_names:
-            attempt = {
-                "offered_version": version, "offered_ciphers": [],
-                "outcome": "NO_PROHIBITED_CLIENT_SUITES", "accepted": False,
-                "negotiated_version": None, "negotiated_cipher": None,
-                "error_class": None, "error_reason": None,
-            }
-        else:
-            attempted = _tls_attempt(
-                host, server_name, port, timeout,
-                version_name=version, cipher_name=":".join(offered_names),
-            )
-            attempt = {**attempted, "offered_ciphers": offered_names}
-            attempt.pop("offered_cipher", None)
-        cipher_attempts.append(attempt)
     return {
         "policy_version": WAVE2_TLS_POLICY_VERSION,
         "protocols": protocols,
-        "weak_cipher_catalog_hash": catalog_hash,
-        "weak_cipher_catalog_complete": False,
-        "weak_cipher_coverage_limitation": "runtime OpenSSL provider does not expose every prohibited legacy suite family",
-        "weak_cipher_catalog": catalog,
-        "weak_cipher_attempts": cipher_attempts,
         "client": {"openssl": ssl.OPENSSL_VERSION, "python_ssl": getattr(ssl, "OPENSSL_VERSION_INFO", None)},
     }
 
 
-def _evaluate_tls_handshake(observation: dict[str, Any]) -> dict[str, dict[str, Any]]:
+def _collect_ssc_tls_weak_cipher_evidence(
+    host: str,
+    server_name: str,
+    port: int,
+    timeout: float,
+) -> dict[str, Any]:
+    started = time.monotonic()
+    deadline = started + TLS_CIPHER_ENDPOINT_DEADLINE_SECONDS
+    partitions = build_prohibited_partitions(server_name)
+    attempts: list[dict[str, Any]] = []
+    for partition in partitions:
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            attempts.append(_tls_cipher_unavailable_attempt(partition, "endpoint_deadline_exceeded"))
+            continue
+        attempt = _raw_tls_cipher_attempt(
+            host, port, partition,
+            min(timeout, TLS_CIPHER_ATTEMPT_TIMEOUT_SECONDS, remaining),
+        )
+        attempts.append(attempt)
+        if attempt.get("matched") is True:
+            break
+
+    control = None
+    if len(attempts) == len(partitions) and all(item.get("definitive_rejection") is True for item in attempts):
+        remaining = deadline - time.monotonic()
+        control_partition = build_strong_control(server_name)
+        if remaining > 0:
+            control = _raw_tls_cipher_attempt(
+                host, port, control_partition,
+                min(timeout, TLS_CIPHER_ATTEMPT_TIMEOUT_SECONDS, remaining),
+            )
+        else:
+            control = _tls_cipher_unavailable_attempt(control_partition, "endpoint_deadline_exceeded")
+
+    attempt_count = len(attempts) + (1 if control else 0)
+    if attempt_count > MAX_TLS_CIPHER_ATTEMPTS_PER_ENDPOINT:
+        raise ScanExecutorError("TLS weak-cipher attempt bound exceeded")
+
+    observation: dict[str, Any] = {
+        "issue_key": TLS_WEAK_CIPHER_ISSUE_KEY,
+        "port": port,
+        "protocol": "TLS",
+        "probe_version": TLS_WEAK_CIPHER_PROBE_VERSION,
+        "method_version": TLS_WEAK_CIPHER_METHOD_VERSION,
+        "policy_version": TLS_WEAK_CIPHER_POLICY_VERSION,
+        "catalog_version": TLS_WEAK_CIPHER_CATALOG_VERSION,
+        "catalog_hash": TLS_WEAK_CIPHER_CATALOG_SHA256,
+        "catalog_complete": True,
+        "partition_count": len(partitions),
+        "attempts": attempts,
+        "control": control,
+        "control_result": control.get("outcome") if isinstance(control, dict) else None,
+        "attempt_count": attempt_count,
+        "elapsed_ms": int((time.monotonic() - started) * 1000),
+    }
+    observation["matched"] = evaluate_tls_weak_cipher_endpoint(observation)
+    observation["outcome"] = (
+        "MATCH" if observation["matched"] is True
+        else "NO_MATCH" if observation["matched"] is False
+        else "INDETERMINATE"
+    )
+    return observation
+
+
+def _raw_tls_cipher_attempt(host: str, port: int, partition: Any, timeout: float) -> dict[str, Any]:
+    started = time.monotonic()
+    deadline = started + timeout
+    response = bytearray()
+    parsed = None
+    error_class = None
+    try:
+        with socket.create_connection((host, port), timeout=timeout) as sock:
+            sock.settimeout(max(0.001, deadline - time.monotonic()))
+            sock.sendall(partition.request_bytes)
+            while True:
+                parsed = parse_tls_response(bytes(response), partition)
+                if parsed.terminal:
+                    break
+                remaining = MAX_TLS_CIPHER_RESPONSE_BYTES - len(response)
+                if remaining <= 0:
+                    parsed = parse_tls_response(
+                        bytes(response), partition, response_limit_exceeded=True,
+                    )
+                    break
+                remaining_time = deadline - time.monotonic()
+                if remaining_time <= 0:
+                    raise TimeoutError
+                sock.settimeout(remaining_time)
+                chunk = sock.recv(min(remaining + 1, 4096))
+                if not chunk:
+                    parsed = parse_tls_response(bytes(response), partition, eof=True)
+                    break
+                response.extend(chunk)
+                if len(response) > MAX_TLS_CIPHER_RESPONSE_BYTES:
+                    parsed = parse_tls_response(
+                        bytes(response), partition, response_limit_exceeded=True,
+                    )
+                    break
+    except TimeoutError:
+        error_class = "timeout"
+    except ConnectionResetError:
+        error_class = "connection_reset"
+    except OSError:
+        error_class = "transport_error"
+
+    if parsed is None:
+        outcome, matched, reason = "INDETERMINATE", None, error_class or "transport_error"
+        selected_suite_id = selected_suite_class = alert_class = None
+        server_hello_valid = definitive_rejection = False
+    else:
+        outcome, matched, reason = parsed.outcome, parsed.matched, parsed.reason_code
+        selected_suite_id = parsed.selected_suite_id
+        selected_suite_class = parsed.selected_suite_class
+        alert_class = parsed.alert_class
+        server_hello_valid = parsed.server_hello_valid
+        definitive_rejection = parsed.definitive_rejection
+    return {
+        "partition_id": partition.partition_id,
+        "attempted_version": partition.tls_version,
+        "suite_class": partition.suite_class,
+        "offered_suite_count": len(partition.offered_suite_ids),
+        "selected_suite_id": selected_suite_id,
+        "selected_suite_class": selected_suite_class,
+        "server_hello_valid": server_hello_valid,
+        "alert_class": alert_class,
+        "definitive_rejection": definitive_rejection,
+        "bytes_sent": len(partition.request_bytes),
+        "bytes_received": min(len(response), MAX_TLS_CIPHER_RESPONSE_BYTES),
+        "response_sha256": hashlib.sha256(bytes(response[:MAX_TLS_CIPHER_RESPONSE_BYTES])).hexdigest(),
+        "completion_reason": reason,
+        "stop_reason": reason,
+        "error_class": error_class,
+        "outcome": outcome,
+        "matched": matched,
+        "elapsed_ms": int((time.monotonic() - started) * 1000),
+    }
+
+
+def _tls_cipher_unavailable_attempt(partition: Any, reason: str) -> dict[str, Any]:
+    return {
+        "partition_id": partition.partition_id,
+        "attempted_version": partition.tls_version,
+        "suite_class": partition.suite_class,
+        "offered_suite_count": len(partition.offered_suite_ids),
+        "selected_suite_id": None,
+        "selected_suite_class": None,
+        "server_hello_valid": False,
+        "alert_class": None,
+        "definitive_rejection": False,
+        "bytes_sent": 0,
+        "bytes_received": 0,
+        "response_sha256": hashlib.sha256(b"").hexdigest(),
+        "completion_reason": reason,
+        "stop_reason": reason,
+        "error_class": reason,
+        "outcome": "INDETERMINATE",
+        "matched": None,
+        "elapsed_ms": 0,
+    }
+
+
+def _evaluate_tls_handshake(
+    observation: dict[str, Any],
+    weak_cipher_observation: dict[str, Any] | None = None,
+) -> dict[str, dict[str, Any]]:
     protocols = observation.get("protocols") if isinstance(observation.get("protocols"), dict) else {}
     weak = [protocols.get("TLSv1.0", {}).get("accepted"), protocols.get("TLSv1.1", {}).get("accepted")]
     modern = [protocols.get("TLSv1.2", {}).get("accepted"), protocols.get("TLSv1.3", {}).get("accepted")]
@@ -2172,17 +2330,10 @@ def _evaluate_tls_handshake(observation: dict[str, Any]) -> dict[str, dict[str, 
     else:
         weak_protocol = None
 
-    attempts = observation.get("weak_cipher_attempts")
-    if isinstance(attempts, list) and any(item.get("accepted") is True for item in attempts):
-        weak_cipher = True
-    elif not isinstance(attempts, list) or not observation.get("weak_cipher_catalog_complete"):
-        weak_cipher = None
-    elif attempts and all(item.get("accepted") is False for item in attempts) and any(value is True for value in modern):
-        weak_cipher = False
-    elif not attempts and any(value is True for value in modern):
-        weak_cipher = False
-    else:
-        weak_cipher = None
+    weak_cipher = (
+        evaluate_tls_weak_cipher_endpoint(weak_cipher_observation)
+        if isinstance(weak_cipher_observation, dict) else None
+    )
     return {
         "tls_weak_protocol": _evaluation(
             weak_protocol, "evaluated completed version-pinned handshakes against the Wave 2 prohibited protocol set",
@@ -2190,9 +2341,9 @@ def _evaluate_tls_handshake(observation: dict[str, Any]) -> dict[str, dict[str, 
             policy_version=WAVE2_TLS_POLICY_VERSION,
         ),
         "tls_weak_cipher": _evaluation(
-            weak_cipher, "offered the complete local policy-prohibited suite set in constrained version-pinned handshakes and required actual server acceptance",
-            {"attempts": attempts, "catalog_hash": observation.get("weak_cipher_catalog_hash"), "policy_version": WAVE2_TLS_POLICY_VERSION},
-            policy_version=WAVE2_TLS_POLICY_VERSION,
+            weak_cipher, "evaluated bounded prohibited-only raw ClientHello partitions against the frozen SSC weak-cipher catalog",
+            weak_cipher_observation or {},
+            policy_version=TLS_WEAK_CIPHER_POLICY_VERSION,
         ),
     }
 

@@ -144,11 +144,11 @@ Cipher and MAC matches require exact names in the pinned `ssc-wave4a-ssh-crypto-
 
 The direct rows are key size, expiry, revocation-control extension presence, self-signature, and weak signature. Jurisdiction, issuance-date CA/B policy, live revocation status, and GoDaddy CA identity require versioned enrichment.
 
-### `TLS_HANDSHAKE` (3)
+### `TLS_HANDSHAKE` / `TLS_CIPHER_NEGOTIATION` (3)
 
 `tls_ocsp_stapling`, `tls_weak_cipher`, `tls_weak_protocol`
 
-`tls_weak_protocol` is supported by completed version-pinned handshakes for TLS 1.0/1.1 and modern controls for TLS 1.2/1.3. `tls_weak_cipher` remains partial: accepted suites are positively observable, but the packaged client cannot offer every prohibited legacy family, so a negative is not yet conclusive. `tls_ocsp_stapling` remains partial because the current TLS socket API does not expose staple bytes for cryptographic validation.
+`tls_weak_protocol` is supported by completed version-pinned handshakes for TLS 1.0/1.1 and modern controls for TLS 1.2/1.3. `tls_weak_cipher` is supported by `tls-raw-clienthello.v1`: three prohibited-only TLS 1.0/1.1/1.2 partitions use the immutable 90-entry `ssc-tls-weak-cipher-catalog.2026-08-11.v1`, independent of OpenSSL providers. A valid correlated ServerHello selection is MATCH; NO_MATCH requires conclusive rejection of every partition plus a successful strong control; timeout, reset, malformed/truncated evidence, ambiguous alerts, missing coverage, or failed control remain INDETERMINATE. `tls_ocsp_stapling` remains partial because the current TLS socket API does not expose staple bytes for cryptographic validation.
 
 ### `WEBSOCKET_RUNTIME` (3)
 
@@ -167,7 +167,11 @@ The recommended order values defensibility and security usefulness over raw row 
 5. **`SERVICE_PROTOCOL_IDENTIFICATION` — Wave 3A and Wave 5A batches complete.** The common safe adapter framework has six original adapters plus four staged plaintext text-service mappings. Later protocol-definitive adapters must ship only in separately approved small batches and earn support independently.
 6. **`HTTP_CONTENT` — Wave 3B direct batch complete.** Six content issues plus declared-path SOAP/WSDL identification now have exact active evaluators. Missing, blocked, truncated, unsupported, malformed, out-of-scope, or budget-incomplete evidence remains indeterminate.
 
-Wave 2 also completes `tls_weak_protocol` under `TLS_HANDSHAKE`; cipher and OCSP-stapling boundaries remain partial. Waves 3A and 5A do not claim the full `SERVICE_PROTOCOL_IDENTIFICATION` ceiling. Any next batch requires separate approval.
+Wave 2 completes `tls_weak_protocol` under `TLS_HANDSHAKE` and closes
+`tls_weak_cipher` with the additive provider-independent v2 method above;
+only the OCSP-stapling boundary remains partial in this TLS group. Waves 3A
+and 5A do not claim the full `SERVICE_PROTOCOL_IDENTIFICATION` ceiling. Any
+next batch requires separate approval.
 
 ## Safety and confidence rules
 

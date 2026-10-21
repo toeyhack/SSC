@@ -4,6 +4,20 @@ Baseline content hash: `0fe2bc8ffb7e3f734d4e88f70b11cffa6e8e9e47e722dc62107f6ff0
 Review date: 2026-09-20  
 Scope: analysis/design only; no scanner, rule, score, or Golden Baseline change.
 
+## TLS weak-cipher implementation supersession (2026-10-21)
+
+The historical Wave 2 limitation and original quality-gate rows below are
+superseded for `tls_weak_cipher`. The active v2 implementation compiles the
+reviewed SSC boundary into a static 90-entry IANA-ID catalog with digest
+`a4cdf405202a6492600e3c8794874b7e37f8cc64e40d9929374d8ef18991570a`.
+Three provider-independent prohibited-only raw ClientHello partitions cover TLS
+1.0, 1.1, and 1.2. MATCH requires actual valid ServerHello selection;
+NO_MATCH requires complete deterministic rejection plus a successful strong
+control; all incomplete or ambiguous evidence is INDETERMINATE. The capability
+is now `SUPPORTED` / `CLOSED`; current coverage is **43/53 VERIFIED_DIRECT**,
+**47/160 V1**, and **47/202 full baseline**, with implementation ceiling
+**46/53**, **50/160**, and **50/202**. No scoring or calibration change follows.
+
 ## Wave 5F semantic supersession (2026-10-21)
 
 The original quality-gate row for `upnp_accessible` below is preserved as a

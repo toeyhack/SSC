@@ -24,22 +24,22 @@ The [row-level CSV](SSC_DIRECT_63_AUDIT.csv) is the audit ledger. Each row inclu
 | `NAME_VARIANT` mappings | 0 |
 | `AMBIGUOUS` mappings | 0 |
 | `NOT_FOUND` mappings | 0 |
-| Current `SUPPORTED` | 42 |
-| Current `PARTIAL` | 20 |
+| Current `SUPPORTED` | 43 |
+| Current `PARTIAL` | 19 |
 | Current `NOT_SUPPORTED` | 1 |
-| Direct backlog: verified and not supported | 11 |
+| Direct backlog: verified and not supported | 10 |
 
-The 63 include **42 of the platform’s 46 closed supported capabilities**. The other four supported issues are `spf_record_softfail`, `dmarc_record_missing`, `dmarc_contains_none`, and `subdomain_dmarc_contains_none`; they are in the 202 issue catalog but outside this dashboard list. The internal `mail_server_unusual_port` detector remains in the implementation inventory, but its SSC capability is `PARTIAL` because SSC's exact unusual-port boundary is undisclosed. Current SSC-aligned support is **42/53**. Elasticsearch, PPTP, and Oracle remain implemented pending real interoperability, so the SSC-aligned implementation ceiling is **45/53**. `upnp_accessible` remains one of the 53 reviewed direct candidates, but that inventory membership does not imply SSC-aligned support or implementation-ceiling credit.
+The 63 include **43 of the platform’s 47 closed supported capabilities**. The other four supported issues are `spf_record_softfail`, `dmarc_record_missing`, `dmarc_contains_none`, and `subdomain_dmarc_contains_none`; they are in the 202 issue catalog but outside this dashboard list. The internal `mail_server_unusual_port` detector remains in the implementation inventory, but its SSC capability is `PARTIAL` because SSC's exact unusual-port boundary is undisclosed. Current SSC-aligned support is **43/53**. Elasticsearch, PPTP, and Oracle remain implemented pending real interoperability, so the SSC-aligned implementation ceiling is **46/53**. `upnp_accessible` remains one of the 53 reviewed direct candidates, but that inventory membership does not imply SSC-aligned support or implementation-ceiling credit.
 
 ## By SSC factor
 
 | Factor | Reviewed | Verified direct | Move to enrichment | Unresolved | Supported | Partial | Not supported |
 |---|---:|---:|---:|---:|---:|---:|---:|
 | `application_security` | 22 | 16 | 6 | 0 | 16 | 5 | 1 |
-| `network_security` | 37 | 33 | 4 | 0 | 23 | 14 | 0 |
+| `network_security` | 37 | 33 | 4 | 0 | 24 | 13 | 0 |
 | `dns_health` | 3 | 3 | 0 | 0 | 3 | 0 | 0 |
 | `ip_reputation` | 1 | 1 | 0 | 0 | 0 | 1 | 0 |
-| **Total** | **63** | **53** | **10** | **0** | **42** | **20** | **1** |
+| **Total** | **63** | **53** | **10** | **0** | **43** | **19** | **1** |
 
 ## By proposed scanner primitive
 
@@ -55,7 +55,8 @@ The primary implementation backlog groups direct rows by reusable primitive. Com
 | `SSH_NEGOTIATION` | 3 | 3 | 0 | 3 | 0 |
 | `DNS` | 3 | 3 | 0 | 3 | 0 |
 | `HTTP_HEADERS+AUTH_FLOW` | 2 | 0 | 2 | 0 | 0 |
-| `TLS_NEGOTIATION` | 2 | 2 | 0 | 1 | 1 |
+| `TLS_NEGOTIATION` | 1 | 1 | 0 | 1 | 0 |
+| `TLS_CIPHER_NEGOTIATION` | 1 | 1 | 0 | 1 | 0 |
 | `DNS_SERVICE_PROTOCOL_IDENTIFICATION` | 1 | 1 | 0 | 1 | 0 |
 | `BROWSER_RUNTIME+PRODUCT_FINGERPRINT` | 1 | 0 | 1 | 0 | 0 |
 | `HTTP_REDIRECT+EXTERNAL_EVIDENCE` | 1 | 0 | 1 | 0 | 0 |
@@ -65,18 +66,17 @@ The primary implementation backlog groups direct rows by reusable primitive. Com
 | `PROXY_VALIDATION` | 1 | 0 | 1 | 0 | 0 |
 | `SERVICE_PROTOCOL+PRODUCT_FINGERPRINT` | 1 | 0 | 1 | 0 | 0 |
 | `TLS_CERTIFICATE+POLICY` | 1 | 0 | 1 | 0 | 0 |
-| **Total** | **63** | **53** | **10** | **42** | **11** |
+| **Total** | **63** | **53** | **10** | **43** | **10** |
 
 ## Prioritized direct implementation backlog
 
-Only the 11 `VERIFIED_DIRECT` rows still lacking `SUPPORTED` status appear below. Priority favors shared collectors and parsers that unlock several exact catalog issues. Each later implementation batch still needs exact-version rule linkage, positive and negative tests, false-positive/unknown-boundary tests, and any required real interoperability before its coverage can become `SUPPORTED`. The order is a planning recommendation, not implementation authorization. For `upnp_accessible`, the direct-audit classification records that a bounded protocol-identity primitive is independently designable; it does not override the current SSC semantic classification `NOT_REPRODUCIBLE_FROM_AUTHORITATIVE_SEMANTICS`.
+Only the 10 `VERIFIED_DIRECT` rows still lacking `SUPPORTED` status appear below. Priority favors shared collectors and parsers that unlock several exact catalog issues. Each later implementation batch still needs exact-version rule linkage, positive and negative tests, and false-positive/unknown-boundary tests before its coverage can become `SUPPORTED`. The order is a planning recommendation, not implementation authorization. For `upnp_accessible`, the direct-audit classification records that a bounded protocol-identity primitive is independently designable; it does not override the current SSC semantic classification `NOT_REPRODUCIBLE_FROM_AUTHORITATIVE_SEMANTICS`.
 
 | Priority | Primitive | Count | Exact SSC keys and batch scope |
 |---:|---|---:|---|
 | 1 | `SERVICE_PROTOCOL` | 10 | Extend the bounded adapter framework only in separately reviewed protocol-specific groups. Wave 5B.1 closed LDAP; Wave 5C closed Minecraft and RDP; Wave 5D closed CouchDB; and Wave 5E closed DNS. Elasticsearch, Oracle Net, and PPTP are implemented pending real interoperability; SMTP unusual-port remains implemented under an internal proxy but is not SSC-aligned because the exact boundary is undisclosed. UPnP remains unimplemented and cannot receive an SSC_REFERENCE detector until its exact predicate is disclosed.<br>`mail_server_unusual_port`, `service_cassandra`, `service_elasticsearch`, `service_microsoft_sql`, `service_mongodb`, `service_mysql`, `service_oracle_db`, `service_pptp`, `service_postgresql`, `upnp_accessible` |
-| 2 | `TLS_NEGOTIATION` | 1 | Use a client capable of offering every prohibited suite in the pinned policy and retain successful modern controls before making a negative claim.<br>`tls_weak_cipher` |
 
-Wave 4A completed SSH; Wave 5A closes FTP, IMAP, and POP3. Its unusual-port SMTP detector remains implemented under `smtp-standard-ports.v1`, but the SSC capability is `PARTIAL / INTERNAL_POLICY_ONLY`. Wave 5B.1 closes LDAP while Oracle remains pending. Wave 5C closes Minecraft through protocol identity and RDP through the composed public-exposure predicate. Wave 5D closes CouchDB while Elasticsearch remains pending, and Wave 5E closes DNS. PPTP remains pending solely for real interoperability. UPnP differs: its protocol identity is designable, but its exact SSC predicate is undisclosed, so it has no SSC MATCH or NO_MATCH rule, no exposure consumer, and no implementation-ceiling credit. Algorithm or protocol evidence does not prove exploitation, authentication weakness, product version, or Internet exposure unless the reviewed rule independently composes the required exposure context.
+Wave 2 policy v2 closes `tls_weak_cipher` using a frozen provider-independent numeric catalog and actual ServerHello selection. Wave 4A completed SSH; Wave 5A closes FTP, IMAP, and POP3. Its unusual-port SMTP detector remains implemented under `smtp-standard-ports.v1`, but the SSC capability is `PARTIAL / INTERNAL_POLICY_ONLY`. Wave 5B.1 closes LDAP while Oracle remains pending. Wave 5C closes Minecraft through protocol identity and RDP through the composed public-exposure predicate. Wave 5D closes CouchDB while Elasticsearch remains pending, and Wave 5E closes DNS. PPTP remains pending solely for real interoperability. UPnP differs: its protocol identity is designable, but its exact SSC predicate is undisclosed, so it has no SSC MATCH or NO_MATCH rule, no exposure consumer, and no implementation-ceiling credit. Algorithm or protocol evidence does not prove exploitation, authentication weakness, product version, or Internet exposure unless the reviewed rule independently composes the required exposure context.
 
 ## Candidates that do not survive DIRECT review
 
@@ -99,7 +99,7 @@ Nine of these ten already carry `TESTABLE_WITH_ENRICHMENT` in the current covera
 
 - All 63 titles match exactly one captured catalog title. There are no ambiguous or missing keys. `SPF Record Found Ineffective` is exactly `spf_record_wildcard` in this catalog; it is specifically about wildcard-synthesized SPF, not every weak SPF policy.
 - `Server error detected` is `SUPPORTED`: the executor makes exactly two bounded safe GET attempts for each explicitly declared URL; one 5xx or an incomplete pair is `INDETERMINATE`.
-- `TLS Service Supports Weak Cipher Suite` is `PARTIAL`: current constrained handshakes can prove some positive acceptance, but the client cannot offer every prohibited suite needed for a conclusive negative.
+- `TLS Service Supports Weak Cipher Suite` is `SUPPORTED`: three bounded provider-independent prohibited-only ClientHello partitions cover the frozen 90-suite SSC catalog; MATCH requires a valid ServerHello selection, while complete rejection plus a valid strong control is required for NO_MATCH and every ambiguity remains INDETERMINATE.
 - `Malformed SPF Record` is `SUPPORTED` by Wave 4B's bounded permanent-error analyzer. Runtime-context-dependent or mixed paths remain `INDETERMINATE`; this is not sender-authorization scoring.
 - `SOAP Server Accessible` is supported only for explicitly declared authorized HTTP endpoints. Unknown paths cannot produce a host-wide `NO_MATCH`.
 - The active Wave 3A adapters cover six service labels in this set. Other service rows require separately established exact semantics as well as any protocol-specific validation; a port number or arbitrary banner is never sufficient.

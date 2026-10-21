@@ -298,12 +298,12 @@ def test_versioned_v1_profile_resolves_exact_baseline_scope_and_capabilities(db)
     supported_by_factor = {
         "application_security": supported[:10] + sorted(set(WAVE3B_BY_KEY) - {"service_soap"}),
         "network_security": (
-            supported[10:15] + sorted(WAVE3A_BY_KEY) + ["service_soap"] + sorted(WAVE4A_BY_KEY)
+            supported[10:16] + sorted(WAVE3A_BY_KEY) + ["service_soap"] + sorted(WAVE4A_BY_KEY)
             + sorted(set(WAVE5A_BY_KEY) - {"mail_server_unusual_port"})
             + sorted(WAVE5B_BY_KEY) + sorted(WAVE5C_BY_KEY) + sorted(WAVE5D_BY_KEY)
             + sorted(WAVE5E_BY_KEY)
         ),
-        "dns_health": supported[15:21] + sorted(WAVE4B_BY_KEY),
+        "dns_health": supported[16:22] + sorted(WAVE4B_BY_KEY),
         "patching_cadence": [],
     }
     rows = []
@@ -369,8 +369,8 @@ def test_versioned_v1_profile_resolves_exact_baseline_scope_and_capabilities(db)
     out_of_scope = [item for item in profile.issues if item.factor_code not in profile.definition.in_scope_factor_codes]
     assert len(in_scope) == 160
     assert len(out_of_scope) == 42
-    assert sum(item.supported_capability for item in in_scope) == 46
-    assert sum(item.supported_capability for item in profile.issues) == 46
+    assert sum(item.supported_capability for item in in_scope) == 47
+    assert sum(item.supported_capability for item in profile.issues) == 47
     assert next(item for item in in_scope if item.stable_key == "service_ldap").supported_capability is True
     assert next(item for item in in_scope if item.stable_key == "service_oracle_db").supported_capability is False
     assert set(WAVE5C_ACTIVE_BY_KEY) == {"minecraft_server", "service_rdp"}
@@ -394,7 +394,7 @@ def test_versioned_v1_profile_resolves_exact_baseline_scope_and_capabilities(db)
         for code in profile.definition.in_scope_factor_codes
     } == {
         "application_security": 16,
-        "network_security": 23,
+        "network_security": 24,
         "dns_health": 7,
         "patching_cadence": 0,
     }

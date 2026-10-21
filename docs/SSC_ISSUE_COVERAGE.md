@@ -2,7 +2,7 @@
 
 Snapshot content hash: `0fe2bc8ffb7e3f734d4e88f70b11cffa6e8e9e47e722dc62107f6ff09694eca8`
 Source: immutable real `SSC_API` Golden Baseline
-Implementation state: Waves 1-2, Wave 3A, Wave 3B, Wave 4A, Wave 4B, Wave 5A FTP/IMAP/POP3, Wave 5B.1 LDAP, Wave 5C Minecraft/RDP, Wave 5D Apache CouchDB, and Wave 5E DNS are active. Wave 5F classifies UPnP as NOT_REPRODUCIBLE from authoritative SSC semantics; its protocol-identity primitive is designable but not implemented. SMTP unusual-port remains INTERNAL_POLICY_ONLY. Elasticsearch, PPTP, and Oracle remain implemented/inactive pending real interoperability.
+Implementation state: Waves 1-2, Wave 3A, Wave 3B, Wave 4A, Wave 4B, Wave 5A FTP/IMAP/POP3, Wave 5B.1 LDAP, Wave 5C Minecraft/RDP, Wave 5D Apache CouchDB, and Wave 5E DNS are active. Wave 2 now includes provider-independent tls_weak_cipher policy v2. Wave 5F classifies UPnP as NOT_REPRODUCIBLE from authoritative SSC semantics; its protocol-identity primitive is designable but not implemented. SMTP unusual-port remains INTERNAL_POLICY_ONLY. Elasticsearch, PPTP, and Oracle remain implemented/inactive pending real interoperability.
 Total mapped issues: **202**
 
 > This is an independent implementation mapped to SSC taxonomy. It does not reproduce or claim knowledge of SSC collection, aggregation, severity, scoring, or proprietary detection logic. `ssc_severity` remains source metadata and is not mapped to internal risk or score impact.
@@ -13,10 +13,10 @@ Total mapped issues: **202**
 
 ## Coverage summary
 
-| Coverage | Before Wave 5E closure | After Wave 5E closure | Percentage after |
+| Coverage | Before tls_weak_cipher closure | After closure | Percentage after |
 |---|---:|---:|---:|
-| `SUPPORTED` | 45 | 46 | 22.8% |
-| `PARTIAL` | 82 | 81 | 40.1% |
+| `SUPPORTED` | 46 | 47 | 23.3% |
+| `PARTIAL` | 81 | 80 | 39.6% |
 | `NOT_SUPPORTED` | 75 | 75 | 37.1% |
 | **Total** | **202** | **202** | **100.0%** |
 
@@ -40,7 +40,7 @@ Total mapped issues: **202**
 | `hacker_chatter` | 2 | 0 | 0 | 2 | 0 | 0 | 0 | 2 |
 | `ip_reputation` | 26 | 1 | 1 | 24 | 0 | 0 | 2 | 24 |
 | `leaked_information` | 8 | 0 | 0 | 8 | 0 | 0 | 0 | 8 |
-| `network_security` | 68 | 41 | 20 | 5 | 2 | 23 | 38 | 7 |
+| `network_security` | 68 | 41 | 20 | 5 | 2 | 24 | 37 | 7 |
 | `patching_cadence` | 21 | 0 | 21 | 0 | 0 | 0 | 8 | 13 |
 | `social_engineering` | 1 | 0 | 0 | 1 | 0 | 0 | 0 | 1 |
 
@@ -80,11 +80,12 @@ Every listed rule uses stable key `ssc.wave1.<issue-key>`, method schema `ssc-wa
 
 ## Active Wave 2 evaluator mappings
 
-Every listed rule uses stable key `ssc.wave2.<issue-key>`, method schema `ssc-wave2-observation.v1`, source type `SSC_REFERENCE`, and a rule-version foreign key to the exact current issue definition from an attested real `SSC_API` snapshot. TLS and email policy versions are retained independently in the rule evidence schema.
+Every listed rule uses stable key `ssc.wave2.<issue-key>`, source type `SSC_REFERENCE`, and a rule-version foreign key to the exact current issue definition from an attested real `SSC_API` snapshot. Existing rules retain method schema `ssc-wave2-observation.v1`; `tls_weak_cipher` uses additive method `ssc-wave2-tls-weak-cipher-observation.v2` and policy `ssc-wave2-tls-weak-cipher-policy.v2` without reinterpreting historical evidence.
 
 | SSC issue key | Primitive | Exact positive condition | Authoritative reference |
 |---|---|---|---|
 | `tls_weak_protocol` | `TLS_HANDSHAKE` | MATCH only when TLS 1.0 or TLS 1.1 completes negotiation; NO_MATCH requires definitive rejection of both weak versions and a successful TLS 1.2 or TLS 1.3 control; otherwise INDETERMINATE. | https://www.rfc-editor.org/rfc/rfc8996.html; https://www.rfc-editor.org/rfc/rfc9325.html; https://csrc.nist.gov/pubs/sp/800/52/r2/final |
+| `tls_weak_cipher` | `TLS_CIPHER_NEGOTIATION` | MATCH when a valid ServerHello selects an offered frozen-catalog suite; NO_MATCH requires complete catalog coverage, conclusive rejection of all three partitions, and a successful comparable strong control; otherwise INDETERMINATE. | https://support.securityscorecard.com/hc/en-us/articles/115003260246-TLS-Service-Supports-Weak-Cipher-Suite; https://www.iana.org/assignments/tls-parameters/; https://www.rfc-editor.org/rfc/rfc5246.html |
 | `spf_record_missing` | `EMAIL_SECURITY` | MATCH when a definitive response contains no record beginning v=spf1; resolver timeout, SERVFAIL or other acquisition error is INDETERMINATE. | https://www.rfc-editor.org/rfc/rfc7208.html |
 | `spf_record_softfail` | `EMAIL_SECURITY` | MATCH when the terminal mechanism is ~all and DMARC is definitively absent or valid with effective p=none; malformed or unavailable SPF/DMARC evidence is INDETERMINATE. | https://www.rfc-editor.org/rfc/rfc7208.html; https://www.rfc-editor.org/rfc/rfc9989.html |
 | `spf_record_wildcard` | `EMAIL_SECURITY` | MATCH only when both nonce names return equivalent SPF policies, proving wildcard synthesis; two definitive negative answers are NO_MATCH and mixed/error evidence is INDETERMINATE. | https://www.rfc-editor.org/rfc/rfc7208.html; https://www.rfc-editor.org/rfc/rfc4592.html |
@@ -97,7 +98,6 @@ Every listed rule uses stable key `ssc.wave2.<issue-key>`, method schema `ssc-wa
 | SSC issue key | Reason |
 |---|---|
 | `tls_ocsp_stapling` | Python's current TLS socket interface does not expose the server's stapled OCSP bytes for cryptographic parsing and freshness/signature validation. |
-| `tls_weak_cipher` | The runtime can positively prove acceptance from constrained handshakes, but its OpenSSL provider cannot offer every prohibited legacy suite; a conclusive negative would be a weak proxy. |
 | `dkim_record_detected` | Selector discovery requires an approved selector inventory or authorized message sample; selectors are not safely enumerable from DNS. |
 | `dkim_weak_signature` | The platform has no authorized message/selector evidence from which to verify the signature algorithm and selected key. |
 | `dkim_insufficient_key_length` | The platform has no approved selector inventory or authorized message sample, so an exhaustive key-size observation cannot be made. |
@@ -389,7 +389,7 @@ The CSV remains normative for exact evidence requirements, proposed logic, depen
 | `ssh_weak_protocol` | SSH Software Supports Vulnerable Protocol | `network_security` | `medium` | `DIRECTLY_TESTABLE` | `SSH_NEGOTIATION` | `SUPPORTED` |
 | `telephony` | Telephony/VoIP Device Accessible | `network_security` | `info` | `DIRECTLY_TESTABLE` | `PROTOCOL_PROBE` | `PARTIAL` |
 | `tls_ocsp_stapling` | TLS Certificate Status Request ("OCSP Stapling") Detected | `network_security` | `info` | `DIRECTLY_TESTABLE` | `TLS` | `PARTIAL` |
-| `tls_weak_cipher` | TLS Service Supports Weak Cipher Suite | `network_security` | `medium` | `DIRECTLY_TESTABLE` | `TLS` | `PARTIAL` |
+| `tls_weak_cipher` | TLS Service Supports Weak Cipher Suite | `network_security` | `medium` | `DIRECTLY_TESTABLE` | `TLS_CIPHER_NEGOTIATION` | `SUPPORTED` |
 | `tls_weak_protocol` | SSL/TLS Service Supports Weak Protocol | `network_security` | `high` | `DIRECTLY_TESTABLE` | `TLS_HANDSHAKE` | `SUPPORTED` |
 | `tlscert_excessive_expiration` | Certificate Lifetime Is Longer Than Best Practices | `network_security` | `low` | `TESTABLE_WITH_ENRICHMENT` | `TLS_CERTIFICATE+POLICY_ENRICHMENT` | `PARTIAL` |
 | `tlscert_expired` | Certificate Is Expired | `network_security` | `low` | `DIRECTLY_TESTABLE` | `TLS_CERTIFICATE` | `SUPPORTED` |

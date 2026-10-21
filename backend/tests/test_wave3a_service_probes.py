@@ -320,5 +320,5 @@ def test_wave3a_exact_version_activation_and_end_to_end_finding(db, monkeypatch)
 
 def test_prior_wave_registries_remain_intact():
     assert len(WAVE1_RULES) == 14
-    assert len(WAVE2_RULES) == 7
+    assert len(WAVE2_RULES) == 8
     assert {spec.issue_key for spec in WAVE3A_RULES}.isdisjoint({spec.issue_key for spec in WAVE1_RULES + WAVE2_RULES})

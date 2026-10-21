@@ -638,6 +638,6 @@ def test_wave4a_exact_version_no_match_produces_no_finding(db):
 
 def test_wave4a_is_exactly_three_and_prior_wave_registries_remain_intact():
     assert {spec.issue_key for spec in WAVE4A_RULES} == {"ssh_weak_protocol", "ssh_weak_cipher", "ssh_weak_mac"}
-    assert len(WAVE1_RULES) == 14 and len(WAVE2_RULES) == 7 and len(WAVE3A_RULES) == 6 and len(WAVE3B_RULES) == 7
+    assert len(WAVE1_RULES) == 14 and len(WAVE2_RULES) == 8 and len(WAVE3A_RULES) == 6 and len(WAVE3B_RULES) == 7
     prior = {spec.issue_key for spec in WAVE1_RULES + WAVE2_RULES + WAVE3A_RULES + WAVE3B_RULES}
     assert prior.isdisjoint({spec.issue_key for spec in WAVE4A_RULES})
