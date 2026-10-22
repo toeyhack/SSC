@@ -8,11 +8,11 @@ This is a design and implementation-status catalog. A primitive supports a findi
 
 ## Current implementation boundary
 
-The platform has HTTP, TLS, DNS, and TCP collectors. Wave 1 added declared-path HTTP and certificate evidence. Wave 2 added version-pinned TLS negotiation and deterministic email-security evidence. Wave 3A added one bounded service-probe adapter framework and six non-authenticating protocol adapters. Wave 3B added bounded declared-path HTML/XML inspection. Wave 4A adds bounded pre-authentication SSH identification and KEXINIT parsing. Wave 4B adds bounded SPF permanent-error analysis. Wave 5A adds bounded staged plaintext FTP, IMAP, POP3, and SMTP identification; SMTP unusual-port evaluation remains implemented under an internal immutable proxy but is inactive/PARTIAL for SSC alignment because SSC's boundary is undisclosed. Wave 5B.1 closes LDAP and exposure-gated Oracle Net. Fifteen reviewed consumers compose protocol observations with public address scope and trusted external vantage: the original nine retain registry v1 contracts, RDP/PPTP enter through v2, CouchDB/Elasticsearch through v3, DNS through v4, and Oracle through additive v5. Wave 5C activates protocol-only Minecraft and exposure-gated PPTP/RDP. Wave 5D activates CouchDB and Elasticsearch, and Wave 5E activates DNS. Wave 5F adds no consumer. It still does not have a general crawler/browser, WebSocket capture, encrypted service-probe continuation, stapled OCSP, DKIM selector provenance, revocation client, general product fingerprint engine, CVE/lifecycle feeds, longitudinal patching, or a general UDP evidence source. Therefore:
+The platform has HTTP, TLS, DNS, and TCP collectors. Wave 1 added declared-path HTTP and certificate evidence and now includes the exact Golden X-XSS-Protection boundary. Wave 2 added version-pinned TLS negotiation and deterministic email-security evidence. Wave 3A added one bounded service-probe adapter framework and six non-authenticating protocol adapters; bounded batch 1 additionally places `open_port` in Wave 3A using declared zero-payload TCP connects. Wave 3B added bounded declared-path HTML/XML inspection and now includes `insecure_telnet`. Wave 4A adds bounded pre-authentication SSH identification and KEXINIT parsing. Wave 4B adds bounded SPF permanent-error analysis. Wave 5A adds bounded staged plaintext FTP, IMAP, POP3, and SMTP identification; SMTP unusual-port evaluation remains implemented under an internal immutable proxy but is inactive/PARTIAL for SSC alignment because SSC's boundary is undisclosed. Wave 5B.1 closes LDAP and exposure-gated Oracle Net. Sixteen reviewed consumers compose protocol observations with public address scope and trusted external vantage: the original nine retain registry v1 contracts, RDP/PPTP enter through v2, CouchDB/Elasticsearch through v3, DNS through v4, Oracle through additive v5, and open-port reachability through additive v6. Wave 5C activates protocol-only Minecraft and exposure-gated PPTP/RDP. Wave 5D activates CouchDB and Elasticsearch, and Wave 5E activates DNS. Wave 5F adds no consumer. It still does not have a general crawler/browser, WebSocket capture, encrypted service-probe continuation, stapled OCSP, DKIM selector provenance, revocation client, general product fingerprint engine, CVE/lifecycle feeds, longitudinal patching, or a general UDP evidence source. Therefore:
 
-- fully `SUPPORTED` today: **49**;
-- `PARTIAL` among the 155 primitive-addressable issues: **77**;
-- `NOT_SUPPORTED` among the 155: **29**;
+- fully `SUPPORTED` today: **53**;
+- `PARTIAL` among the 155 primitive-addressable issues: **74**;
+- `NOT_SUPPORTED` among the 155: **28**;
 - every supported issue has an active evaluator pinned to an exact attested `SSC_API` issue version; other primitives still require issue-specific evidence and evaluators.
 
 ## Primitive coverage summary
@@ -28,19 +28,19 @@ The platform has HTTP, TLS, DNS, and TCP collectors. Wave 1 added declared-path 
 | `DOMAIN_PUBLIC_DATA` | 1 | 0/1 | 0 | 1 | 0 | LOW | versioned browser HSTS preload dataset |
 | `EMAIL_SECURITY` | 10 | 7/3 | 7 | 3 | 0 | MEDIUM | bounded SPF permanent-error analysis is active; approved mail samples/selectors remain required for DKIM |
 | `EOL_EOS_CORRELATION` | 2 | 0/2 | 0 | 0 | 2 | HIGH | verified product/version and versioned vendor lifecycle records |
-| `HTTP_CONTENT` | 9 | 9/0 | 6 | 0 | 3 | MEDIUM | declared-path HTML parser, body-size limits, redaction; recursive discovery remains out of scope |
-| `HTTP_HEADERS` | 9 | 6/3 | 6 | 3 | 0 | MEDIUM | optional synthetic auth flow and versioned legacy-browser policy for the remaining rows |
+| `HTTP_CONTENT` | 9 | 9/0 | 7 | 0 | 2 | MEDIUM | declared-path HTML parser, body-size limits, redaction; recursive discovery remains out of scope |
+| `HTTP_HEADERS` | 9 | 7/2 | 7 | 2 | 0 | MEDIUM | optional synthetic authentication flow and cookie-purpose inventory for the remaining rows |
 | `HTTP_REDIRECT` | 4 | 3/1 | 3 | 1 | 0 | LOW | approved passive/authorized evidence for an external terminal destination |
 | `LONGITUDINAL_PATCHING` | 11 | 0/11 | 0 | 0 | 11 | HIGH | stable asset/product identity, CVE state history, observation windows, missing-data semantics |
 | `PRODUCT_FINGERPRINT` | 16 | 0/16 | 0 | 15 | 1 | HIGH | versioned multi-signal fingerprints, provenance, ambiguity/confidence model, inventory corroboration |
 | `PROXY_VALIDATION` | 2 | 2/0 | 1 | 1 | 0 | MEDIUM | SOCKS5 identification is supported without relaying traffic; HTTP proxy validation still needs an organization-owned canary and strict egress target |
 | `SERVICE_PROTOCOL_IDENTIFICATION` | 31 | 29/2 | 17 | 14 | 0 | MEDIUM–HIGH | active bounded adapters cover Wave 3A, Wave 5A, LDAP, Oracle, SOAP, Minecraft, PPTP, RDP, CouchDB, Elasticsearch, and DNS; UPnP is excluded because the exact SSC predicate is undisclosed |
 | `SSH_NEGOTIATION` | 3 | 3/0 | 3 | 0 | 0 | MEDIUM | bounded identification/KEXINIT parser, exact versioned cryptographic policy, no authentication |
-| `TCP_SERVICE_DISCOVERY` | 1 | 1/0 | 0 | 1 | 0 | LOW | approved port manifest and TCP connect evidence |
+| `TCP_CONNECT_REACHABILITY` | 1 | 1/0 | 1 | 0 | 0 | LOW | approved explicit port manifest, bounded connect taxonomy, and trusted public-exposure context |
 | `TLS_CERTIFICATE` | 9 | 5/4 | 5 | 4 | 0 | MEDIUM–HIGH | CA policy history, authoritative revocation, jurisdiction, and CA registry enrichment |
-| `TLS_HANDSHAKE` | 3 | 3/0 | 1 | 2 | 0 | MEDIUM | complete prohibited-suite client coverage and OCSP-staple capture/validation |
+| `TLS_HANDSHAKE` | 3 | 3/0 | 2 | 1 | 0 | MEDIUM | raw prohibited-suite coverage is active; OCSP-staple capture/validation remains |
 | `WEBSOCKET_RUNTIME` | 3 | 2/1 | 0 | 0 | 3 | HIGH | browser runtime, bounded frame metadata, synthetic markers, application data schema |
-| **Total** | **155** | **74/81** | **49** | **77** | **29** |  |  |
+| **Total** | **155** | **75/80** | **53** | **74** | **28** |  |  |
 
 ## Issue grouping
 
@@ -84,13 +84,13 @@ Six SPF/DMARC rows retain their exact active Wave 2 evaluators. Wave 4B separate
 
 `contact_information_detected`, `insecure_ftp`, `insecure_telnet`, `links_to_insecure_website`, `local_file_path_exposed_via_url_scheme`, `server_error`, `unsafe_sri_v2`, `website_copyright_expired`, `website_copyright_up_to_date`
 
-Wave 3B supports `unsafe_sri_v2`, `insecure_ftp`, `contact_information_detected`, `local_file_path_exposed_via_url_scheme`, `server_error`, and `links_to_insecure_website`. The collector inspects only declared paths; an omitted `http_paths` setting declares exactly `/`, while explicit user paths replace that default. It never crawls or discovers other paths, never follows non-HTTP destinations, persists only compact hash/redaction evidence, retries each declared endpoint exactly once for `server_error`, and issues at most 20 actual same-origin SRI resource GETs including redirect GETs without recursion. An SRI redirect that changes origin stops before the redirected GET. A content-rule `NO_MATCH` applies only to the declared paths evaluated in that scan and does not establish absence from every possible application path. The three unrelated content rows remain unsupported.
+Wave 3B supports `unsafe_sri_v2`, `insecure_ftp`, `insecure_telnet`, `contact_information_detected`, `local_file_path_exposed_via_url_scheme`, `server_error`, and `links_to_insecure_website`. The collector inspects only declared paths; an omitted `http_paths` setting declares exactly `/`, while explicit user paths replace that default. It never crawls or discovers other paths, never follows or resolves non-HTTP destinations, persists only compact hash/redaction evidence, retries each declared endpoint exactly once for `server_error`, and issues at most 20 actual same-origin SRI resource GETs including redirect GETs without recursion. An SRI redirect that changes origin stops before the redirected GET. A content-rule `NO_MATCH` applies only to the declared paths evaluated in that scan and does not establish absence from every possible application path. The two unrelated content rows remain unsupported.
 
 ### `HTTP_HEADERS` (9)
 
 `cookie_missing_http_only`, `cookie_missing_secure_attribute`, `csp_no_policy_v2`, `csp_too_broad_v2`, `csp_unsafe_policy_v2`, `hsts_incorrect_v2`, `x_content_type_options_incorrect_v2`, `x_frame_options_incorrect_v2`, `x_xss_protection_incorrect_v2`
 
-The three enrichment rows are the two session-cookie findings and `x_xss_protection_incorrect_v2`. Cookie purpose requires a reviewed cookie inventory/test flow. The legacy XSS header requires a versioned browser-estate policy because major modern browsers removed the feature.
+The two session-cookie findings require a reviewed cookie inventory/test flow. `x_xss_protection_incorrect_v2` is active from the exact Golden recommendation: exactly one normalized `1; mode=block` value is compliant, without inventing a browser-estate policy.
 
 ### `HTTP_REDIRECT` (4)
 

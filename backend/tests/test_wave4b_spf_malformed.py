@@ -313,10 +313,10 @@ def test_versions_registry_cli_and_calibrated_risk_contract():
     assert SPF_PARSER_VERSION == "ssc-wave4b-spf-parser.v1"
     assert SPF_POLICY_VERSION == "ssc-wave4b-spf-malformed-policy.v1"
     assert [spec.issue_key for spec in WAVE4B_RULES] == ["spf_record_malformed"]
-    assert len(WAVE1_RULES) == 14
+    assert len(WAVE1_RULES) == 15
     assert len(WAVE2_RULES) == 8
-    assert len(WAVE3A_RULES) == 6
-    assert len(WAVE3B_RULES) == 7
+    assert len(WAVE3A_RULES) == 7
+    assert len(WAVE3B_RULES) == 8
     assert len(WAVE4A_RULES) == 3
     args = build_parser().parse_args(["baseline", "activate-wave4b", "--yes"])
     assert args.baseline_command == "activate-wave4b" and args.yes is True

@@ -126,12 +126,13 @@ def test_all_http_content_evaluators_match_positive_conditions():
         <a href='mailto:security@example.test'>contact</a>
         <a href='file:///etc/example'>file</a>
         <a href='http://outside.example.test/'>http</a>
+        <a href='telnet://user:secret@telnet.example.test/private'>telnet</a>
     </body></html>"""
     first = _attempt(html, attempt_number=1)
     second = _attempt(html, attempt_number=2)
     evaluated = evaluate_http_content([first, second])
     for key in (
-        "unsafe_sri_v2", "insecure_ftp", "contact_information_detected",
+        "unsafe_sri_v2", "insecure_ftp", "insecure_telnet", "contact_information_detected",
         "local_file_path_exposed_via_url_scheme", "links_to_insecure_website",
     ):
         assert evaluated[key]["outcome"] == "MATCH"
@@ -141,6 +142,38 @@ def test_all_http_content_evaluators_match_positive_conditions():
     assert "security@example.test" not in serialized
     assert "files.example.test" not in serialized
     assert "outside.example.test" not in serialized
+    assert "telnet.example.test" not in serialized
+    assert "user:secret" not in serialized
+
+
+def test_telnet_scheme_exact_normalization_nonmatches_and_privacy(monkeypatch):
+    monkeypatch.setattr("socket.getaddrinfo", lambda *_args, **_kwargs: pytest.fail("telnet destination resolved"))
+    for scheme in ("telnet", "TELNET"):
+        body = f"<a href='{scheme}://user:secret@example.test/private?q=sensitive'>remote</a>".encode()
+        result = evaluate_http_content([_attempt(body, attempt_number=1), _attempt(body, attempt_number=2)])
+        evaluation = result["insecure_telnet"]
+        assert evaluation["outcome"] == "MATCH"
+        serialized = json.dumps(evaluation)
+        assert "user:secret" not in serialized and "sensitive" not in serialized and "example.test" not in serialized
+        assert evaluation["evidence"][0]["samples"][0]["scheme"] == "telnet"
+
+    ordinary = b"<p>telnet is text only</p><a href='http://example.test'>h</a><a href='https://example.test'>s</a><a href='ftp://example.test'>f</a><a href='file:///tmp/x'>l</a>"
+    evaluated = evaluate_http_content([_attempt(ordinary, attempt_number=1), _attempt(ordinary, attempt_number=2)])
+    assert evaluated["insecure_telnet"]["outcome"] == "NO_MATCH"
+    assert evaluated["insecure_ftp"]["outcome"] == "MATCH"
+    assert evaluated["local_file_path_exposed_via_url_scheme"]["outcome"] == "MATCH"
+    assert evaluated["links_to_insecure_website"]["outcome"] == "MATCH"
+
+
+def test_telnet_multiple_pages_and_incomplete_boundaries():
+    safe = _attempt(b"<a href='https://example.test'>safe</a>", attempt_number=1, request_path="/safe")
+    positive = _attempt(b"<a href='telnet://example.test'>remote</a>", attempt_number=1, request_path="/positive")
+    assert evaluate_http_content([safe, positive])["insecure_telnet"]["outcome"] == "MATCH"
+    truncated = _attempt(b"<a href='telnet://example.test'>", attempt_number=1, body_complete=False)
+    assert evaluate_http_content([truncated])["insecure_telnet"]["outcome"] == "INDETERMINATE"
+    assert evaluate_http_content([_unavailable_attempt(1)])["insecure_telnet"]["outcome"] == "INDETERMINATE"
+    malformed = _attempt(b"<a href='telnet://[invalid'>x</a>", attempt_number=1)
+    assert evaluate_http_content([malformed])["insecure_telnet"]["outcome"] == "INDETERMINATE"
 
     soap = b"<soap:Envelope xmlns:soap='http://schemas.xmlsoap.org/soap/envelope/'><soap:Body/></soap:Envelope>"
     soap_result = evaluate_http_content([
@@ -745,17 +778,21 @@ def test_default_cli_scan_scope_exact_mapping_and_calibrated_finding_scores(db, 
     monkeypatch.setattr("app.services.score_results.load_v1_assessment_profile", lambda _db: None)
     import_golden_baseline(db, _wave3b_baseline(), attest_real_source=True)
     assert activate_wave3b_rules(db, commit=False)["unavailable"] == {
-        "service_soap": "current definition is not the reviewed version in the pinned attested SSC_API baseline"
+        "insecure_telnet": "current definition is not the reviewed version in the pinned attested SSC_API baseline",
+        "service_soap": "current definition is not the reviewed version in the pinned attested SSC_API baseline",
     }
     _pin_test_snapshot(db)
     activation = activate_wave3b_rules(db, commit=False)
     assert activation["unavailable"] == {}
+    repeated = activate_wave3b_rules(db, commit=False)
+    assert repeated["rules_created"] == repeated["rule_versions_created"] == 0
     mappings = active_wave3b_mappings(db)
-    assert len(mappings) == len(WAVE3B_RULES) == 7
+    assert len(mappings) == len(WAVE3B_RULES) == 8
     assert {item["issue_key"] for item in mappings} == set(HTTP_CONTENT_ISSUE_KEYS)
     expected_risks = {
         "unsafe_sri_v2": ("LOW", True),
         "insecure_ftp": ("LOW", True),
+        "insecure_telnet": ("UNKNOWN", False),
         "contact_information_detected": ("UNKNOWN", False),
         "local_file_path_exposed_via_url_scheme": ("LOW", True),
         "server_error": ("UNKNOWN", False),

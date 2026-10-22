@@ -20,6 +20,7 @@ from app.models.rule_models import (
 )
 from app.services.http_content import HTTP_CONTENT_METHOD_VERSION, HTTP_CONTENT_POLICY_VERSION
 from app.services.public_exposure_consumers import (
+    PINNED_SSC_BASELINE_HASH,
     get_pinned_public_exposure_consumer,
     public_exposure_rule_expression,
     public_exposure_schema_contract,
@@ -42,6 +43,7 @@ class Wave3BRuleSpec:
     reference: str
     primitive: str = "HTTP_CONTENT"
     evidence_root: str = "http"
+    required_snapshot_hash: str | None = None
 
     @property
     def rule_key(self) -> str:
@@ -127,6 +129,14 @@ WAVE3B_RULES = (
         "https://www.rfc-editor.org/rfc/rfc959.html",
     ),
     Wave3BRuleSpec(
+        "insecure_telnet", "Non-standard links detected: Unsafe Telnet protocol",
+        "Declared HTML page, element/attribute, resolved telnet scheme, and hash-only destination evidence; the destination is never followed or resolved.",
+        "MATCH when a covered static HTML URL uses the telnet: scheme.", _HTML_NO_MATCH, _HTML_INDETERMINATE,
+        "Replace Telnet links with an approved encrypted remote-access mechanism and remove obsolete references.",
+        "https://www.rfc-editor.org/rfc/rfc1738.html",
+        required_snapshot_hash=PINNED_SSC_BASELINE_HASH,
+    ),
+    Wave3BRuleSpec(
         "contact_information_detected", "Non-standard links detected: Contact information displayed",
         "Declared HTML page, href element, contact URI scheme, and a hash-only contact value.",
         "MATCH when a covered href uses mailto:, tel:, sms:, whatsapp:, or viber: under the versioned policy.",
@@ -182,14 +192,24 @@ def activate_wave3b_rules(db: Session, *, commit: bool = True) -> dict[str, Any]
         .join(CatalogSnapshot, CatalogSnapshot.id == CatalogSnapshotItem.catalog_snapshot_id)
         .where(CatalogSnapshot.source_type == SourceTypeEnum.SSC_API, CatalogSnapshot.is_real_baseline.is_(True))
     ).scalars())
+    pinned_versions = set(db.execute(
+        select(CatalogSnapshotItem.issue_type_version_id)
+        .join(CatalogSnapshot, CatalogSnapshot.id == CatalogSnapshotItem.catalog_snapshot_id)
+        .where(
+            CatalogSnapshot.content_hash == PINNED_SSC_BASELINE_HASH,
+            CatalogSnapshot.source_type == SourceTypeEnum.SSC_API,
+            CatalogSnapshot.is_real_baseline.is_(True),
+        )
+    ).scalars())
     pinned_consumers = resolve_pinned_consumer_issue_versions(db)
-    counts = {"rules_created": 0, "rule_versions_created": 0, "rules_reused": 0}
+    counts = {"rules_created": 0, "rule_versions_created": 0, "rules_reused": 0, "rules_deactivated": 0}
     activated: list[str] = []
     unavailable: dict[str, str] = {}
     for spec in WAVE3B_RULES:
         issue = db.execute(select(CatalogIssueType).where(CatalogIssueType.stable_key == spec.issue_key)).scalar_one_or_none()
         if issue is None or not issue.is_active or issue.current_version_id is None:
             unavailable[spec.issue_key] = "exact issue/current version is absent or inactive"
+            _deactivate_rule_if_active(db, spec.rule_key, counts)
             continue
         issue_version = db.get(CatalogIssueTypeVersion, issue.current_version_id)
         consumer = get_pinned_public_exposure_consumer(spec.issue_key)
@@ -199,11 +219,21 @@ def activate_wave3b_rules(db: Session, *, commit: bool = True) -> dict[str, Any]
             or issue_version.id != expected_consumer_version.id
         ):
             unavailable[spec.issue_key] = "current definition is not the reviewed version in the pinned attested SSC_API baseline"
+            _deactivate_rule_if_active(db, spec.rule_key, counts)
+            continue
+        if spec.required_snapshot_hash is not None and (
+            spec.required_snapshot_hash != PINNED_SSC_BASELINE_HASH
+            or issue_version is None
+            or issue_version.id not in pinned_versions
+        ):
+            unavailable[spec.issue_key] = "current definition is not the reviewed version in the pinned attested SSC_API baseline"
+            _deactivate_rule_if_active(db, spec.rule_key, counts)
             continue
         if consumer is None and (
             issue_version is None or issue_version.source_type != SourceTypeEnum.SSC_API or issue_version.id not in real_versions
         ):
             unavailable[spec.issue_key] = "current definition is not part of an attested real SSC_API baseline"
+            _deactivate_rule_if_active(db, spec.rule_key, counts)
             continue
         rule = db.execute(select(RuleEngineRule).where(RuleEngineRule.stable_key == spec.rule_key).with_for_update()).scalar_one_or_none()
         if rule is None:
@@ -246,6 +276,15 @@ def _same_definition(version: RuleEngineRuleVersion, expected: dict[str, Any]) -
     return all(getattr(version, key) == value for key, value in expected.items())
 
 
+def _deactivate_rule_if_active(db: Session, rule_key: str, counts: dict[str, int]) -> None:
+    rule = db.execute(
+        select(RuleEngineRule).where(RuleEngineRule.stable_key == rule_key).with_for_update()
+    ).scalar_one_or_none()
+    if rule is not None and rule.is_active:
+        rule.is_active = False
+        counts["rules_deactivated"] += 1
+
+
 def active_wave3b_mappings(db: Session) -> list[dict[str, Any]]:
     real_versions = set(db.execute(
         select(CatalogSnapshotItem.issue_type_version_id)
@@ -255,6 +294,15 @@ def active_wave3b_mappings(db: Session) -> list[dict[str, Any]]:
     pinned_consumer_ids = {
         version.id for version in resolve_pinned_consumer_issue_versions(db).values()
     }
+    pinned_version_ids = set(db.execute(
+        select(CatalogSnapshotItem.issue_type_version_id)
+        .join(CatalogSnapshot, CatalogSnapshot.id == CatalogSnapshotItem.catalog_snapshot_id)
+        .where(
+            CatalogSnapshot.content_hash == PINNED_SSC_BASELINE_HASH,
+            CatalogSnapshot.source_type == SourceTypeEnum.SSC_API,
+            CatalogSnapshot.is_real_baseline.is_(True),
+        )
+    ).scalars())
     rows = db.execute(
         select(RuleEngineRule, RuleEngineRuleVersion, CatalogIssueType, CatalogIssueTypeVersion)
         .join(RuleEngineRuleVersion, RuleEngineRule.current_version_id == RuleEngineRuleVersion.id)
@@ -272,6 +320,7 @@ def active_wave3b_mappings(db: Session) -> list[dict[str, Any]]:
             or issue_version.source_type != SourceTypeEnum.SSC_API
             or issue_version.id not in real_versions
             or (consumer is not None and issue_version.id not in pinned_consumer_ids)
+            or (spec.required_snapshot_hash is not None and issue_version.id not in pinned_version_ids)
             or rule_version.rule_expression != spec.expression
             or rule_version.evidence_schema != spec.evidence_schema
         ):

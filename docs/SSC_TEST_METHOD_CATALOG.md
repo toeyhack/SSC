@@ -14,7 +14,7 @@ Every observation should include target identity, executor and version, method/r
 
 ### HTTP headers, cookies, and redirects
 
-Use bounded same-target HTTP(S) requests and standards-based redirect resolution. Preserve status, selected headers, parsed cookie attributes, every hop, and indeterminate errors. Cookie values and sensitive URL parameters are discarded. Primary references: [HTTP semantics](https://www.rfc-editor.org/rfc/rfc9110.html), [cookies](https://www.rfc-editor.org/rfc/rfc6265.html), [HSTS](https://www.rfc-editor.org/rfc/rfc6797.html), [OWASP Secure Headers](https://owasp.org/www-project-secure-headers/), and [CSP3](https://www.w3.org/TR/CSP3/).
+Use bounded same-target HTTP(S) requests and standards-based redirect resolution. Preserve status, every relevant header instance, parsed cookie attributes, every hop, and indeterminate errors. The exact Golden X-XSS-Protection rule accepts one case-insensitively normalized `1; mode=block` value; absence, duplicates, or other complete values match, while incomplete acquisition remains indeterminate. Cookie values and sensitive URL parameters are discarded. Primary references: [HTTP semantics](https://www.rfc-editor.org/rfc/rfc9110.html), [cookies](https://www.rfc-editor.org/rfc/rfc6265.html), [HSTS](https://www.rfc-editor.org/rfc/rfc6797.html), [OWASP Secure Headers](https://owasp.org/www-project-secure-headers/), and [CSP3](https://www.w3.org/TR/CSP3/).
 
 ### Bounded crawl and instrumented browser
 
@@ -64,15 +64,15 @@ Generate deterministic brand variants locally, but existence/activity requires e
 - HTTP now captures all relevant header instances, configured declared paths, CSP meta/header policy state, and bounded normalized redirects. It still lacks a general crawler/browser and authenticated synthetic flows.
 - TLS captures certificate evidence plus version-pinned TLS 1.0/1.1/1.2/1.3 attempts and accepted property-derived prohibited cipher groups. `tls_weak_protocol` is active. Weak-cipher support remains partial until the client can offer the complete prohibited legacy suite universe; stapled OCSP bytes and authoritative revocation retrieval/validation are also absent.
 - DNS preserves ANSWER/NODATA/NXDOMAIN/error states, joined TXT records, SPF parse/lookup traces, DMARC tags/effective policy, two nonce wildcard queries, and exact declared-subdomain inheritance. Six SPF/DMARC rules are active. Complete RFC 7208 dynamic permanent-error semantics, public-suffix inference, and DKIM selector/message provenance remain absent; organizational-domain scope is explicitly declared rather than inferred.
-- TCP includes bounded protocol-specific Wave 3A, Wave 5A, Wave 5B.1, and Wave 5C identification exchanges. Wave 5B.1 LDAP/Oracle and Wave 5C Minecraft/PPTP/RDP are active: Minecraft is protocol-identity-only, while Oracle, PPTP, and RDP additionally require PUBLIC_ROUTABLE plus trusted EXTERNAL_PUBLIC vantage. TCP-open alone remains unusable as service identity.
+- TCP includes bounded protocol-specific Wave 3A, Wave 5A, Wave 5B.1, and Wave 5C identification exchanges. Wave 5B.1 LDAP/Oracle and Wave 5C Minecraft/PPTP/RDP are active: Minecraft is protocol-identity-only, while Oracle, PPTP, and RDP additionally require PUBLIC_ROUTABLE plus trusted EXTERNAL_PUBLIC vantage. The `open_port` issue separately uses an explicitly declared zero-payload connect plus the same trusted public-exposure composition; TCP-open remains unusable as named service identity.
 - No browser/WebSocket, SBOM/inventory, CPE/CVE/KEV, lifecycle, longitudinal analytics, or external-intelligence ingestion contracts exist yet.
 
 ## Mapping totals
 
 - Directly testable: 75
-- Testable with enrichment: 81
+- Testable with enrichment: 80
 - External data required: 42
-- Not reproducible: 4
-- Current supported / partial / unsupported: 50 / 77 / 75
+- Not reproducible: 5
+- Current supported / partial / unsupported: 53 / 75 / 74. The source matrix classified `insecure_telnet` as `NOT_SUPPORTED`, so promoting it changes that category; this differs from the pre-stated 53/74/75 split without changing the 53 supported total.
 
 The row-level proposed method, exact evidence, rule logic, executor, external data, references, complexity, confidence, notes, and support status are in `SSC_ISSUE_COVERAGE.csv`.

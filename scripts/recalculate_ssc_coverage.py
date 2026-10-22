@@ -151,9 +151,9 @@ def main() -> int:
         row["current_platform_support"] for row in rows if row["factor"] in V1_FACTORS
     )
     feasibility = Counter(row["feasibility_category"] for row in rows)
-    if coverage != {"SUPPORTED": 50, "PARTIAL": 77, "NOT_SUPPORTED": 75}:
+    if coverage != {"SUPPORTED": 53, "PARTIAL": 75, "NOT_SUPPORTED": 74}:
         raise SystemExit(f"unexpected coverage totals: {dict(coverage)}")
-    if v1_coverage != {"SUPPORTED": 50, "PARTIAL": 74, "NOT_SUPPORTED": 36}:
+    if v1_coverage != {"SUPPORTED": 53, "PARTIAL": 72, "NOT_SUPPORTED": 35}:
         raise SystemExit(f"unexpected V1 coverage totals: {dict(v1_coverage)}")
 
     if args.write:
@@ -215,7 +215,7 @@ def render_markdown(rows, feasibility, coverage, wave1_rules, wave1_partial, wav
         "",
         f"Snapshot content hash: `{BASELINE_HASH}`",
         "Source: immutable real `SSC_API` Golden Baseline",
-        "Implementation state: Waves 1-2, Wave 3A, Wave 3B, Wave 4A, Wave 4B, Wave 5A FTP/IMAP/POP3, Wave 5B.1 LDAP/Oracle, Wave 5C Minecraft/PPTP/RDP, Wave 5D Apache CouchDB/Elasticsearch, and Wave 5E DNS are active. Wave 2 includes provider-independent tls_weak_cipher policy v2. Wave 5F classifies UPnP as NOT_REPRODUCIBLE from authoritative SSC semantics; its protocol-identity primitive is designable but not implemented. SMTP unusual-port remains INTERNAL_POLICY_ONLY. Under the revised closure policy, deterministic specification-derived evidence is sufficient and real product interoperability is optional stronger validation.",
+        "Implementation state: Waves 1-2, Wave 3A, Wave 3B, Wave 4A, Wave 4B, Wave 5A FTP/IMAP/POP3, Wave 5B.1 LDAP/Oracle, Wave 5C Minecraft/PPTP/RDP, Wave 5D Apache CouchDB/Elasticsearch, and Wave 5E DNS are active. The first post-ceiling bounded batch adds exact X-XSS-Protection, static telnet-link, and declared open-port evaluators. Wave 2 includes provider-independent tls_weak_cipher policy v2. Wave 5F classifies UPnP as NOT_REPRODUCIBLE from authoritative SSC semantics; its protocol-identity primitive is designable but not implemented. SMTP unusual-port remains INTERNAL_POLICY_ONLY. Under the revised closure policy, deterministic specification-derived evidence is sufficient and real product interoperability is optional stronger validation.",
         "Total mapped issues: **202**",
         "",
         "> This is an independent implementation mapped to SSC taxonomy. It does not reproduce or claim knowledge of SSC collection, aggregation, severity, scoring, or proprietary detection logic. `ssc_severity` remains source metadata and is not mapped to internal risk or score impact.",
@@ -226,10 +226,10 @@ def render_markdown(rows, feasibility, coverage, wave1_rules, wave1_partial, wav
         "",
         "## Coverage summary",
         "",
-        "| Coverage | Before three-capability closure | After closure | Percentage after |",
+        "| Coverage | Before bounded batch 1 | After batch | Percentage after |",
         "|---|---:|---:|---:|",
-        f"| `SUPPORTED` | 47 | {coverage['SUPPORTED']} | {coverage['SUPPORTED']/202:.1%} |",
-        f"| `PARTIAL` | 80 | {coverage['PARTIAL']} | {coverage['PARTIAL']/202:.1%} |",
+        f"| `SUPPORTED` | 50 | {coverage['SUPPORTED']} | {coverage['SUPPORTED']/202:.1%} |",
+        f"| `PARTIAL` | 77 | {coverage['PARTIAL']} | {coverage['PARTIAL']/202:.1%} |",
         f"| `NOT_SUPPORTED` | 75 | {coverage['NOT_SUPPORTED']} | {coverage['NOT_SUPPORTED']/202:.1%} |",
         "| **Total** | **202** | **202** | **100.0%** |",
         "",
@@ -303,7 +303,7 @@ def render_markdown(rows, feasibility, coverage, wave1_rules, wave1_partial, wav
         "",
         "## Active Wave 3A evaluator mappings",
         "",
-        "Every listed rule uses stable key `ssc.wave3a.<issue-key>`, method schema `ssc-wave3a-service-observation.v1`, policy `ssc-wave3a-service-identification.v1`, source type `SSC_REFERENCE`, and an immutable rule-version link to the exact attested `SSC_API` issue version. This is the first six-protocol batch, not the full service-identification ceiling.",
+        "Every listed rule uses stable key `ssc.wave3a.<issue-key>`, source type `SSC_REFERENCE`, and an immutable rule-version link to the exact attested `SSC_API` issue version. Service identities retain method schema `ssc-wave3a-service-observation.v1` and policy `ssc-wave3a-service-identification.v1`; `open_port` uses the bounded `TCP_CONNECT_REACHABILITY` primitive and `ssc-tcp-connect-policy.v1` with PUBLIC_EXPOSURE_CONTEXT.",
         "",
         "| SSC issue key | Protocol | Primitive | Exact MATCH condition | Exact NO_MATCH boundary | INDETERMINATE boundary | Authoritative reference |",
         "|---|---|---|---|---|---|---|",

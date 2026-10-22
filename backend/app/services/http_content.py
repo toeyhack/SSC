@@ -21,6 +21,7 @@ HTTP_CONTENT_POLICY_VERSION = "ssc-http-content-policy.v1"
 HTTP_CONTENT_ISSUE_KEYS = (
     "unsafe_sri_v2",
     "insecure_ftp",
+    "insecure_telnet",
     "contact_information_detected",
     "local_file_path_exposed_via_url_scheme",
     "server_error",
@@ -139,6 +140,7 @@ def _inspect_html(body: bytes, charset: str | None, document_url: str) -> dict[s
         url_parse_error = True
     match_counts = {
         "insecure_ftp": 0,
+        "insecure_telnet": 0,
         "contact_information_detected": 0,
         "local_file_path_exposed_via_url_scheme": 0,
         "links_to_insecure_website": 0,
@@ -160,6 +162,8 @@ def _inspect_html(body: bytes, charset: str | None, document_url: str) -> dict[s
         keys: list[str] = []
         if scheme == "ftp":
             keys.append("insecure_ftp")
+        if scheme == "telnet":
+            keys.append("insecure_telnet")
         if attribute == "href" and scheme in CONTACT_SCHEMES:
             keys.append("contact_information_detected")
         if scheme == "file":
@@ -442,6 +446,7 @@ def evaluate_http_content(attempts: list[dict[str, Any]]) -> dict[str, dict[str,
     evaluations: dict[str, dict[str, Any]] = {}
     issue_to_count = {
         "insecure_ftp": "insecure_ftp",
+        "insecure_telnet": "insecure_telnet",
         "contact_information_detected": "contact_information_detected",
         "local_file_path_exposed_via_url_scheme": "local_file_path_exposed_via_url_scheme",
         "links_to_insecure_website": "links_to_insecure_website",

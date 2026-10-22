@@ -4,6 +4,27 @@ CLI-FIRST MVP — COMPLETE / PASS
 
 Current phase: Phase 6B - CLI-first REPORT Output
 
+Post-ceiling bounded V1 batch 1: READY FOR REVIEW (2026-10-22).
+`insecure_telnet`, `x_xss_protection_incorrect_v2`, and `open_port` now have
+bounded deterministic evaluators linked to their exact Golden issue versions.
+Telnet reuses declared-page HTTP content parsing and never follows or resolves
+the destination. X-XSS-Protection requires exactly one normalized
+`1; mode=block` value on every complete declared response. Open-port evidence
+uses ordinary zero-payload TCP connect attempts only for at most ten explicitly
+declared ports and composes a positive connection with PUBLIC_ROUTABLE address
+scope and trusted EXTERNAL_PUBLIC vantage through additive consumer registry
+v6. Missing, malformed, truncated, timed-out, unreachable, untrusted-source,
+non-public, or stale-context evidence fails closed.
+
+All three remain absent from explicit internal-risk calibration and therefore
+resolve to `UNKNOWN` / `affects_score=false`; scoring is unchanged. Current
+support is **46/53 VERIFIED_DIRECT**, **53/160 V1**, and **53/202 full**. The
+seven remaining bounded V1 candidates are `bitcoin_server`,
+`exposed_mobile_printing_service`, `java_debugger`, `service_ldap_anonymous`,
+`service_neo4j`, `telephony`, and `tls_ocsp_stapling`, so the bounded scanner
+ceiling remains **60/160 V1** and **60/202 full**. The Golden Baseline and the
+53-row VERIFIED_DIRECT denominator are unchanged.
+
 Three pending deterministic capability reconciliation: COMPLETE / PASS
 (2026-10-22). The revised closure policy makes real product/container
 interoperability optional stronger validation rather than a mandatory closure

@@ -4,6 +4,21 @@ Baseline content hash: `0fe2bc8ffb7e3f734d4e88f70b11cffa6e8e9e47e722dc62107f6ff0
 Review date: 2026-09-20  
 Scope: analysis/design only; no scanner, rule, score, or Golden Baseline change.
 
+## Post-ceiling bounded batch 1 supersession (2026-10-22)
+
+The exact Golden boundaries for `insecure_telnet`,
+`x_xss_protection_incorrect_v2`, and `open_port` are now implemented and active.
+Static `telnet:` URLs reuse privacy-minimized HTTP-content evidence; the XSS
+header rule accepts only one normalized `1; mode=block` field value; and
+declared TCP-connect evidence uses additive PUBLIC_EXPOSURE_CONTEXT consumer
+registry v6 for final positive findings. No destination discovery, Telnet
+connection, browser execution, port expansion, banner read, authentication, or
+application payload is introduced. Current support is **46/53
+VERIFIED_DIRECT**, **53/160 V1**, and **53/202 full**. The bounded scanner
+ceiling remains **60/160** and **60/202** because seven reviewed bounded
+candidates remain. Historical wave sections below retain their release-time
+counts and decisions.
+
 ## Three-capability closure-policy supersession (2026-10-22)
 
 The current closure policy treats real product/container interoperability as

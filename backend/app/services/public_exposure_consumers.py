@@ -34,10 +34,11 @@ PUBLIC_EXPOSURE_CONSUMER_POLICY_V2 = "ssc-public-exposure-consumers.v2"
 PUBLIC_EXPOSURE_CONSUMER_POLICY_V3 = "ssc-public-exposure-consumers.v3"
 PUBLIC_EXPOSURE_CONSUMER_POLICY_V4 = "ssc-public-exposure-consumers.v4"
 PUBLIC_EXPOSURE_CONSUMER_POLICY_V5 = "ssc-public-exposure-consumers.v5"
-# The current registry release is v5.  Existing v1/v2/v3/v4 consumer contracts retain
+PUBLIC_EXPOSURE_CONSUMER_POLICY_V6 = "ssc-public-exposure-consumers.v6"
+# The current registry release is v6.  Existing v1/v2/v3/v4/v5 consumer contracts retain
 # their original entry-level policy version so their immutable rule definitions
 # do not churn merely because the registry gained new reviewed members.
-PUBLIC_EXPOSURE_CONSUMER_POLICY_VERSION = PUBLIC_EXPOSURE_CONSUMER_POLICY_V5
+PUBLIC_EXPOSURE_CONSUMER_POLICY_VERSION = PUBLIC_EXPOSURE_CONSUMER_POLICY_V6
 PUBLIC_EXPOSURE_REQUIRED = "PUBLIC_EXPOSURE_REQUIRED"
 
 
@@ -99,10 +100,14 @@ _WAVE5E_V4_ENTRIES = (
 _ORACLE_V5_ENTRIES = (
     _entry("service_oracle_db", "tcp", "SCANNER_TCP", PUBLIC_EXPOSURE_CONSUMER_POLICY_V5),
 )
+_OPEN_PORT_V6_ENTRIES = (
+    _entry("open_port", "tcp", "SCANNER_TCP", PUBLIC_EXPOSURE_CONSUMER_POLICY_V6),
+)
 _V2_ENTRIES = _V1_ENTRIES + _WAVE5C_V2_ENTRIES
 _V3_ENTRIES = _V2_ENTRIES + _WAVE5D_V3_ENTRIES
 _V4_ENTRIES = _V3_ENTRIES + _WAVE5E_V4_ENTRIES
-_ENTRIES = _V4_ENTRIES + _ORACLE_V5_ENTRIES
+_V5_ENTRIES = _V4_ENTRIES + _ORACLE_V5_ENTRIES
+_ENTRIES = _V5_ENTRIES + _OPEN_PORT_V6_ENTRIES
 
 # Registry releases describe exact membership.  Each later release is additive;
 # existing entries retain their original entry-level policy version.
@@ -111,7 +116,8 @@ PUBLIC_EXPOSURE_CONSUMER_REGISTRY_VERSIONS = MappingProxyType({
     PUBLIC_EXPOSURE_CONSUMER_POLICY_V2: tuple(entry.issue_key for entry in _V2_ENTRIES),
     PUBLIC_EXPOSURE_CONSUMER_POLICY_V3: tuple(entry.issue_key for entry in _V3_ENTRIES),
     PUBLIC_EXPOSURE_CONSUMER_POLICY_V4: tuple(entry.issue_key for entry in _V4_ENTRIES),
-    PUBLIC_EXPOSURE_CONSUMER_POLICY_V5: tuple(entry.issue_key for entry in _ENTRIES),
+    PUBLIC_EXPOSURE_CONSUMER_POLICY_V5: tuple(entry.issue_key for entry in _V5_ENTRIES),
+    PUBLIC_EXPOSURE_CONSUMER_POLICY_V6: tuple(entry.issue_key for entry in _ENTRIES),
 })
 
 PUBLIC_EXPOSURE_CONSUMERS = MappingProxyType(

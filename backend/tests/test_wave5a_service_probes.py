@@ -430,7 +430,7 @@ def test_wave5a_registry_cli_exact_activation_idempotence_and_approved_risk(db):
         "service_ftp", "service_imap", "service_pop3", "mail_server_unusual_port",
     }
     assert WAVE5A_SSC_ACTIVE_KEYS == {"service_ftp", "service_imap", "service_pop3"}
-    assert len(WAVE3A_RULES) == 6
+    assert len(WAVE3A_RULES) == 7
     assert SMTP_STANDARD_PORT_POLICY_VERSION == "smtp-standard-ports.v1"
     assert SMTP_STANDARD_PORTS == {25, 465, 587}
     args = build_parser().parse_args(["baseline", "activate-wave5a", "--yes"])

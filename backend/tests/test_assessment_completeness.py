@@ -296,7 +296,7 @@ def test_json_and_html_expose_v1_assessment_completeness():
 def test_versioned_v1_profile_resolves_exact_baseline_scope_and_capabilities(db):
     supported = sorted(set(WAVE1_BY_KEY) | set(WAVE2_BY_KEY))
     supported_by_factor = {
-        "application_security": supported[:10] + sorted(set(WAVE3B_BY_KEY) - {"service_soap"}),
+            "application_security": supported[:10] + supported[22:] + sorted(set(WAVE3B_BY_KEY) - {"service_soap"}),
         "network_security": (
             supported[10:16] + sorted(WAVE3A_BY_KEY) + ["service_soap"] + sorted(WAVE4A_BY_KEY)
             + sorted(set(WAVE5A_BY_KEY) - {"mail_server_unusual_port"})
@@ -369,8 +369,8 @@ def test_versioned_v1_profile_resolves_exact_baseline_scope_and_capabilities(db)
     out_of_scope = [item for item in profile.issues if item.factor_code not in profile.definition.in_scope_factor_codes]
     assert len(in_scope) == 160
     assert len(out_of_scope) == 42
-    assert sum(item.supported_capability for item in in_scope) == 50
-    assert sum(item.supported_capability for item in profile.issues) == 50
+    assert sum(item.supported_capability for item in in_scope) == 53
+    assert sum(item.supported_capability for item in profile.issues) == 53
     assert next(item for item in in_scope if item.stable_key == "service_ldap").supported_capability is True
     assert next(item for item in in_scope if item.stable_key == "service_oracle_db").supported_capability is True
     assert set(WAVE5C_ACTIVE_BY_KEY) == {"minecraft_server", "service_pptp", "service_rdp"}
@@ -393,8 +393,8 @@ def test_versioned_v1_profile_resolves_exact_baseline_scope_and_capabilities(db)
         code: sum(item.supported_capability for item in in_scope if item.factor_code == code)
         for code in profile.definition.in_scope_factor_codes
     } == {
-        "application_security": 16,
-        "network_security": 27,
+        "application_security": 18,
+        "network_security": 28,
         "dns_health": 7,
         "patching_cadence": 0,
     }

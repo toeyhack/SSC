@@ -1,5 +1,7 @@
 import hashlib
 import json
+import errno
+import socket
 import socketserver
 import threading
 from contextlib import contextmanager
@@ -22,7 +24,15 @@ from app.outputs.report import render_html
 from app.services.cli_scan import scan_inventory_target
 from app.services.cli_setup import add_inventory_target
 from app.services.golden_baseline_importer import import_golden_baseline
-from app.services.scan_executors import InventoryScanTarget, TCPExecutor, validate_scan_config
+from app.services.scan_executors import (
+    InventoryScanTarget,
+    TCPExecutor,
+    TCP_CONNECT_POLICY_VERSION,
+    _evaluate_open_ports,
+    _tcp_connect_outcome,
+    validate_scan_config,
+)
+from app.services.internal_risk_calibration import resolve_ssc_internal_risk
 from app.services.scoring_engine import ScoringDefinition
 from app.services.service_probes import (
     ADAPTERS,
@@ -113,6 +123,77 @@ def test_unsupported_transport_is_indeterminate(protocol):
     result = evaluate_service_probe_response(protocol, POSITIVE_FIXTURES[protocol], transport="udp")
     assert result["outcome"] == "INDETERMINATE"
     assert result["matched"] is None
+
+
+def test_open_port_connect_taxonomy_and_tri_state_are_exact():
+    assert _tcp_connect_outcome(ConnectionRefusedError(errno.ECONNREFUSED, "private text")) == "CONNECTION_REFUSED"
+    assert _tcp_connect_outcome(TimeoutError("private text")) == "TIMEOUT"
+    assert _tcp_connect_outcome(OSError(errno.ENETUNREACH, "private text")) == "NETWORK_UNREACHABLE"
+    assert _tcp_connect_outcome(OSError(errno.EHOSTUNREACH, "private text")) == "HOST_UNREACHABLE"
+    assert _tcp_connect_outcome(OSError(errno.EIO, "private text")) == "TRANSPORT_ERROR"
+    assert _evaluate_open_ports({"22": {"outcome": "CONNECTED"}}, [22])["outcome"] == "MATCH"
+    assert _evaluate_open_ports({"22": {"outcome": "CONNECTION_REFUSED"}}, [22])["outcome"] == "NO_MATCH"
+    for outcome in ("TIMEOUT", "NETWORK_UNREACHABLE", "HOST_UNREACHABLE", "TRANSPORT_ERROR"):
+        result = _evaluate_open_ports({"22": {"outcome": outcome}}, [22])
+        assert result["outcome"] == "INDETERMINATE"
+    assert _evaluate_open_ports({}, [])["outcome"] == "INDETERMINATE"
+
+
+def test_open_port_loopback_connects_once_closes_and_transfers_no_application_data():
+    accepted = []
+    handled = threading.Event()
+
+    class Handler(socketserver.BaseRequestHandler):
+        def handle(self):
+            accepted.append(self.request.recv(1))
+            handled.set()
+
+    server = socketserver.ThreadingTCPServer(("127.0.0.1", 0), Handler)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        port = server.server_address[1]
+        target = InventoryScanTarget(ScanTargetTypeEnum.HOST, "id", "localhost", "127.0.0.1", "example.test", True)
+        evidence = TCPExecutor().collect(target, {"tcp_ports": [port], "connect_timeout_seconds": 1}).evidence
+        assert handled.wait(timeout=1)
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=2)
+    assert accepted == [b""]
+    assert evidence["ports"] == {
+        str(port): {"open": True, "outcome": "CONNECTED", "error": None, "elapsed_ms": evidence["ports"][str(port)]["elapsed_ms"]}
+    }
+    assert evidence["evaluations"]["open_port"]["outcome"] == "MATCH"
+    assert evidence["evaluations"]["open_port"]["policy_version"] == TCP_CONNECT_POLICY_VERSION
+
+
+def test_open_port_uses_only_declared_ports_once_and_never_uses_arbitrary_error_text(monkeypatch):
+    calls = []
+
+    class Connected:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            self.closed = True
+
+    connected = Connected()
+
+    def connect(address, timeout):
+        calls.append((address, timeout))
+        if address[1] == 1001:
+            return connected
+        raise ConnectionRefusedError(errno.ECONNREFUSED, "must not persist")
+
+    monkeypatch.setattr(socket, "create_connection", connect)
+    target = InventoryScanTarget(ScanTargetTypeEnum.HOST, "id", "host", "8.8.8.8", "example.test", False)
+    evidence = TCPExecutor().collect(target, {"tcp_ports": [1001, 1002], "connect_timeout_seconds": 1}).evidence
+    assert calls == [(('8.8.8.8', 1001), 1.0), (('8.8.8.8', 1002), 1.0)]
+    assert connected.closed is True
+    assert evidence["ports"]["1002"]["error"] == "CONNECTION_REFUSED"
+    assert "must not persist" not in json.dumps(evidence)
+    assert evidence["evaluations"]["open_port"]["outcome"] == "MATCH"
 
 
 @contextmanager
@@ -272,12 +353,17 @@ def test_wave3a_exact_version_activation_and_end_to_end_finding(db, monkeypatch)
     activation = activate_wave3a_rules(db, commit=False)
     assert activation["unavailable"] == {}
     mappings = active_wave3a_mappings(db)
-    assert len(mappings) == len(WAVE3A_RULES) == 6
+    assert len(mappings) == len(WAVE3A_RULES) == 7
     assert {item["issue_key"] for item in mappings} == {spec.issue_key for spec in WAVE3A_RULES}
     for mapping in mappings:
         issue_version = db.get(CatalogIssueTypeVersion, UUID(mapping["issue_version_id"]))
         assert issue_version.source_type == SourceTypeEnum.SSC_API
-        assert mapping["primitive"] == "SERVICE_PROTOCOL_IDENTIFICATION"
+        expected = "TCP_CONNECT_REACHABILITY" if mapping["issue_key"] == "open_port" else "SERVICE_PROTOCOL_IDENTIFICATION"
+        assert mapping["primitive"] == expected
+    assert resolve_ssc_internal_risk("open_port").breach_risk == "UNKNOWN"
+    assert resolve_ssc_internal_risk("open_port").affects_score is False
+    repeated = activate_wave3a_rules(db, commit=False)
+    assert repeated["rules_created"] == repeated["rule_versions_created"] == 0
 
 
     rule = db.scalar(select(RuleEngineRule).where(RuleEngineRule.stable_key == "ssc.wave3a.service_vnc"))
@@ -319,6 +405,6 @@ def test_wave3a_exact_version_activation_and_end_to_end_finding(db, monkeypatch)
 
 
 def test_prior_wave_registries_remain_intact():
-    assert len(WAVE1_RULES) == 14
+    assert len(WAVE1_RULES) == 15
     assert len(WAVE2_RULES) == 8
     assert {spec.issue_key for spec in WAVE3A_RULES}.isdisjoint({spec.issue_key for spec in WAVE1_RULES + WAVE2_RULES})

@@ -1,6 +1,7 @@
 import hashlib
 import http.client
 import ipaddress
+import errno
 import socket
 import ssl
 import time
@@ -965,15 +966,17 @@ class TCPExecutor(BaseExecutor):
         for port in ports:
             started = time.monotonic()
             is_open = False
-            error = None
+            outcome = "TRANSPORT_ERROR"
             try:
                 with socket.create_connection((target.connect_host, port), timeout=timeout):
                     is_open = True
+                    outcome = "CONNECTED"
             except (OSError, TimeoutError) as exc:
-                error = exc.__class__.__name__
+                outcome = _tcp_connect_outcome(exc)
             evidence["ports"][str(port)] = {
                 "open": is_open,
-                "error": error,
+                "outcome": outcome,
+                "error": None if outcome == "CONNECTED" else outcome,
                 "elapsed_ms": int((time.monotonic() - started) * 1000),
             }
         for configured in configured_probes:
@@ -1032,6 +1035,7 @@ class TCPExecutor(BaseExecutor):
                 timeout=ssh_timeout,
             ))
         evidence["evaluations"] = {
+            "open_port": _evaluate_open_ports(evidence["ports"], ports),
             **aggregate_service_probe_evaluations(evidence["service_probes"]),
             **aggregate_ssh_evaluations(evidence["ssh_negotiations"]),
         }
@@ -1039,6 +1043,47 @@ class TCPExecutor(BaseExecutor):
             evidence["skipped"] = "no tcp_ports, service_probes, or ssh_ports configured"
             evidence["status"] = "skipped"
         return ExecutorObservation(self.evidence_source, evidence)
+
+
+TCP_CONNECT_POLICY_VERSION = "ssc-tcp-connect-policy.v1"
+
+
+def _tcp_connect_outcome(exc: BaseException) -> str:
+    """Reduce runtime errors to a stable, non-sensitive connect taxonomy."""
+    if isinstance(exc, (TimeoutError, socket.timeout)):
+        return "TIMEOUT"
+    error_number = getattr(exc, "errno", None)
+    if error_number == errno.ECONNREFUSED:
+        return "CONNECTION_REFUSED"
+    if error_number == errno.ENETUNREACH:
+        return "NETWORK_UNREACHABLE"
+    if error_number == errno.EHOSTUNREACH:
+        return "HOST_UNREACHABLE"
+    return "TRANSPORT_ERROR"
+
+
+def _evaluate_open_ports(port_results: dict[str, dict[str, Any]], declared_ports: list[int]) -> dict[str, Any]:
+    values: list[bool | None] = []
+    compact = []
+    for port in declared_ports:
+        result = port_results.get(str(port), {})
+        outcome = result.get("outcome")
+        value = True if outcome == "CONNECTED" else False if outcome == "CONNECTION_REFUSED" else None
+        values.append(value)
+        compact.append({"port": port, "connect_outcome": outcome})
+    matched = _tri_aggregate(values)
+    return _evaluation(
+        matched,
+        (
+            "at least one explicitly declared TCP port accepted a connection"
+            if matched is True
+            else "every explicitly declared TCP port returned connection refused"
+            if matched is False
+            else "declared TCP port reachability is incomplete or indeterminate"
+        ),
+        compact,
+        policy_version=TCP_CONNECT_POLICY_VERSION,
+    )
 
 
 EXECUTOR_BY_NAME: dict[str, BaseExecutor] = {
@@ -1535,6 +1580,13 @@ def _tri_aggregate(values: list[bool | None]) -> bool | None:
     return None
 
 
+def _x_xss_protection_incorrect(values: list[str]) -> bool:
+    """Apply the exact Golden recommendation while preserving field multiplicity."""
+    if len(values) != 1:
+        return True
+    return re.fullmatch(r"1[\t ]*;[\t ]*mode[\t ]*=[\t ]*block", values[0].strip(), re.IGNORECASE) is None
+
+
 def _evaluation(
     matched: bool | None,
     reason: str,
@@ -1559,6 +1611,7 @@ def _evaluate_http_wave1(attempts: list[dict[str, Any]]) -> dict[str, dict[str, 
     hsts_values: list[bool | None] = []
     xcto_values: list[bool | None] = []
     xfo_values: list[bool | None] = []
+    x_xss_values: list[bool | None] = []
     details = []
     for attempt in header_attempts:
         headers = attempt.get("headers", {})
@@ -1624,6 +1677,40 @@ def _evaluate_http_wave1(attempts: list[dict[str, Any]]) -> dict[str, dict[str, 
             hsts = _header_values(headers, "strict-transport-security")
             hsts_values.append(None if not hsts and not attempt.get("coverage_declared") else _hsts_incorrect(hsts))
 
+    x_xss_details = []
+    for attempt in attempts:
+        headers = attempt.get("headers")
+        complete = bool(
+            attempt.get("coverage_declared")
+            and attempt.get("endpoint_available")
+            and attempt.get("stop_reason") == "terminal_response"
+            and isinstance(attempt.get("status_code"), int)
+            and isinstance(headers, dict)
+        )
+        values = _header_values(headers, "x-xss-protection") if isinstance(headers, dict) else []
+        structurally_valid = not (
+            isinstance(headers, dict)
+            and "x-xss-protection" in headers
+            and not (
+                isinstance(headers["x-xss-protection"], str)
+                or (
+                    isinstance(headers["x-xss-protection"], list)
+                    and all(isinstance(item, str) for item in headers["x-xss-protection"])
+                )
+            )
+        )
+        value = _x_xss_protection_incorrect(values) if complete and structurally_valid else None
+        x_xss_values.append(value)
+        x_xss_details.append({
+            "scheme": attempt.get("terminal_scheme"),
+            "port": attempt.get("request_port"),
+            "path": attempt.get("request_path"),
+            "coverage_declared": attempt.get("coverage_declared", False),
+            "acquisition_complete": complete,
+            "header_instance_count": len(values),
+            "normalized_compliant": value is False,
+        })
+
     evaluations = {
         key: _evaluation(_tri_aggregate(values), "evaluated declared terminal HTML responses", details)
         for key, values in csp_results.items()
@@ -1636,6 +1723,11 @@ def _evaluate_http_wave1(attempts: list[dict[str, Any]]) -> dict[str, dict[str, 
     )
     evaluations["x_frame_options_incorrect_v2"] = _evaluation(
         _tri_aggregate(xfo_values), "evaluated declared terminal HTML responses", details,
+    )
+    evaluations["x_xss_protection_incorrect_v2"] = _evaluation(
+        _tri_aggregate(x_xss_values),
+        "required exactly one normalized X-XSS-Protection: 1; mode=block value on every complete declared response",
+        x_xss_details,
     )
 
     chain_details = [

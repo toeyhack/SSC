@@ -24,6 +24,7 @@ from app.models.rule_models import (
     RuleSourceTypeEnum,
     RuleTargetTypeEnum,
 )
+from app.services.public_exposure_consumers import PINNED_SSC_BASELINE_HASH
 
 
 METHOD_VERSION = "ssc-wave1-observation.v1"
@@ -40,6 +41,7 @@ class Wave1RuleSpec:
     logic: str
     remediation: str
     reference: str
+    required_snapshot_hash: str | None = None
 
     @property
     def rule_key(self) -> str:
@@ -105,6 +107,14 @@ WAVE1_RULES = (
         "MATCH when the header is absent, duplicated, or its sole normalized value is not exactly nosniff; acquisition failure is INDETERMINATE.",
         "Return exactly one X-Content-Type-Options: nosniff header and accurate Content-Type metadata on covered responses.",
         "https://owasp.org/www-project-secure-headers/",
+    ),
+    Wave1RuleSpec(
+        "x_xss_protection_incorrect_v2", "HTTP_HEADERS", "http", "Website does not implement X-XSS-Protection Best Practices",
+        "All X-XSS-Protection header instances from every successfully acquired declared response, preserving distinct field instances.",
+        "MATCH when the header is absent, duplicated, malformed, or its sole value is not the normalized directive 1; mode=block. NO_MATCH requires complete declared response evidence with exactly one compliant field value; incomplete acquisition is INDETERMINATE.",
+        "Return exactly one X-XSS-Protection: 1; mode=block header on every covered response.",
+        "SSC_API Golden metadata; https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/X-XSS-Protection",
+        required_snapshot_hash=PINNED_SSC_BASELINE_HASH,
     ),
     _spec(
         "x_frame_options_incorrect_v2", "HTTP_HEADERS", "http", "Site Does Not Use Best Practices Against Embedding",
@@ -177,7 +187,6 @@ WAVE1_BY_KEY = {spec.issue_key: spec for spec in WAVE1_RULES}
 WAVE1_PARTIAL_REASONS = {
     "cookie_missing_http_only": "Session/authentication purpose requires an approved synthetic authentication flow and reviewed cookie-purpose inventory.",
     "cookie_missing_secure_attribute": "Session/authentication purpose requires an approved synthetic authentication flow and reviewed cookie-purpose inventory.",
-    "x_xss_protection_incorrect_v2": "Correctness depends on an approved, versioned legacy-browser estate policy.",
     "redirect_to_insecure_website": "An out-of-scope Location does not prove the terminal destination without authorized or passive redirect evidence.",
     "communication_with_server_certificate_issued_by_blacklisted_country": "Issuer jurisdiction requires a reviewed CA registry and internal denylist.",
     "tlscert_excessive_expiration": "The applicable lifetime maximum requires issuance-date CA/B policy history and certificate applicability data.",
@@ -200,7 +209,16 @@ def activate_wave1_rules(db: Session, *, commit: bool = True) -> dict[str, Any]:
             CatalogSnapshot.is_real_baseline.is_(True),
         )
     ).scalars())
-    counts = {"rules_created": 0, "rule_versions_created": 0, "rules_reused": 0}
+    pinned_versions = set(db.execute(
+        select(CatalogSnapshotItem.issue_type_version_id)
+        .join(CatalogSnapshot, CatalogSnapshot.id == CatalogSnapshotItem.catalog_snapshot_id)
+        .where(
+            CatalogSnapshot.content_hash == PINNED_SSC_BASELINE_HASH,
+            CatalogSnapshot.source_type == SourceTypeEnum.SSC_API,
+            CatalogSnapshot.is_real_baseline.is_(True),
+        )
+    ).scalars())
+    counts = {"rules_created": 0, "rule_versions_created": 0, "rules_reused": 0, "rules_deactivated": 0}
     activated: list[str] = []
     unavailable: dict[str, str] = {}
 
@@ -211,14 +229,27 @@ def activate_wave1_rules(db: Session, *, commit: bool = True) -> dict[str, Any]:
         ).scalar_one_or_none()
         if issue is None or not issue.is_active or issue.current_version_id is None:
             unavailable[spec.issue_key] = "exact issue/current version is absent or inactive"
+            _deactivate_rule_if_active(db, spec.rule_key, counts)
             continue
         issue_version = db.get(CatalogIssueTypeVersion, issue.current_version_id)
         if (
             issue_version is None
             or issue_version.source_type != SourceTypeEnum.SSC_API
             or issue_version.id not in real_versions
+            or (
+                spec.required_snapshot_hash is not None
+                and (
+                    spec.required_snapshot_hash != PINNED_SSC_BASELINE_HASH
+                    or issue_version.id not in pinned_versions
+                )
+            )
         ):
-            unavailable[spec.issue_key] = "current definition is not part of an attested real SSC_API baseline"
+            unavailable[spec.issue_key] = (
+                "current definition is not the reviewed version in the pinned attested SSC_API baseline"
+                if spec.required_snapshot_hash is not None
+                else "current definition is not part of an attested real SSC_API baseline"
+            )
+            _deactivate_rule_if_active(db, spec.rule_key, counts)
             continue
 
         rule = db.execute(
@@ -278,12 +309,30 @@ def _same_definition(version: RuleEngineRuleVersion, expected: dict[str, Any]) -
     return all(getattr(version, key) == value for key, value in expected.items())
 
 
+def _deactivate_rule_if_active(db: Session, rule_key: str, counts: dict[str, int]) -> None:
+    rule = db.execute(
+        select(RuleEngineRule).where(RuleEngineRule.stable_key == rule_key).with_for_update()
+    ).scalar_one_or_none()
+    if rule is not None and rule.is_active:
+        rule.is_active = False
+        counts["rules_deactivated"] += 1
+
+
 def active_wave1_mappings(db: Session) -> list[dict[str, Any]]:
     """Return only exact, active and currently selected Wave 1 mappings."""
     real_versions = set(db.execute(
         select(CatalogSnapshotItem.issue_type_version_id)
         .join(CatalogSnapshot, CatalogSnapshot.id == CatalogSnapshotItem.catalog_snapshot_id)
         .where(
+            CatalogSnapshot.source_type == SourceTypeEnum.SSC_API,
+            CatalogSnapshot.is_real_baseline.is_(True),
+        )
+    ).scalars())
+    pinned_versions = set(db.execute(
+        select(CatalogSnapshotItem.issue_type_version_id)
+        .join(CatalogSnapshot, CatalogSnapshot.id == CatalogSnapshotItem.catalog_snapshot_id)
+        .where(
+            CatalogSnapshot.content_hash == PINNED_SSC_BASELINE_HASH,
             CatalogSnapshot.source_type == SourceTypeEnum.SSC_API,
             CatalogSnapshot.is_real_baseline.is_(True),
         )
@@ -304,6 +353,7 @@ def active_wave1_mappings(db: Session) -> list[dict[str, Any]]:
             or issue_version.issue_type_id != issue.id
             or issue_version.source_type != SourceTypeEnum.SSC_API
             or issue_version.id not in real_versions
+            or (spec.required_snapshot_hash is not None and issue_version.id not in pinned_versions)
             or rule_version.rule_expression != spec.expression
             or rule_version.evidence_schema != spec.evidence_schema
         ):

@@ -86,9 +86,11 @@ An approved external worker can produce a finding only for protocol `MATCH` +
 `service_vnc`, `service_telnet`, and `minecraft_server` deliberately retain
 protocol-identity-only rules. `service_rdp`, `service_pptp`,
 `service_elasticsearch`, and `service_oracle_db` are active under their
-exposure contracts. `mail_server_unusual_port` is not registered and remains
+exposure contracts. Additive immutable registry v6 adds only `open_port` at
+evidence root `tcp` with required source `SCANNER_TCP`; v1-v5 membership and
+entry-level policy versions are unchanged. `mail_server_unusual_port` is not registered and remains
 `PARTIAL / INTERNAL_POLICY_ONLY`: its SMTP identity primitive and immutable
 `smtp-standard-ports.v1` proxy remain available, but SSC does not disclose the
 exact unusual-port boundary and its managed SSC rule is inactive. Capability
-support accounting is 46/53 VERIFIED_DIRECT, 50/160 V1 supported, and 50/202
+support accounting is 46/53 VERIFIED_DIRECT, 53/160 V1 supported, and 53/202
 full supported.

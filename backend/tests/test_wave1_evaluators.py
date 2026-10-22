@@ -9,7 +9,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.db.session import engine
-from app.models.catalog_models import CatalogIssueTypeVersion, SourceTypeEnum
+from app.models.catalog_models import CatalogIssueTypeVersion, CatalogSnapshot, CatalogSnapshotItem, SourceTypeEnum
 from app.models.rule_models import RuleEngineRule
 from app.outputs.report import render_html
 from app.services.cli_scan import scan_inventory_target
@@ -23,7 +23,8 @@ from app.services.scan_executors import (
 )
 from app.services.scoring_engine import ScoringDefinition
 from app.services.ssc_api_baseline import API_ORIGIN, FACTORS_ENDPOINT, ISSUES_ENDPOINT, normalize_api_payloads
-from app.services.wave1_rules import WAVE1_RULES, active_wave1_mappings
+from app.services.wave1_rules import WAVE1_RULES, activate_wave1_rules, active_wave1_mappings
+from app.services.public_exposure_consumers import PINNED_SSC_BASELINE_HASH
 from tests.test_scan_executors import _http_server
 
 
@@ -101,6 +102,40 @@ def test_http_header_evaluators_positive_negative_and_malformed_boundaries():
     assert implicit["hsts_incorrect_v2"]["matched"] is None
     assert implicit["x_content_type_options_incorrect_v2"]["matched"] is None
     assert implicit["x_frame_options_incorrect_v2"]["matched"] is None
+
+
+@pytest.mark.parametrize("value", ["1; mode=block", " 1 ; MODE = BLOCK ", "1;\tmode=block"])
+def test_x_xss_protection_exact_compliant_boundary(value):
+    result = _evaluate_http_wave1([_terminal({"x-xss-protection": [value]})])
+    assert result["x_xss_protection_incorrect_v2"]["outcome"] == "NO_MATCH"
+
+
+@pytest.mark.parametrize("values", [
+    [], ["0"], ["1"], ["1; mode=block; report=/x"], ["garbage"],
+    ["1; mode=block", "1; mode=block"], ["1; mode=block", "0"],
+    ["1; mode=block, 0"],
+])
+def test_x_xss_protection_incorrect_missing_duplicate_and_malformed_values_match(values):
+    headers = {} if not values else {"x-xss-protection": values}
+    result = _evaluate_http_wave1([_terminal(headers)])
+    assert result["x_xss_protection_incorrect_v2"]["outcome"] == "MATCH"
+
+
+def test_x_xss_protection_incomplete_or_structurally_truncated_evidence_is_indeterminate():
+    failed = _terminal({"x-xss-protection": ["1; mode=block"]})
+    failed.update(endpoint_available=False, status_code=None, stop_reason="request_error")
+    truncated = _terminal({"x-xss-protection": {"truncated": True}})
+    undeclared = _terminal({"x-xss-protection": ["1; mode=block"]})
+    undeclared["coverage_declared"] = False
+    for attempt in (failed, truncated, undeclared):
+        result = _evaluate_http_wave1([attempt])
+        assert result["x_xss_protection_incorrect_v2"]["outcome"] == "INDETERMINATE"
+
+    mixed = _evaluate_http_wave1([
+        _terminal({"x-xss-protection": ["1; mode=block"]}, path="/complete"),
+        failed,
+    ])
+    assert mixed["x_xss_protection_incorrect_v2"]["outcome"] == "INDETERMINATE"
 
 
 def test_csp_multiple_policy_and_nonce_false_positive_boundaries():
@@ -232,6 +267,24 @@ def _wave1_baseline():
     return normalize_api_payloads(raw)
 
 
+def _pin_test_snapshot(db):
+    source = db.scalar(select(CatalogSnapshot).order_by(CatalogSnapshot.imported_at.desc()))
+    snapshot = CatalogSnapshot(
+        name=source.name, source_type=source.source_type, source_reference=source.source_reference,
+        captured_at=source.captured_at, content_hash=PINNED_SSC_BASELINE_HASH,
+        normalized_schema_version=source.normalized_schema_version,
+        normalized_payload=source.normalized_payload, raw_source=source.raw_source, is_real_baseline=True,
+    )
+    db.add(snapshot)
+    db.flush()
+    for item in source.items:
+        db.add(CatalogSnapshotItem(
+            catalog_snapshot_id=snapshot.id, issue_type_version_id=item.issue_type_version_id,
+            factor_position=item.factor_position, issue_position=item.issue_position,
+        ))
+    db.flush()
+
+
 class MissingCSPHandler(BaseHTTPRequestHandler):
     def log_message(self, _format, *args):
         return
@@ -258,10 +311,19 @@ class SafeCSPHandler(MissingCSPHandler):
         self.wfile.write(body)
 
 
-def test_real_baseline_activation_linkage_observation_finding_and_report(db):
+def test_real_baseline_activation_linkage_observation_finding_and_report(db, monkeypatch):
+    monkeypatch.setattr("app.services.score_results.load_v1_assessment_profile", lambda _db: None)
     import_golden_baseline(db, _wave1_baseline(), attest_real_source=True)
+    assert activate_wave1_rules(db, commit=False)["unavailable"] == {
+        "x_xss_protection_incorrect_v2": "current definition is not the reviewed version in the pinned attested SSC_API baseline"
+    }
+    _pin_test_snapshot(db)
+    first = activate_wave1_rules(db, commit=False)
+    assert first["unavailable"] == {}
+    repeated = activate_wave1_rules(db, commit=False)
+    assert repeated["rules_created"] == repeated["rule_versions_created"] == 0
     mappings = active_wave1_mappings(db)
-    assert len(mappings) == len(WAVE1_RULES) == 14
+    assert len(mappings) == len(WAVE1_RULES) == 15
     assert {item["issue_key"] for item in mappings} == {spec.issue_key for spec in WAVE1_RULES}
     for mapping in mappings:
         issue_version = db.get(CatalogIssueTypeVersion, UUID(mapping["issue_version_id"]))

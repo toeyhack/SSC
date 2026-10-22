@@ -2,7 +2,7 @@
 
 Snapshot content hash: `0fe2bc8ffb7e3f734d4e88f70b11cffa6e8e9e47e722dc62107f6ff09694eca8`
 Source: immutable real `SSC_API` Golden Baseline
-Implementation state: Waves 1-2, Wave 3A, Wave 3B, Wave 4A, Wave 4B, Wave 5A FTP/IMAP/POP3, Wave 5B.1 LDAP/Oracle, Wave 5C Minecraft/PPTP/RDP, Wave 5D Apache CouchDB/Elasticsearch, and Wave 5E DNS are active. Wave 2 includes provider-independent tls_weak_cipher policy v2. Wave 5F classifies UPnP as NOT_REPRODUCIBLE from authoritative SSC semantics; its protocol-identity primitive is designable but not implemented. SMTP unusual-port remains INTERNAL_POLICY_ONLY. Under the revised closure policy, deterministic specification-derived evidence is sufficient and real product interoperability is optional stronger validation.
+Implementation state: Waves 1-2, Wave 3A, Wave 3B, Wave 4A, Wave 4B, Wave 5A FTP/IMAP/POP3, Wave 5B.1 LDAP/Oracle, Wave 5C Minecraft/PPTP/RDP, Wave 5D Apache CouchDB/Elasticsearch, and Wave 5E DNS are active. The first post-ceiling bounded batch adds exact X-XSS-Protection, static telnet-link, and declared open-port evaluators. Wave 2 includes provider-independent tls_weak_cipher policy v2. Wave 5F classifies UPnP as NOT_REPRODUCIBLE from authoritative SSC semantics; its protocol-identity primitive is designable but not implemented. SMTP unusual-port remains INTERNAL_POLICY_ONLY. Under the revised closure policy, deterministic specification-derived evidence is sufficient and real product interoperability is optional stronger validation.
 Total mapped issues: **202**
 
 > This is an independent implementation mapped to SSC taxonomy. It does not reproduce or claim knowledge of SSC collection, aggregation, severity, scoring, or proprietary detection logic. `ssc_severity` remains source metadata and is not mapped to internal risk or score impact.
@@ -13,19 +13,19 @@ Total mapped issues: **202**
 
 ## Coverage summary
 
-| Coverage | Before three-capability closure | After closure | Percentage after |
+| Coverage | Before bounded batch 1 | After batch | Percentage after |
 |---|---:|---:|---:|
-| `SUPPORTED` | 47 | 50 | 24.8% |
-| `PARTIAL` | 80 | 77 | 38.1% |
-| `NOT_SUPPORTED` | 75 | 75 | 37.1% |
+| `SUPPORTED` | 50 | 53 | 26.2% |
+| `PARTIAL` | 77 | 75 | 37.1% |
+| `NOT_SUPPORTED` | 75 | 74 | 36.6% |
 | **Total** | **202** | **202** | **100.0%** |
 
 ### Feasibility after Wave 5F semantic reconciliation
 
 | Category | Count | Percentage |
 |---|---:|---:|
-| `DIRECTLY_TESTABLE` | 74 | 36.6% |
-| `TESTABLE_WITH_ENRICHMENT` | 81 | 40.1% |
+| `DIRECTLY_TESTABLE` | 75 | 37.1% |
+| `TESTABLE_WITH_ENRICHMENT` | 80 | 39.6% |
 | `EXTERNAL_DATA_REQUIRED` | 42 | 20.8% |
 | `NOT_REPRODUCIBLE` | 5 | 2.5% |
 
@@ -33,14 +33,14 @@ Total mapped issues: **202**
 
 | Factor | Total | Direct | Enrichment | External | Not reproducible | Supported | Partial | Not supported |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|
-| `application_security` | 61 | 25 | 35 | 0 | 1 | 16 | 29 | 16 |
+| `application_security` | 61 | 26 | 34 | 0 | 1 | 18 | 28 | 15 |
 | `cubit_score` | 3 | 0 | 1 | 0 | 2 | 0 | 1 | 2 |
 | `dns_health` | 10 | 7 | 3 | 0 | 0 | 7 | 3 | 0 |
 | `endpoint_security` | 2 | 0 | 0 | 2 | 0 | 0 | 0 | 2 |
 | `hacker_chatter` | 2 | 0 | 0 | 2 | 0 | 0 | 0 | 2 |
 | `ip_reputation` | 26 | 1 | 1 | 24 | 0 | 0 | 2 | 24 |
 | `leaked_information` | 8 | 0 | 0 | 8 | 0 | 0 | 0 | 8 |
-| `network_security` | 68 | 41 | 20 | 5 | 2 | 27 | 34 | 7 |
+| `network_security` | 68 | 41 | 20 | 5 | 2 | 28 | 33 | 7 |
 | `patching_cadence` | 21 | 0 | 21 | 0 | 0 | 0 | 8 | 13 |
 | `social_engineering` | 1 | 0 | 0 | 1 | 0 | 0 | 0 | 1 |
 
@@ -55,6 +55,7 @@ Every listed rule uses stable key `ssc.wave1.<issue-key>`, method schema `ssc-wa
 | `csp_too_broad_v2` | `HTTP_HEADERS` | MATCH when the effective script/object policy permits a wildcard, an unscoped network scheme, or data: active content under the versioned Wave 1 policy; malformed evidence is INDETERMINATE. | https://www.w3.org/TR/CSP3/; https://owasp.org/www-project-web-security-testing-guide/ |
 | `hsts_incorrect_v2` | `HTTP_HEADERS` | MATCH when HSTS is absent, duplicated, malformed, has max-age below 31536000, or omits includeSubDomains on a covered HTTPS response; HTTP-delivered HSTS is ignored. | https://www.rfc-editor.org/rfc/rfc6797.html |
 | `x_content_type_options_incorrect_v2` | `HTTP_HEADERS` | MATCH when the header is absent, duplicated, or its sole normalized value is not exactly nosniff; acquisition failure is INDETERMINATE. | https://owasp.org/www-project-secure-headers/ |
+| `x_xss_protection_incorrect_v2` | `HTTP_HEADERS` | MATCH when the header is absent, duplicated, malformed, or its sole value is not the normalized directive 1; mode=block. NO_MATCH requires complete declared response evidence with exactly one compliant field value; incomplete acquisition is INDETERMINATE. | SSC_API Golden metadata; https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/X-XSS-Protection |
 | `x_frame_options_incorrect_v2` | `HTTP_HEADERS` | MATCH when neither a restrictive valid CSP frame-ancestors directive nor exactly one valid X-Frame-Options DENY/SAMEORIGIN value protects the response; malformed evidence is INDETERMINATE. | https://www.w3.org/TR/CSP3/; https://owasp.org/www-project-secure-headers/ |
 | `domain_missing_https_v2` | `HTTP_REDIRECT` | MATCH when HTTP serves terminal content without a permanent same-target upgrade to a reachable trusted HTTPS endpoint, or no trusted HTTPS endpoint is available; incomplete attempts are INDETERMINATE. | https://www.rfc-editor.org/rfc/rfc9110.html; https://www.rfc-editor.org/rfc/rfc6797.html |
 | `insecure_https_redirect_pattern_v2` | `HTTP_REDIRECT` | MATCH when an HTTPS hop downgrades to HTTP, a chain oscillates from HTTPS back to HTTP, or an HTTP request reaches terminal content before an HTTPS upgrade. | https://www.rfc-editor.org/rfc/rfc9110.html |
@@ -71,7 +72,6 @@ Every listed rule uses stable key `ssc.wave1.<issue-key>`, method schema `ssc-wa
 |---|---|
 | `cookie_missing_http_only` | Session/authentication purpose requires an approved synthetic authentication flow and reviewed cookie-purpose inventory. |
 | `cookie_missing_secure_attribute` | Session/authentication purpose requires an approved synthetic authentication flow and reviewed cookie-purpose inventory. |
-| `x_xss_protection_incorrect_v2` | Correctness depends on an approved, versioned legacy-browser estate policy. |
 | `redirect_to_insecure_website` | An out-of-scope Location does not prove the terminal destination without authorized or passive redirect evidence. |
 | `communication_with_server_certificate_issued_by_blacklisted_country` | Issuer jurisdiction requires a reviewed CA registry and internal denylist. |
 | `tlscert_excessive_expiration` | The applicable lifetime maximum requires issuance-date CA/B policy history and certificate applicability data. |
@@ -104,7 +104,7 @@ Every listed rule uses stable key `ssc.wave2.<issue-key>`, source type `SSC_REFE
 
 ## Active Wave 3A evaluator mappings
 
-Every listed rule uses stable key `ssc.wave3a.<issue-key>`, method schema `ssc-wave3a-service-observation.v1`, policy `ssc-wave3a-service-identification.v1`, source type `SSC_REFERENCE`, and an immutable rule-version link to the exact attested `SSC_API` issue version. This is the first six-protocol batch, not the full service-identification ceiling.
+Every listed rule uses stable key `ssc.wave3a.<issue-key>`, source type `SSC_REFERENCE`, and an immutable rule-version link to the exact attested `SSC_API` issue version. Service identities retain method schema `ssc-wave3a-service-observation.v1` and policy `ssc-wave3a-service-identification.v1`; `open_port` uses the bounded `TCP_CONNECT_REACHABILITY` primitive and `ssc-tcp-connect-policy.v1` with PUBLIC_EXPOSURE_CONTEXT.
 
 | SSC issue key | Protocol | Primitive | Exact MATCH condition | Exact NO_MATCH boundary | INDETERMINATE boundary | Authoritative reference |
 |---|---|---|---|---|---|---|
@@ -114,6 +114,7 @@ Every listed rule uses stable key `ssc.wave3a.<issue-key>`, method schema `ssc-w
 | `service_socks_proxy` | `socks5` | `SERVICE_PROTOCOL_IDENTIFICATION` | MATCH only when a minimal SOCKS5 no-auth method offer receives an exact two-byte version-5 method-selection response; no connect request follows. | NO_MATCH only when the bounded exchange returns a complete, protocol-valid response identified as a different supported protocol; TCP-open or arbitrary bytes are not negative evidence. | Timeout, reset, acquisition error, malformed or truncated response, ambiguous banner, unsupported transport, or incomplete exchange is INDETERMINATE. | https://www.rfc-editor.org/rfc/rfc1928.html |
 | `service_telnet` | `telnet` | `SERVICE_PROTOCOL_IDENTIFICATION` | MATCH only when a bounded IAC DO SUPPRESS-GO-AHEAD request receives the corresponding protocol-valid IAC WILL or IAC WONT response. | NO_MATCH only when the bounded exchange returns a complete, protocol-valid response identified as a different supported protocol; TCP-open or arbitrary bytes are not negative evidence. | Timeout, reset, acquisition error, malformed or truncated response, ambiguous banner, unsupported transport, or incomplete exchange is INDETERMINATE. | https://www.rfc-editor.org/rfc/rfc854.html |
 | `service_smb` | `smb2` | `SERVICE_PROTOCOL_IDENTIFICATION` | MATCH only when a minimal SMB2 negotiate request receives a correctly framed SMB2 negotiate or SMB2 error response with matching command semantics. | NO_MATCH only when the bounded exchange returns a complete, protocol-valid response identified as a different supported protocol; TCP-open or arbitrary bytes are not negative evidence. | Timeout, reset, acquisition error, malformed or truncated response, ambiguous banner, unsupported transport, or incomplete exchange is INDETERMINATE. | https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-smb2/ |
+| `open_port` | `tcp-connect` | `TCP_CONNECT_REACHABILITY` | MATCH when at least one explicitly declared approved TCP port completes a connection and current PUBLIC_EXPOSURE_CONTEXT proves a PUBLIC_ROUTABLE destination observed from a trusted EXTERNAL_PUBLIC vantage. | The raw connect primitive returns NO_MATCH only when every declared port produces a pinned-destination connection refusal; public-exposure composition remains positive-only. | Timeout, filtering, network/host unreachable, transport failure, absent or invalid declared scope, non-public address, unknown/internal vantage, wrong evidence source, or stale exposure policy is INDETERMINATE / NOT_ASSESSED. | SSC_API Golden metadata; https://www.rfc-editor.org/rfc/rfc9293.html |
 
 ## Active Wave 3B evaluator mappings
 
@@ -123,6 +124,7 @@ Every listed rule uses stable key `ssc.wave3b.<issue-key>`, method schema `ssc-h
 |---|---|---|---|---|---|
 | `unsafe_sri_v2` | `HTTP_CONTENT` | MATCH when a covered external script or stylesheet lacks SRI, has invalid or disallowed integrity metadata, or fetched bytes fail every digest using the strongest supported algorithm represented in its metadata. | NO_MATCH only when complete declared HTML contains no covered resources or every covered resource has valid permitted metadata and at least one digest using its strongest represented supported algorithm verifies. | Page/resource failure, truncation, cross-origin or otherwise out-of-scope resource, unsafe redirect, unsupported content, exhausted fetch budget, or incomplete digest evidence is INDETERMINATE. | https://www.w3.org/TR/SRI/ |
 | `insecure_ftp` | `HTTP_CONTENT` | MATCH when a covered static HTML URL uses the ftp: scheme. | NO_MATCH only when every declared response is fetched completely and parsed as HTML and none satisfies the condition. | Missing or failed response, blocked/non-2xx response, truncated body, unsupported content type or encoding, malformed content, undeclared path coverage, or an exceeded observation bound is INDETERMINATE. | https://www.rfc-editor.org/rfc/rfc959.html |
+| `insecure_telnet` | `HTTP_CONTENT` | MATCH when a covered static HTML URL uses the telnet: scheme. | NO_MATCH only when every declared response is fetched completely and parsed as HTML and none satisfies the condition. | Missing or failed response, blocked/non-2xx response, truncated body, unsupported content type or encoding, malformed content, undeclared path coverage, or an exceeded observation bound is INDETERMINATE. | https://www.rfc-editor.org/rfc/rfc1738.html |
 | `contact_information_detected` | `HTTP_CONTENT` | MATCH when a covered href uses mailto:, tel:, sms:, whatsapp:, or viber: under the versioned policy. | NO_MATCH only when every declared response is fetched completely and parsed as HTML and none satisfies the condition. | Missing or failed response, blocked/non-2xx response, truncated body, unsupported content type or encoding, malformed content, undeclared path coverage, or an exceeded observation bound is INDETERMINATE. | https://www.rfc-editor.org/rfc/rfc6068.html |
 | `local_file_path_exposed_via_url_scheme` | `HTTP_CONTENT` | MATCH when a covered static HTML URL uses the file: scheme. | NO_MATCH only when every declared response is fetched completely and parsed as HTML and none satisfies the condition. | Missing or failed response, blocked/non-2xx response, truncated body, unsupported content type or encoding, malformed content, undeclared path coverage, or an exceeded observation bound is INDETERMINATE. | https://www.rfc-editor.org/rfc/rfc8089.html |
 | `server_error` | `HTTP_CONTENT` | MATCH when the same declared URL returns an HTTP 5xx status on both bounded attempts. | NO_MATCH only when every declared URL completes both attempts without a reproducible 5xx. | Any failed/incomplete attempt, an undeclared path set, or exactly one 5xx in a pair is INDETERMINATE. | https://www.rfc-editor.org/rfc/rfc9110.html#name-server-error-5xx |
@@ -239,7 +241,7 @@ The CSV remains normative for exact evidence requirements, proposed logic, depen
 | `insecure_ftp` | Non-standard links detected: Unsafe File Transfer Protocol | `application_security` | `medium` | `DIRECTLY_TESTABLE` | `HTTP_CONTENT` | `SUPPORTED` |
 | `insecure_https_redirect_pattern_v2` | Insecure HTTPS Redirect Pattern | `application_security` | `low` | `DIRECTLY_TESTABLE` | `HTTP_REDIRECT` | `SUPPORTED` |
 | `insecure_server_certificate_key_size` | Certificate key is smaller than recommended size | `application_security` | `low` | `DIRECTLY_TESTABLE` | `TLS_CERTIFICATE` | `SUPPORTED` |
-| `insecure_telnet` | Non-standard links detected: Unsafe Telnet protocol | `application_security` | `info` | `DIRECTLY_TESTABLE` | `HTTP_CRAWLER` | `NOT_SUPPORTED` |
+| `insecure_telnet` | Non-standard links detected: Unsafe Telnet protocol | `application_security` | `info` | `DIRECTLY_TESTABLE` | `HTTP_CONTENT` | `SUPPORTED` |
 | `links_to_insecure_website` | Site links to insecure websites | `application_security` | `low` | `DIRECTLY_TESTABLE` | `HTTP_CONTENT` | `SUPPORTED` |
 | `local_file_path_exposed_via_url_scheme` | Non-standard links detected: Local file path exposed | `application_security` | `low` | `DIRECTLY_TESTABLE` | `HTTP_CONTENT` | `SUPPORTED` |
 | `openssl_critical_vulnerability` | November 2022 OpenSSL 3.X vulnerability detected | `application_security` | `high` | `TESTABLE_WITH_ENRICHMENT` | `FINGERPRINT+SBOM+CVE` | `NOT_SUPPORTED` |
@@ -281,7 +283,7 @@ The CSV remains normative for exact evidence requirements, proposed logic, depen
 | `websocket_sends_data` | Site may use WebSockets to send user data | `application_security` | `low` | `DIRECTLY_TESTABLE` | `BROWSER_WEBSOCKET` | `NOT_SUPPORTED` |
 | `x_content_type_options_incorrect_v2` | Website does not implement X-Content-Type-Options Best Practices | `application_security` | `low` | `DIRECTLY_TESTABLE` | `HTTP_HEADERS` | `SUPPORTED` |
 | `x_frame_options_incorrect_v2` | Site Does Not Use Best Practices Against Embedding of Malicious Content | `application_security` | `low` | `DIRECTLY_TESTABLE` | `HTTP_HEADERS` | `SUPPORTED` |
-| `x_xss_protection_incorrect_v2` | Website does not implement X-XSS-Protection Best Practices | `application_security` | `info` | `TESTABLE_WITH_ENRICHMENT` | `HTTP_HEADERS+POLICY_ENRICHMENT` | `PARTIAL` |
+| `x_xss_protection_incorrect_v2` | Website does not implement X-XSS-Protection Best Practices | `application_security` | `info` | `DIRECTLY_TESTABLE` | `HTTP_HEADERS` | `SUPPORTED` |
 | `ransomware_association` | Ransomware-Susceptible Remote Access Services Exposed | `cubit_score` | `high` | `TESTABLE_WITH_ENRICHMENT` | `PROTOCOL_FINGERPRINT+CVE+KEV` | `PARTIAL` |
 | `synth_high_risk_appsec_vulnerabilities` | High-Risk Application Security Vulnerabilities | `cubit_score` | `info` | `NOT_REPRODUCIBLE` | `None` | `NOT_SUPPORTED` |
 | `synth_possible_initial_access` | Possible Initial Access by Threat Actor | `cubit_score` | `info` | `NOT_REPRODUCIBLE` | `None` | `NOT_SUPPORTED` |
@@ -348,7 +350,7 @@ The CSV remains normative for exact evidence requirements, proposed logic, depen
 | `microsoft_exchange_http_api_vulnerability` | Product Potentially Impacted by PowerShell Remoting RCE | `network_security` | `low` | `TESTABLE_WITH_ENRICHMENT` | `FINGERPRINT+SBOM+CVE` | `PARTIAL` |
 | `minecraft_server` | Minecraft Server Accessible | `network_security` | `medium` | `DIRECTLY_TESTABLE` | `SERVICE_PROTOCOL_IDENTIFICATION` | `SUPPORTED` |
 | `mysql_server_empty_password` | MySQL Server Running with Empty Password | `network_security` | `low` | `TESTABLE_WITH_ENRICHMENT` | `CONFIG_AUDIT` | `NOT_SUPPORTED` |
-| `open_port` | Open Port Discovered | `network_security` | `info` | `DIRECTLY_TESTABLE` | `TCP` | `PARTIAL` |
+| `open_port` | Open Port Discovered | `network_security` | `info` | `DIRECTLY_TESTABLE` | `TCP_CONNECT_REACHABILITY` | `SUPPORTED` |
 | `potentially_vulnerable_cisco_rv_320_325` | Potentially Vulnerable Cisco RV320/RV325 Router | `network_security` | `info` | `TESTABLE_WITH_ENRICHMENT` | `FINGERPRINT+SBOM+CVE` | `PARTIAL` |
 | `product_uses_vulnerable_log4j` | Product Running Vulnerable Log4j Version | `network_security` | `high` | `TESTABLE_WITH_ENRICHMENT` | `FINGERPRINT+SBOM+CVE` | `PARTIAL` |
 | `remote_access` | Remote Access Service Observed | `network_security` | `low` | `TESTABLE_WITH_ENRICHMENT` | `TCP+HTTP+TLS+DNS_FINGERPRINT` | `PARTIAL` |

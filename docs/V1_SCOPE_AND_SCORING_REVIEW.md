@@ -5,11 +5,16 @@ Review date: 2026-09-23
 Golden Baseline: immutable real `SSC_API` snapshot `0fe2bc8ffb7e3f734d4e88f70b11cffa6e8e9e47e722dc62107f6ff09694eca8`
 
 Current closure-policy supersession (2026-10-22): the exact-version active
-capability set is now **50/160 V1** and **50/202 full baseline** after closing
+capability set is now **53/160 V1** and **53/202 full baseline** after closing
 `service_elasticsearch`, `service_oracle_db`, and `service_pptp` with bounded
-deterministic evidence. Oracle, Elasticsearch, and PPTP require the existing
-public-exposure composition; internal risk remains `UNKNOWN` and non-scoring.
-Historical wave counts below remain records of their respective release dates.
+deterministic evidence and then adding `insecure_telnet`,
+`x_xss_protection_incorrect_v2`, and `open_port` as bounded batch 1. Oracle,
+Elasticsearch, PPTP, and open-port findings require the existing public-exposure
+composition; internal risk remains `UNKNOWN` and non-scoring. VERIFIED_DIRECT
+remains 46/53 because bounded batch 1 is outside that fixed denominator. Seven
+bounded V1 candidates remain, so the practical bounded scanner ceiling is
+60/160, not a claim that 60 are already implemented. Historical wave counts
+below remain records of their respective release dates.
 
 Implementation state updated 2026-10-12: 42 active V1 exact SSC evaluator mappings remain supported; nine reviewed public-exposure consumers now require versioned exposure composition per run without changing calibration or capability counts
 
@@ -116,9 +121,11 @@ This ordering favors deterministic support gained per engineering effort using c
 
 Wave 3A moved V1 support from 21 to 27, Wave 3B moved it to 34, Wave 4A moved it to 37, Wave 4B moved it to 38, and Wave 5A moves it to 41 of 160. The remaining ranked work is a ceiling, not a commitment or a claim of assessment completeness. `PRODUCT_FINGERPRINT` → `CVE_CORRELATION` → `LONGITUDINAL_PATCHING` is the critical follow-on path for Patching Cadence, but it is lower in immediate engineering efficiency and must not use ambiguous banners or unversioned vulnerability/lifecycle data.
 
-## Recommended V1 exit criterion
+## Historical V1 exit criterion (superseded)
 
-The matrix contains 74 directly testable V1 issues: 25 Application Security, 42 Network Security, 7 DNS Health, and none in Patching Cadence. This provides a non-arbitrary base gate. V1 should exit only when all of the following are true:
+The following was the original 2026-09-23 target and is no longer a current requirement. Later exact semantic review showed that a directly-testable label alone does not establish reproducible SSC semantics, and none of the 21 Patching Cadence rows discloses enough authoritative window, inclusion, aggregation, and threshold boundaries for SSC-equivalent support. Useful internal patch-latency analytics remain worthwhile but do not count as SSC support.
+
+The original matrix contained 74 directly testable V1 issues: 25 Application Security, 42 Network Security, 7 DNS Health, and none in Patching Cadence. It proposed:
 
 1. All 74 directly testable V1 issues are truly `SUPPORTED`, unless a reviewed evidence-quality change formally reclassifies an issue.
 2. One complete deterministic Patching Cadence primitive is supported end to end. The reviewed `LONGITUDINAL_PATCHING` primitive contains 11 issues, so this produces a concrete minimum of **85/160 supported (53.1%)** with factor floors of 25/61 Application Security, 42/68 Network Security, 7/10 DNS Health, and 11/21 Patching Cadence.

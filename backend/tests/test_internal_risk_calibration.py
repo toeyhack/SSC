@@ -171,6 +171,13 @@ def test_calibration_has_all_approved_decisions_and_counts():
     }
 
 
+def test_bounded_batch1_unconfigured_keys_fail_closed_without_scoring_changes():
+    for issue_key in ("insecure_telnet", "x_xss_protection_incorrect_v2", "open_port"):
+        decision = resolve_ssc_internal_risk(issue_key)
+        assert decision.breach_risk == "UNKNOWN"
+        assert decision.affects_score is False
+
+
 def test_all_34_v1_1_approved_mappings_remain_unchanged():
     actual = {
         key: (decision.breach_risk, decision.affects_score)
