@@ -55,6 +55,7 @@ from app.services.wave5b_rules import (
     active_wave5b_mappings,
 )
 from app.services.public_exposure_consumers import PINNED_SSC_BASELINE_HASH
+from app.services.public_exposure_consumers import PUBLIC_EXPOSURE_CONSUMER_POLICY_V5
 
 
 def _ber(tag: int, value: bytes) -> bytes:
@@ -175,8 +176,12 @@ def test_oracle_valid_identification_packets_match_without_peer_values(response)
     _tns(11, b"resend"),
     _tns(99, b"unknown"),
     _tns_accept()[:-1],
+    _tns(2, (299).to_bytes(2, "big") + b"\x00\x01" + bytes(10) + b"\x00" + bytes(9) + (8192).to_bytes(4, "big")),
+    _tns(2, (319).to_bytes(2, "big") + b"\x00\x01" + bytes(10) + b"\x00" + bytes(9) + (511).to_bytes(4, "big")),
     _tns(4, b"\x00\x00\x00\x20short"),
+    _tns(4, b"\x00\x00\x00\x05(OK)"),
     _tns(5, b"\x00\x05bad"),
+    _tns(5, b"\x00\x04nope"),
 ])
 def test_oracle_invalid_packets_are_indeterminate(response):
     result = evaluate_service_probe_response("oracle", response)
@@ -195,6 +200,14 @@ def test_oracle_truncation_at_every_boundary_is_indeterminate(response):
 
 def test_oracle_endpoint_builder_is_numeric_bounded_and_contains_no_identity_data():
     built = build_oracle_connect(ProbeRequestContext("127.0.0.1", 1521, bytes(16)))
+    assert built.payload.hex() == (
+        "00c3000001000000013f012c0001200020004f98000000010079004a000000008484"
+        "00000000000000000000000000000000000000000000000000002000000020000000"
+        "000000000000284445534352495054494f4e3d28414444524553533d2850524f544f43"
+        "4f4c3d5443502928484f53543d3132372e302e302e312928504f52543d313532312929"
+        "28434f4e4e4543545f444154413d28534552564943455f4e414d453d5353435f50524f"
+        "42455f444f5f4e4f545f4352454154455f5631292929"
+    )
     assert len(built.payload) <= MAX_SERVICE_PROBE_OUTBOUND_BYTES
     assert int.from_bytes(built.payload[:2], "big") == len(built.payload)
     assert built.payload[4] == 1
@@ -384,50 +397,40 @@ def _activate_pinned_test_baseline(db):
 
 def test_wave5b_registry_cli_activation_is_exact_idempotent_and_uncalibrated(db):
     assert [spec.issue_key for spec in WAVE5B_RULES] == ["service_ldap", "service_oracle_db"]
-    assert WAVE5B_ACTIVE_KEYS == {"service_ldap"}
+    assert WAVE5B_ACTIVE_KEYS == {"service_ldap", "service_oracle_db"}
+    oracle = next(spec for spec in WAVE5B_RULES if spec.issue_key == "service_oracle_db")
+    assert oracle.expression["path"] == "tcp.evaluations.service_oracle_db.exposure_context.composition.matched"
+    assert oracle.evidence_schema["public_exposure_context"]["consumer_policy_version"] == (
+        PUBLIC_EXPOSURE_CONSUMER_POLICY_V5
+    )
     assert not {"cassandra", "microsoft_sql", "mongodb", "mysql", "postgresql"} & set(ADAPTERS)
     args = build_parser().parse_args(["baseline", "activate-wave5b", "--yes"])
     assert args.baseline_command == "activate-wave5b" and args.yes
     import_golden_baseline(db, _wave5b_baseline(), attest_real_source=True)
-    assert set(activate_wave5b_rules(db, commit=False)["unavailable"]) == {"service_ldap"}
+    assert set(activate_wave5b_rules(db, commit=False)["unavailable"]) == {"service_ldap", "service_oracle_db"}
     _activate_pinned_test_baseline(db)
     mappings = active_wave5b_mappings(db)
-    assert len(mappings) == 1
-    assert {item["rule_key"] for item in mappings} == {"ssc.wave5b.service_ldap"}
-    assert db.scalar(select(RuleEngineRule).where(
-        RuleEngineRule.stable_key == "ssc.wave5b.service_oracle_db",
-    )) is None
+    assert len(mappings) == 2
+    assert {item["rule_key"] for item in mappings} == {
+        "ssc.wave5b.service_ldap", "ssc.wave5b.service_oracle_db",
+    }
     for mapping in mappings:
         version = db.get(CatalogIssueTypeVersion, UUID(mapping["issue_version_id"]))
         assert version.source_type == SourceTypeEnum.SSC_API
         decision = resolve_ssc_internal_risk(mapping["issue_key"])
         assert decision.breach_risk == "UNKNOWN" and decision.affects_score is False
-    oracle_issue = db.scalar(select(CatalogIssueType).where(
-        CatalogIssueType.stable_key == "service_oracle_db",
-    ))
-    legacy_oracle_rule = RuleEngineRule(
-        stable_key="ssc.wave5b.service_oracle_db",
-        catalog_issue_type_id=oracle_issue.id,
-        is_active=True,
-    )
-    db.add(legacy_oracle_rule)
-    db.flush()
-    deactivated = activate_wave5b_rules(db, commit=False)
-    assert deactivated["rules_created"] == deactivated["rule_versions_created"] == 0
-    assert deactivated["rules_reused"] == 1 and deactivated["rules_deactivated"] == 1
-    assert deactivated["activated"] == ["service_ldap"]
-    assert deactivated["inactive"] == ["service_oracle_db"]
-    assert deactivated["unavailable"] == {}
-    assert legacy_oracle_rule.is_active is False
     repeated = activate_wave5b_rules(db, commit=False)
-    assert repeated["rules_reused"] == 1 and repeated["rules_deactivated"] == 0
+    assert repeated["rules_created"] == repeated["rule_versions_created"] == 0
+    assert repeated["rules_reused"] == 2 and repeated["rules_deactivated"] == 0
+    assert repeated["activated"] == ["service_ldap", "service_oracle_db"]
+    assert repeated["inactive"] == [] and repeated["unavailable"] == {}
 
 
-def test_active_wave5b_match_finding_is_visible_unknown_and_non_scoring(db, monkeypatch):
+@pytest.mark.parametrize("protocol,response", [("ldap", _ldap_done()), ("oracle", _tns_refuse())])
+def test_active_wave5b_match_finding_is_visible_unknown_and_non_scoring(db, monkeypatch, protocol, response):
     monkeypatch.setattr("app.services.score_results.load_v1_assessment_profile", lambda _db: None)
     import_golden_baseline(db, _wave5b_baseline(), attest_real_source=True)
     _activate_pinned_test_baseline(db)
-    protocol, response = "ldap", _ldap_done()
     issue_key = ADAPTERS[protocol].issue_key
     rule = db.scalar(select(RuleEngineRule).where(
         RuleEngineRule.stable_key == f"ssc.wave5b.{issue_key}",
@@ -467,5 +470,31 @@ def test_active_wave5b_match_finding_is_visible_unknown_and_non_scoring(db, monk
 def test_wave5b_activation_rejects_unattested_and_stale_current_versions(db):
     import_golden_baseline(db, _wave5b_baseline(), attest_real_source=False)
     unavailable = activate_wave5b_rules(db, commit=False)["unavailable"]
-    assert set(unavailable) == {"service_ldap"}
+    assert set(unavailable) == {"service_ldap", "service_oracle_db"}
     db.rollback()
+
+
+def test_wave5b_activation_deactivates_only_drifted_oracle_definition(db):
+    import_golden_baseline(db, _wave5b_baseline(), attest_real_source=True)
+    _activate_pinned_test_baseline(db)
+    oracle = db.scalar(select(CatalogIssueType).where(
+        CatalogIssueType.stable_key == "service_oracle_db",
+    ))
+    oracle_rule = db.scalar(select(RuleEngineRule).where(
+        RuleEngineRule.stable_key == "ssc.wave5b.service_oracle_db",
+    ))
+    stale = CatalogIssueTypeVersion(
+        issue_type_id=oracle.id,
+        version_number=2,
+        name="Stale Oracle definition",
+        breach_risk=oracle.current_version.breach_risk,
+        ssc_severity="medium",
+        affects_score=False,
+        source_type=SourceTypeEnum.SSC_API,
+    )
+    db.add(stale); db.flush()
+    oracle.current_version_id = stale.id
+    result = activate_wave5b_rules(db, commit=False)
+    assert result["activated"] == ["service_ldap"]
+    assert set(result["unavailable"]) == {"service_oracle_db"}
+    assert result["rules_deactivated"] == 1 and oracle_rule.is_active is False

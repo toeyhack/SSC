@@ -152,16 +152,11 @@ WAVE5B_RULES = (
     ),
 )
 WAVE5B_BY_KEY = {spec.issue_key: spec for spec in WAVE5B_RULES}
-WAVE5B_ACTIVE_KEYS = frozenset({"service_ldap"})
+WAVE5B_ACTIVE_KEYS = frozenset({"service_ldap", "service_oracle_db"})
 WAVE5B_ACTIVE_RULES = tuple(spec for spec in WAVE5B_RULES if spec.issue_key in WAVE5B_ACTIVE_KEYS)
 WAVE5B_ACTIVE_BY_KEY = {spec.issue_key: spec for spec in WAVE5B_ACTIVE_RULES}
 WAVE5B_PENDING_RULES = tuple(spec for spec in WAVE5B_RULES if spec.issue_key not in WAVE5B_ACTIVE_KEYS)
-WAVE5B_PARTIAL_REASONS = {
-    "service_oracle_db": (
-        "The bounded Oracle Net/TNS implementation and deterministic fixtures are complete, but real Oracle "
-        "interoperability remains pending; its evaluator is not active and the capability remains PARTIAL."
-    ),
-}
+WAVE5B_PARTIAL_REASONS: dict[str, str] = {}
 
 
 class Wave5BActivationError(ValueError):
@@ -194,6 +189,7 @@ def activate_wave5b_rules(db: Session, *, commit: bool = True) -> dict[str, Any]
         issue = db.execute(select(CatalogIssueType).where(CatalogIssueType.stable_key == spec.issue_key)).scalar_one_or_none()
         if issue is None or not issue.is_active or issue.current_version_id is None:
             unavailable[spec.issue_key] = "exact issue/current version is absent or inactive"
+            _deactivate_rule_if_active(db, spec.rule_key, counts)
             continue
         issue_version = db.get(CatalogIssueTypeVersion, issue.current_version_id)
         consumer = get_pinned_public_exposure_consumer(spec.issue_key)
@@ -203,11 +199,13 @@ def activate_wave5b_rules(db: Session, *, commit: bool = True) -> dict[str, Any]
             or issue_version.id != expected_consumer_version.id
         ):
             unavailable[spec.issue_key] = "current definition is not the reviewed version in the pinned attested SSC_API baseline"
+            _deactivate_rule_if_active(db, spec.rule_key, counts)
             continue
         if consumer is None and (
             issue_version is None or issue_version.source_type != SourceTypeEnum.SSC_API or issue_version.id not in real_versions
         ):
             unavailable[spec.issue_key] = "current definition is not part of an attested real SSC_API baseline"
+            _deactivate_rule_if_active(db, spec.rule_key, counts)
             continue
         rule = db.execute(
             select(RuleEngineRule).where(RuleEngineRule.stable_key == spec.rule_key).with_for_update()
@@ -259,6 +257,15 @@ def activate_wave5b_rules(db: Session, *, commit: bool = True) -> dict[str, Any]
 
 def _same_definition(version: RuleEngineRuleVersion, expected: dict[str, Any]) -> bool:
     return all(getattr(version, key) == value for key, value in expected.items())
+
+
+def _deactivate_rule_if_active(db: Session, rule_key: str, counts: dict[str, int]) -> None:
+    rule = db.execute(
+        select(RuleEngineRule).where(RuleEngineRule.stable_key == rule_key).with_for_update()
+    ).scalar_one_or_none()
+    if rule is not None and rule.is_active:
+        rule.is_active = False
+        counts["rules_deactivated"] += 1
 
 
 def active_wave5b_mappings(db: Session) -> list[dict[str, Any]]:

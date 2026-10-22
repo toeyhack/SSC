@@ -151,9 +151,9 @@ def main() -> int:
         row["current_platform_support"] for row in rows if row["factor"] in V1_FACTORS
     )
     feasibility = Counter(row["feasibility_category"] for row in rows)
-    if coverage != {"SUPPORTED": 47, "PARTIAL": 80, "NOT_SUPPORTED": 75}:
+    if coverage != {"SUPPORTED": 50, "PARTIAL": 77, "NOT_SUPPORTED": 75}:
         raise SystemExit(f"unexpected coverage totals: {dict(coverage)}")
-    if v1_coverage != {"SUPPORTED": 47, "PARTIAL": 77, "NOT_SUPPORTED": 36}:
+    if v1_coverage != {"SUPPORTED": 50, "PARTIAL": 74, "NOT_SUPPORTED": 36}:
         raise SystemExit(f"unexpected V1 coverage totals: {dict(v1_coverage)}")
 
     if args.write:
@@ -215,7 +215,7 @@ def render_markdown(rows, feasibility, coverage, wave1_rules, wave1_partial, wav
         "",
         f"Snapshot content hash: `{BASELINE_HASH}`",
         "Source: immutable real `SSC_API` Golden Baseline",
-        "Implementation state: Waves 1-2, Wave 3A, Wave 3B, Wave 4A, Wave 4B, Wave 5A FTP/IMAP/POP3, Wave 5B.1 LDAP, Wave 5C Minecraft/RDP, Wave 5D Apache CouchDB, and Wave 5E DNS are active. Wave 2 now includes provider-independent tls_weak_cipher policy v2. Wave 5F classifies UPnP as NOT_REPRODUCIBLE from authoritative SSC semantics; its protocol-identity primitive is designable but not implemented. SMTP unusual-port remains INTERNAL_POLICY_ONLY. Elasticsearch, PPTP, and Oracle remain implemented/inactive pending real interoperability.",
+        "Implementation state: Waves 1-2, Wave 3A, Wave 3B, Wave 4A, Wave 4B, Wave 5A FTP/IMAP/POP3, Wave 5B.1 LDAP/Oracle, Wave 5C Minecraft/PPTP/RDP, Wave 5D Apache CouchDB/Elasticsearch, and Wave 5E DNS are active. Wave 2 includes provider-independent tls_weak_cipher policy v2. Wave 5F classifies UPnP as NOT_REPRODUCIBLE from authoritative SSC semantics; its protocol-identity primitive is designable but not implemented. SMTP unusual-port remains INTERNAL_POLICY_ONLY. Under the revised closure policy, deterministic specification-derived evidence is sufficient and real product interoperability is optional stronger validation.",
         "Total mapped issues: **202**",
         "",
         "> This is an independent implementation mapped to SSC taxonomy. It does not reproduce or claim knowledge of SSC collection, aggregation, severity, scoring, or proprietary detection logic. `ssc_severity` remains source metadata and is not mapped to internal risk or score impact.",
@@ -226,10 +226,10 @@ def render_markdown(rows, feasibility, coverage, wave1_rules, wave1_partial, wav
         "",
         "## Coverage summary",
         "",
-        "| Coverage | Before tls_weak_cipher closure | After closure | Percentage after |",
+        "| Coverage | Before three-capability closure | After closure | Percentage after |",
         "|---|---:|---:|---:|",
-        f"| `SUPPORTED` | 46 | {coverage['SUPPORTED']} | {coverage['SUPPORTED']/202:.1%} |",
-        f"| `PARTIAL` | 81 | {coverage['PARTIAL']} | {coverage['PARTIAL']/202:.1%} |",
+        f"| `SUPPORTED` | 47 | {coverage['SUPPORTED']} | {coverage['SUPPORTED']/202:.1%} |",
+        f"| `PARTIAL` | 80 | {coverage['PARTIAL']} | {coverage['PARTIAL']/202:.1%} |",
         f"| `NOT_SUPPORTED` | 75 | {coverage['NOT_SUPPORTED']} | {coverage['NOT_SUPPORTED']/202:.1%} |",
         "| **Total** | **202** | **202** | **100.0%** |",
         "",
@@ -390,7 +390,7 @@ def render_markdown(rows, feasibility, coverage, wave1_rules, wave1_partial, wav
         "",
         "## Active Wave 5B.1 evaluator mappings",
         "",
-        "The approved Wave 5B.1 activation set contains only `service_ldap`. Its no-Bind RootDSE evaluator is linked to the exact attested issue version. Oracle Net remains implemented and tested but inactive/PARTIAL pending real interoperability. The adapters define no deterministic NO_MATCH, perform no authentication/session/query, and never follow Oracle redirects. The five product-ambiguous database keys remain PARTIAL.",
+        "The approved Wave 5B.1 activation set contains `service_ldap` and `service_oracle_db`, each linked to its exact attested issue version. Oracle requires protocol identity plus PUBLIC_ROUTABLE destination and trusted EXTERNAL_PUBLIC vantage through PUBLIC_EXPOSURE_CONTEXT; LDAP retains its existing public-exposure contract. The adapters define no deterministic protocol NO_MATCH, perform no authentication/session/query, and never follow Oracle redirects. The five product-ambiguous database keys remain PARTIAL.",
         "",
         "| SSC issue key | Protocol | Primitive | Exact MATCH condition | Exact NO_MATCH boundary | INDETERMINATE boundary | Authoritative reference |",
         "|---|---|---|---|---|---|---|",
@@ -403,24 +403,24 @@ def render_markdown(rows, feasibility, coverage, wave1_rules, wave1_partial, wav
 
     lines += [
         "",
-        "## Wave 5B.1 implemented pending interoperability",
+        "## Wave 5B.1 remaining pending implementations",
         "",
-        "These adapters and deterministic tests remain available, but they have no approved active evaluator and are not counted as `SUPPORTED`.",
+        "None. Real product interoperability is optional stronger validation and is not a closure gate.",
         "",
         "| SSC issue key | Protocol | Current state | Closure blocker |",
         "|---|---|---|---|",
     ]
     for spec in wave5b_pending_rules:
         lines.append(
-            f"| `{spec.issue_key}` | `{spec.protocol}` | `IMPLEMENTED_PENDING_INTEROP` / `PARTIAL` | "
-            "Real protocol interoperability has not been validated. |"
+            f"| `{spec.issue_key}` | `{spec.protocol}` | `PARTIAL` / inactive | "
+            "An independent semantic or deterministic closure gate remains. |"
         )
 
     lines += [
         "",
         "## Active Wave 5C evaluator mappings",
         "",
-        "The approved Wave 5C activation set contains `minecraft_server` and `service_rdp`, each linked to the exact attested issue version. Minecraft uses protocol identity as its complete applicability predicate. RDP requires protocol MATCH plus PUBLIC_ROUTABLE plus trusted EXTERNAL_PUBLIC deployment-manifest vantage through PUBLIC_EXPOSURE_CONTEXT v1.",
+        "The approved Wave 5C activation set contains `minecraft_server`, `service_pptp`, and `service_rdp`, each linked to the exact attested issue version. Minecraft uses protocol identity as its complete applicability predicate. PPTP and RDP require protocol MATCH plus PUBLIC_ROUTABLE plus trusted EXTERNAL_PUBLIC deployment-manifest vantage through PUBLIC_EXPOSURE_CONTEXT.",
         "",
         "| SSC issue key | Protocol | Primitive | Exact logic | Authoritative reference |",
         "|---|---|---|---|---|",
@@ -432,9 +432,9 @@ def render_markdown(rows, feasibility, coverage, wave1_rules, wave1_partial, wav
 
     lines += [
         "",
-        "## Wave 5C implemented pending interoperability",
+        "## Wave 5C remaining pending implementations",
         "",
-        "PPTP's protocol adapter and public-exposure consumer semantics are ready, but its SSC rule remains inactive until real interoperability passes.",
+        "None. Real PPTP interoperability remains optional stronger validation and was not run for this closure.",
         "",
         "| SSC issue key | Protocol | Current state | Closure blockers |",
         "|---|---|---|---|",
@@ -449,7 +449,7 @@ def render_markdown(rows, feasibility, coverage, wave1_rules, wave1_partial, wav
         "",
         "## Wave 5D exact HTTP product identification",
         "",
-        "Apache CouchDB is active after official loopback interoperability. Elasticsearch remains inactive pending official Elasticsearch and real OpenSearch interoperability. Both require exact-product identity plus PUBLIC_EXPOSURE_CONTEXT v1.",
+        "Apache CouchDB and Elasticsearch are active. Both require exact-product identity plus PUBLIC_EXPOSURE_CONTEXT. Elasticsearch closure uses strong product-format-derived Elasticsearch and OpenSearch fixtures; official-container interoperability remains optional stronger validation and was not run.",
         "",
         "| SSC issue key | Product | Current state | Closure blockers |",
         "|---|---|---|---|",

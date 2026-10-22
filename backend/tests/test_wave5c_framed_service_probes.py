@@ -338,6 +338,12 @@ def test_pptp_every_truncation_boundary_is_indeterminate(response):
     assert evaluate_service_probe_response("pptp", response)["outcome"] == "INDETERMINATE"
 
 
+@pytest.mark.parametrize("response", [b"RFB 003.008\n", b"+PONG\r\n", b"\x16\x03\x03\x00\x05hello"])
+def test_pptp_foreign_protocol_bytes_remain_indeterminate(response):
+    result = evaluate_service_probe_response("pptp", response)
+    assert result["outcome"] == "INDETERMINATE" and result["matched"] is None
+
+
 def test_rdp_request_is_exact_reviewed_negotiation_request():
     assert RDP_NEGOTIATION_REQUEST.hex() == "030000130ee00000000000010008000b000000"
     assert len(RDP_NEGOTIATION_REQUEST) == 19
@@ -474,9 +480,9 @@ def test_wave5c_config_and_executor_pass_declared_hostname(monkeypatch):
     assert all(item[3] == "declared.example.test" for item in seen)
 
 
-def test_wave5c_rules_close_minecraft_and_rdp_with_exact_semantics(db):
-    assert WAVE5C_ACTIVE_KEYS == frozenset({"minecraft_server", "service_rdp"})
-    assert WAVE5C_CLOSURE_BLOCKERS == {"service_pptp": ("IMPLEMENTED_PENDING_INTEROP",)}
+def test_wave5c_rules_close_all_three_with_exact_semantics(db):
+    assert WAVE5C_ACTIVE_KEYS == frozenset({"minecraft_server", "service_pptp", "service_rdp"})
+    assert WAVE5C_CLOSURE_BLOCKERS == {}
     minecraft = WAVE5C_BY_KEY["minecraft_server"]
     assert minecraft.expression == {
         "operator": "equals", "path": "tcp.evaluations.minecraft_server.matched", "value": True,
@@ -492,37 +498,32 @@ def test_wave5c_rules_close_minecraft_and_rdp_with_exact_semantics(db):
     assert rdp.evidence_schema["public_exposure_context"]["consumer_policy_version"] == (
         PUBLIC_EXPOSURE_CONSUMER_POLICY_V2
     )
-    assert get_pinned_public_exposure_consumer("service_pptp") is not None
+    pptp = WAVE5C_BY_KEY["service_pptp"]
+    assert pptp.expression["path"] == "tcp.evaluations.service_pptp.exposure_context.composition.matched"
+    assert pptp.evidence_schema["public_exposure_context"]["consumer_policy_version"] == (
+        PUBLIC_EXPOSURE_CONSUMER_POLICY_V2
+    )
     args = build_parser().parse_args(["baseline", "activate-wave5c", "--yes"])
     assert args.baseline_command == "activate-wave5c" and args.yes
 
 
-def test_wave5c_activation_requires_exact_baseline_is_idempotent_and_deactivates_pptp(db):
+def test_wave5c_activation_requires_exact_baseline_and_is_idempotent(db):
     unavailable = activate_wave5c_rules(db, commit=False)["unavailable"]
-    assert set(unavailable) == {"minecraft_server", "service_rdp"}
+    assert set(unavailable) == {"minecraft_server", "service_pptp", "service_rdp"}
     issues = _seed_pinned_wave5c_baseline(db)
-
-    pptp_rule = RuleEngineRule(
-        stable_key="ssc.wave5c.service_pptp",
-        catalog_issue_type_id=issues["service_pptp"].id,
-        is_active=True,
-    )
-    db.add(pptp_rule)
-    db.flush()
     first = activate_wave5c_rules(db, commit=False)
     assert first["unavailable"] == {}
-    assert set(first["activated"]) == {"minecraft_server", "service_rdp"}
-    assert first["inactive"] == ["service_pptp"]
-    assert first["rules_created"] == first["rule_versions_created"] == 2
-    assert first["rules_deactivated"] == 1 and pptp_rule.is_active is False
+    assert set(first["activated"]) == {"minecraft_server", "service_pptp", "service_rdp"}
+    assert first["inactive"] == []
+    assert first["rules_created"] == first["rule_versions_created"] == 3
     mappings = active_wave5c_mappings(db)
-    assert {mapping["issue_key"] for mapping in mappings} == {"minecraft_server", "service_rdp"}
+    assert {mapping["issue_key"] for mapping in mappings} == {"minecraft_server", "service_pptp", "service_rdp"}
     assert all(UUID(mapping["issue_version_id"]) == issues[mapping["issue_key"]].current_version_id for mapping in mappings)
 
     version_count = db.scalar(select(func.count()).select_from(RuleEngineRuleVersion))
     repeated = activate_wave5c_rules(db, commit=False)
     assert repeated["rules_created"] == repeated["rule_versions_created"] == 0
-    assert repeated["rules_reused"] == 2 and repeated["rules_deactivated"] == 0
+    assert repeated["rules_reused"] == 3 and repeated["rules_deactivated"] == 0
     assert db.scalar(select(func.count()).select_from(RuleEngineRuleVersion)) == version_count
 
 
@@ -551,7 +552,7 @@ def test_wave5c_activation_rejects_stale_current_version_and_does_not_churn_othe
         other_rules.append((rule.id, version.id, version.version_number, version.rule_expression, version.evidence_schema))
 
     initial = activate_wave5c_rules(db, commit=False)
-    assert set(initial["activated"]) == {"minecraft_server", "service_rdp"}
+    assert set(initial["activated"]) == {"minecraft_server", "service_pptp", "service_rdp"}
     minecraft_rule = db.scalar(select(RuleEngineRule).where(
         RuleEngineRule.stable_key == "ssc.wave5c.minecraft_server"
     ))
@@ -570,7 +571,7 @@ def test_wave5c_activation_rejects_stale_current_version_and_does_not_churn_othe
     db.flush()
     minecraft.current_version_id = stale.id
     result = activate_wave5c_rules(db, commit=False)
-    assert set(result["activated"]) == {"service_rdp"}
+    assert set(result["activated"]) == {"service_pptp", "service_rdp"}
     assert set(result["unavailable"]) == {"minecraft_server"}
     assert result["rules_deactivated"] == 1 and minecraft_rule.is_active is False
     for rule_id, version_id, number, expression, schema in other_rules:

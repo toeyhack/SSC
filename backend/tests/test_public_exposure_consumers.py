@@ -199,6 +199,7 @@ def _scanner_observation(issue_key, source, *, protocol_outcome="MATCH", stale=F
         ("service_couchdb", EvidenceSourceEnum.SCANNER_HTTP),
         ("service_elasticsearch", EvidenceSourceEnum.SCANNER_HTTP),
         ("service_dns", EvidenceSourceEnum.SCANNER_DNS),
+        ("service_oracle_db", EvidenceSourceEnum.SCANNER_TCP),
     ],
 )
 def test_external_public_scanner_match_creates_explained_finding(db, monkeypatch, issue_key, source):
@@ -249,6 +250,7 @@ def test_minecraft_protocol_match_creates_finding_without_external_vantage(db, m
         ("service_couchdb", EvidenceSourceEnum.SCANNER_HTTP),
         ("service_elasticsearch", EvidenceSourceEnum.SCANNER_HTTP),
         ("service_dns", EvidenceSourceEnum.SCANNER_DNS),
+        ("service_oracle_db", EvidenceSourceEnum.SCANNER_TCP),
     ],
 )
 def test_unknown_local_api_and_default_worker_vantage_are_not_assessed(
@@ -283,6 +285,7 @@ def test_unknown_local_api_and_default_worker_vantage_are_not_assessed(
         ("service_couchdb", EvidenceSourceEnum.SCANNER_HTTP),
         ("service_elasticsearch", EvidenceSourceEnum.SCANNER_HTTP),
         ("service_dns", EvidenceSourceEnum.SCANNER_DNS),
+        ("service_oracle_db", EvidenceSourceEnum.SCANNER_TCP),
     ],
 )
 def test_internal_vantage_non_public_target_and_protocol_indeterminate_are_not_assessed(
@@ -309,6 +312,7 @@ def test_internal_vantage_non_public_target_and_protocol_indeterminate_are_not_a
         ("service_couchdb", EvidenceSourceEnum.SCANNER_HTTP, EvidenceSourceEnum.SCANNER_TCP),
         ("service_elasticsearch", EvidenceSourceEnum.SCANNER_HTTP, EvidenceSourceEnum.SCANNER_TCP),
         ("service_dns", EvidenceSourceEnum.SCANNER_DNS, EvidenceSourceEnum.SCANNER_TCP),
+        ("service_oracle_db", EvidenceSourceEnum.SCANNER_TCP, EvidenceSourceEnum.SCANNER_HTTP),
     ],
 )
 @pytest.mark.parametrize("stale", [True, False])
@@ -330,7 +334,7 @@ def test_stale_policy_and_wrong_scanner_source_fail_closed(
 
 @pytest.mark.parametrize(
     "issue_key",
-    ["service_rsync", "service_rdp", "service_couchdb", "service_elasticsearch", "service_dns"],
+    ["service_rsync", "service_rdp", "service_couchdb", "service_elasticsearch", "service_dns", "service_oracle_db"],
 )
 def test_manual_protocol_shaped_match_is_rejected_by_source_identity(db, issue_key):
     consumer = get_pinned_public_exposure_consumer(issue_key)

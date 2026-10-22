@@ -149,7 +149,7 @@ def _validate_profile_membership(issues: tuple[ProfileIssue, ...]) -> None:
             counts[issue.factor_code] += 1
     if counts != V1_FACTOR_TOTALS or sum(counts.values()) != V1_TOTAL_ISSUES:
         raise AssessmentProfileError(f"V1 profile membership mismatch: {counts}")
-    if sum(issue.supported_capability for issue in issues if issue.factor_code in V1_FACTOR_CODES) != 47:
-        raise AssessmentProfileError("V1 profile must resolve the 47 reviewed supported capabilities")
-    if sum(issue.supported_capability for issue in issues) != 47:
-        raise AssessmentProfileError("full profile must resolve the 47 reviewed supported capabilities")
+    if sum(issue.supported_capability for issue in issues if issue.factor_code in V1_FACTOR_CODES) != 50:
+        raise AssessmentProfileError("V1 profile must resolve the 50 reviewed supported capabilities")
+    if sum(issue.supported_capability for issue in issues) != 50:
+        raise AssessmentProfileError("full profile must resolve the 50 reviewed supported capabilities")

@@ -201,6 +201,27 @@ def _elasticsearch_facts(document: Any, product_values: list[str]) -> tuple[bool
     return match, facts
 
 
+def _opensearch_signature(document: Any, elastic_facts: dict[str, bool]) -> bool:
+    """Recognize only the complete documented OpenSearch root response shape."""
+    root = document if isinstance(document, dict) else {}
+    version = root.get("version") if isinstance(root.get("version"), dict) else {}
+    typed = (
+        _valid_version(version.get("number"))
+        and all(_nonempty(version.get(key)) for key in ("build_type", "build_hash", "build_date"))
+        and all(_valid_version(version.get(key)) for key in (
+            "lucene_version", "minimum_wire_compatibility_version", "minimum_index_compatibility_version",
+        ))
+        and isinstance(version.get("build_snapshot"), bool)
+    )
+    return bool(
+        all(_nonempty(root.get(key)) for key in ("name", "cluster_name", "cluster_uuid"))
+        and typed
+        and elastic_facts["opensearch_distribution"]
+        and elastic_facts["opensearch_tagline_exact"]
+        and not elastic_facts["elastic_product_header_exact"]
+    )
+
+
 def evaluate_http_product_response(
     product: str,
     observation: dict[str, Any],
@@ -224,12 +245,7 @@ def evaluate_http_product_response(
     elastic_content_ok = media_type in {"application/json", "application/vnd.elasticsearch+json"}
     couch_exact = couch_signature and couch_content_ok
     elastic_exact = elastic_signature and elastic_content_ok
-    opensearch_exact = elastic_content_ok and (
-        isinstance(document, dict)
-        and elastic_facts["opensearch_distribution"]
-        and elastic_facts["opensearch_tagline_exact"]
-        and not elastic_facts["elastic_product_header_exact"]
-    )
+    opensearch_exact = elastic_content_ok and _opensearch_signature(document, elastic_facts)
     marker_facts = couch_facts if product == "couchdb" else elastic_facts
     status = observation.get("status_code")
     body_complete = observation.get("body_complete") is True
@@ -247,7 +263,11 @@ def evaluate_http_product_response(
         or json_error
         or ("json_root_not_object" if document is not None and not isinstance(document, dict) else None)
     )
-    conflicting = (couch_exact and (elastic_exact or opensearch_exact)) or (elastic_exact and opensearch_exact)
+    elastic_opensearch_conflict = (
+        elastic_facts["elastic_product_header_exact"]
+        and (elastic_facts["opensearch_distribution"] or elastic_facts["opensearch_tagline_exact"])
+    )
+    conflicting = (couch_exact and (elastic_exact or opensearch_exact)) or elastic_opensearch_conflict
     if common_error or conflicting:
         outcome, identity_class = "INDETERMINATE", "CONFLICTING" if conflicting else "UNKNOWN"
         reason = "conflicting_product_markers" if conflicting else str(common_error)

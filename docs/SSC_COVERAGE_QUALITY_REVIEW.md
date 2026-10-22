@@ -4,6 +4,28 @@ Baseline content hash: `0fe2bc8ffb7e3f734d4e88f70b11cffa6e8e9e47e722dc62107f6ff0
 Review date: 2026-09-20  
 Scope: analysis/design only; no scanner, rule, score, or Golden Baseline change.
 
+## Three-capability closure-policy supersession (2026-10-22)
+
+The current closure policy treats real product/container interoperability as
+optional stronger validation, not a mandatory gate. Exact semantic alignment,
+bounded deterministic implementation, strong specification/product-format
+fixtures, fail-closed tri-state behavior, focused and regression validation,
+and reconciled accounting remain mandatory. Under that policy,
+`service_elasticsearch`, `service_oracle_db`, and `service_pptp` are now
+`SUPPORTED` / `CLOSED`; historical sections below accurately record the older
+interoperability-gated decisions but no longer describe current status.
+
+Elasticsearch requires exact product identity plus public exposure and has a
+deterministic complete OpenSearch `NO_MATCH` boundary. Oracle accepts only one
+complete structurally valid TNS ACCEPT, REFUSE, or REDIRECT (never following a
+redirect), and its exact Golden description also requires public exposure.
+PPTP accepts one complete legal RFC 2637 SCCRP, including legal rejection
+results that still identify PPTP, plus public exposure. All three fail closed
+on missing, malformed, ambiguous, transport-failed, or stale exposure evidence.
+Current support and the practical ceiling converge at **46/53 VERIFIED_DIRECT**,
+**50/160 V1**, and **50/202 full baseline**. No scoring or calibration change
+follows.
+
 ## TLS weak-cipher implementation supersession (2026-10-21)
 
 The historical Wave 2 limitation and original quality-gate rows below are

@@ -4,6 +4,13 @@ Review date: 2026-09-23
 
 Golden Baseline: immutable real `SSC_API` snapshot `0fe2bc8ffb7e3f734d4e88f70b11cffa6e8e9e47e722dc62107f6ff09694eca8`
 
+Current closure-policy supersession (2026-10-22): the exact-version active
+capability set is now **50/160 V1** and **50/202 full baseline** after closing
+`service_elasticsearch`, `service_oracle_db`, and `service_pptp` with bounded
+deterministic evidence. Oracle, Elasticsearch, and PPTP require the existing
+public-exposure composition; internal risk remains `UNKNOWN` and non-scoring.
+Historical wave counts below remain records of their respective release dates.
+
 Implementation state updated 2026-10-12: 42 active V1 exact SSC evaluator mappings remain supported; nine reviewed public-exposure consumers now require versioned exposure composition per run without changing calibration or capability counts
 
 This review originally changed product scope documentation only. The V1 Assessment Completeness Fix implemented on 2026-09-23 applies the correction specified here without changing the Golden Baseline, scanner primitives, rule activation, penalty arithmetic, factor weights, or SSC severity.

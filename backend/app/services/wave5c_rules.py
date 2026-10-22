@@ -163,19 +163,12 @@ WAVE5C_RULES = (
 WAVE5C_BY_KEY = {spec.issue_key: spec for spec in WAVE5C_RULES}
 WAVE5C_IMPLEMENTED_KEYS = frozenset(WAVE5C_BY_KEY)
 
-WAVE5C_ACTIVE_KEYS: frozenset[str] = frozenset({"minecraft_server", "service_rdp"})
+WAVE5C_ACTIVE_KEYS: frozenset[str] = frozenset({"minecraft_server", "service_pptp", "service_rdp"})
 WAVE5C_ACTIVE_RULES = tuple(spec for spec in WAVE5C_RULES if spec.issue_key in WAVE5C_ACTIVE_KEYS)
 WAVE5C_ACTIVE_BY_KEY = {spec.issue_key: spec for spec in WAVE5C_ACTIVE_RULES}
 WAVE5C_PENDING_RULES = tuple(spec for spec in WAVE5C_RULES if spec.issue_key not in WAVE5C_ACTIVE_KEYS)
-WAVE5C_CLOSURE_BLOCKERS = {
-    "service_pptp": ("IMPLEMENTED_PENDING_INTEROP",),
-}
-WAVE5C_PARTIAL_REASONS = {
-    "service_pptp": (
-        "The bounded PPTP control implementation and PUBLIC_EXPOSURE_CONTEXT consumer semantics are complete, but "
-        "real PPTP server interoperability remains pending; the SSC rule is inactive."
-    ),
-}
+WAVE5C_CLOSURE_BLOCKERS: dict[str, tuple[str, ...]] = {}
+WAVE5C_PARTIAL_REASONS: dict[str, str] = {}
 
 
 class Wave5CActivationError(ValueError):

@@ -52,7 +52,13 @@ ELASTIC = {
 }
 OPENSEARCH = {
     "name": "private-node", "cluster_name": "private-cluster", "cluster_uuid": "private-uuid",
-    "version": {"distribution": "opensearch", "number": "7.10.2"},
+    "version": {
+        "distribution": "opensearch", "number": "2.19.1", "build_type": "tar",
+        "build_hash": "private-opensearch-hash", "build_date": "2026-01-01",
+        "build_snapshot": False, "lucene_version": "9.12.1",
+        "minimum_wire_compatibility_version": "7.10.0",
+        "minimum_index_compatibility_version": "7.0.0",
+    },
     "tagline": "The OpenSearch Project: https://opensearch.org/",
 }
 
@@ -116,32 +122,49 @@ def test_versions_and_independent_activation_gate():
     assert HTTP_PRODUCT_EVIDENCE_SCHEMA_VERSION == "ssc-wave5d-http-product-evidence.v1"
     assert COUCHDB_IDENTITY_POLICY_VERSION == "ssc-wave5d-couchdb-identity.v1"
     assert ELASTICSEARCH_IDENTITY_POLICY_VERSION == "ssc-wave5d-elasticsearch-identity.v1"
-    assert WAVE5D_ACTIVE_KEYS == {"service_couchdb"}
-    assert WAVE5D_CLOSURE_BLOCKERS["service_elasticsearch"] == (
-        "IMPLEMENTED_PENDING_INTEROP", "REAL_OPENSEARCH_REJECTION_PENDING",
-    )
+    assert WAVE5D_ACTIVE_KEYS == {"service_couchdb", "service_elasticsearch"}
+    assert WAVE5D_CLOSURE_BLOCKERS == {}
     assert WAVE5D_BY_KEY["service_couchdb"].expression["path"] == "http.evaluations.service_couchdb.exposure_context.composition.matched"
 
 
-def test_activation_is_exact_independent_idempotent_and_deactivates_pending(db):
+def test_activation_is_exact_independent_and_idempotent(db):
+    assert set(activate_wave5d_rules(db, commit=False)["unavailable"]) == {
+        "service_couchdb", "service_elasticsearch",
+    }
     issues = _seed_baseline(db)
-    stale = RuleEngineRule(
-        stable_key="ssc.wave5d.service_elasticsearch",
-        catalog_issue_type_id=issues["service_elasticsearch"].id,
-        is_active=True,
-    )
-    db.add(stale); db.flush()
     first = activate_wave5d_rules(db, commit=False)
-    assert first["activated"] == ["service_couchdb"]
-    assert first["inactive"] == ["service_elasticsearch"]
-    assert stale.is_active is False
+    assert first["activated"] == ["service_couchdb", "service_elasticsearch"]
+    assert first["inactive"] == []
     versions_before = db.scalar(select(func.count()).select_from(RuleEngineRuleVersion))
     second = activate_wave5d_rules(db, commit=False)
     assert second["rules_created"] == second["rule_versions_created"] == 0
     assert db.scalar(select(func.count()).select_from(RuleEngineRuleVersion)) == versions_before
     mappings = active_wave5d_mappings(db)
-    assert [item["issue_key"] for item in mappings] == ["service_couchdb"]
-    assert mappings[0]["issue_version_number"] == 1
+    assert [item["issue_key"] for item in mappings] == ["service_couchdb", "service_elasticsearch"]
+    assert all(item["issue_version_number"] == 1 for item in mappings)
+
+
+def test_activation_deactivates_only_drifted_elasticsearch_definition(db):
+    issues = _seed_baseline(db)
+    activate_wave5d_rules(db, commit=False)
+    elastic_rule = db.scalar(select(RuleEngineRule).where(
+        RuleEngineRule.stable_key == "ssc.wave5d.service_elasticsearch"
+    ))
+    stale = CatalogIssueTypeVersion(
+        issue_type_id=issues["service_elasticsearch"].id,
+        version_number=2,
+        name="Stale Elasticsearch definition",
+        breach_risk=BreachRiskEnum.UNKNOWN,
+        ssc_severity="medium",
+        affects_score=False,
+        source_type=SourceTypeEnum.SSC_API,
+    )
+    db.add(stale); db.flush()
+    issues["service_elasticsearch"].current_version_id = stale.id
+    result = activate_wave5d_rules(db, commit=False)
+    assert result["activated"] == ["service_couchdb"]
+    assert set(result["unavailable"]) == {"service_elasticsearch"}
+    assert result["rules_deactivated"] == 1 and elastic_rule.is_active is False
 
 
 def test_registry_v3_is_additive_and_scanner_http_only():
@@ -245,6 +268,18 @@ def test_opensearch_with_injected_elastic_header_is_conflicting():
     result = evaluate_http_product_response("elasticsearch", _observation(
         OPENSEARCH, headers=[("Content-Type", "application/json"), ("X-Elastic-Product", "Elasticsearch")]
     ))
+    assert (result["outcome"], result["identity_class"], result["reason_code"]) == (
+        "INDETERMINATE", "CONFLICTING", "conflicting_product_markers",
+    )
+
+
+def test_incomplete_opensearch_overlap_is_indeterminate_not_no_match():
+    incomplete = {
+        "name": "node", "cluster_name": "cluster", "cluster_uuid": "uuid",
+        "version": {"distribution": "opensearch", "number": "2.19.1"},
+        "tagline": "The OpenSearch Project: https://opensearch.org/",
+    }
+    result = evaluate_http_product_response("elasticsearch", _observation(incomplete))
     assert (result["outcome"], result["identity_class"]) == ("INDETERMINATE", "UNKNOWN")
 
 

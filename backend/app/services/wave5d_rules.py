@@ -122,17 +122,12 @@ WAVE5D_RULES = (
 )
 WAVE5D_BY_KEY = {spec.issue_key: spec for spec in WAVE5D_RULES}
 WAVE5D_IMPLEMENTED_KEYS = frozenset(WAVE5D_BY_KEY)
-WAVE5D_ACTIVE_KEYS: frozenset[str] = frozenset({"service_couchdb"})
+WAVE5D_ACTIVE_KEYS: frozenset[str] = frozenset({"service_couchdb", "service_elasticsearch"})
 WAVE5D_ACTIVE_RULES = tuple(spec for spec in WAVE5D_RULES if spec.issue_key in WAVE5D_ACTIVE_KEYS)
 WAVE5D_ACTIVE_BY_KEY = {spec.issue_key: spec for spec in WAVE5D_ACTIVE_RULES}
 WAVE5D_PENDING_RULES = tuple(spec for spec in WAVE5D_RULES if spec.issue_key not in WAVE5D_ACTIVE_KEYS)
-WAVE5D_CLOSURE_BLOCKERS = {"service_elasticsearch": ("IMPLEMENTED_PENDING_INTEROP", "REAL_OPENSEARCH_REJECTION_PENDING")}
-WAVE5D_PARTIAL_REASONS = {
-    "service_elasticsearch": (
-        "The exact-product evaluator is complete, but official Elasticsearch and real OpenSearch interoperability "
-        "remain pending because the local resource gate was not satisfied; the SSC rule is inactive."
-    ),
-}
+WAVE5D_CLOSURE_BLOCKERS: dict[str, tuple[str, ...]] = {}
+WAVE5D_PARTIAL_REASONS: dict[str, str] = {}
 
 
 class Wave5DActivationError(ValueError):

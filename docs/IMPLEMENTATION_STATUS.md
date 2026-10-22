@@ -4,6 +4,72 @@ CLI-FIRST MVP — COMPLETE / PASS
 
 Current phase: Phase 6B - CLI-first REPORT Output
 
+Three pending deterministic capability reconciliation: COMPLETE / PASS
+(2026-10-22). The revised closure policy makes real product/container
+interoperability optional stronger validation rather than a mandatory closure
+gate. Exact semantic alignment, bounded implementation, strong
+specification/product-format-derived fixtures, fail-closed tri-state behavior,
+focused and full regression validation, and reconciled accounting remain
+mandatory.
+
+The read-only local attested `SSC_API` Golden snapshot has exact content hash
+`0fe2bc8ffb7e3f734d4e88f70b11cffa6e8e9e47e722dc62107f6ff09694eca8`
+and `is_real_baseline=true`. The three exact current rows are:
+
+| Stable key | Issue-version UUID | Version | Title | Factor | SSC severity | Exact description |
+|---|---|---:|---|---|---|---|
+| `service_elasticsearch` | `5adf0761-a78e-4dec-bfea-33df5a8c9a71` | 1 | Elasticsearch Service Observed | `network_security` | `medium` | We observed Elasticsearch, a database management system, publicly exposed. |
+| `service_oracle_db` | `5d9ae38c-7dda-4720-9f72-094c4609ccd7` | 1 | Oracle Database Server Accessible | `network_security` | `medium` | We discovered a publicly exposed Oracle database server, which has high risk of data compromise due its exploitability and value to hackers. |
+| `service_pptp` | `9700a831-c572-4023-a102-29a5ae8e3344` | 1 | PPTP Service Accessible | `network_security` | `medium` | We observed a service running PPTP, an obsolete and insecure VPN-like protocol, publicly exposed. |
+
+Each row has `source_type=SSC_API` and
+`source_snapshot_hash=content_hash=0fe2bc8ffb7e3f734d4e88f70b11cffa6e8e9e47e722dc62107f6ff09694eca8`.
+The exact `ssc_metadata` objects retain the same key/title/factor/severity and
+these source short descriptions, plus their captured long descriptions and
+recommendations; the Golden snapshot itself is unchanged.
+
+Elasticsearch now closes on an exact status-200 bounded accepted-JSON root
+response with exactly one `X-Elastic-Product: Elasticsearch`, complete typed
+root/version/build identity, exact Elastic tagline, and no OpenSearch markers.
+A complete documented-shape OpenSearch root response with
+`distribution=opensearch`, the exact OpenSearch tagline, and no exact Elastic
+product header is `NO_MATCH`; incomplete overlap and conflicting markers are
+`INDETERMINATE`. Oracle closes only on exactly one complete structurally valid
+TNS ACCEPT, REFUSE, or REDIRECT; redirects are identity evidence and are never
+followed. PPTP closes only on one complete legal 156-byte RFC 2637 SCCRP,
+including legal rejection results that still prove PPTP identity. Oracle and
+PPTP define no protocol `NO_MATCH`.
+
+All three exact Golden descriptions require public exposure. Elasticsearch
+retains its v3 consumer entry and PPTP retains v2. Additive registry v5
+preserves immutable v1-v4 membership and every older entry-level policy, adding
+only Oracle at evidence root `tcp` with `SCANNER_TCP`. Final MATCH for each
+candidate requires identity MATCH plus PUBLIC_ROUTABLE destination plus trusted
+EXTERNAL_PUBLIC deployment-manifest vantage; internal/unknown/non-public/stale
+context remains `INDETERMINATE` / `NOT_ASSESSED`.
+
+The active sets are Wave 5B `{service_ldap, service_oracle_db}`, Wave
+5C `{minecraft_server, service_pptp, service_rdp}`, and Wave 5D
+`{service_couchdb, service_elasticsearch}`. Every candidate remains exact
+issue-version and attested-baseline pinned, repeat activation is idempotent, and
+definition drift deactivates the affected managed rule. Internal risk remains
+unconfigured `UNKNOWN` / `affects_score=false`; scoring and calibration are
+unchanged. Support and the practical implementation ceiling now converge at
+**46/53 VERIFIED_DIRECT**, **50/160 V1**, and **50/202
+full baseline**. Official Elasticsearch/OpenSearch, Oracle Database, and real
+privileged PPTP interoperability are `OPTIONAL_STRONGER_VALIDATION_NOT_RUN`.
+
+Validation used fresh isolated PostgreSQL databases
+`ssc_three_close_focus_20261022`, `ssc_three_close_activation_20261022`, and
+`ssc_three_close_full_20261022`, never `ssc_e2e`. The focused closure and
+regression gate passed **1,123 tests** with **1** opt-in skip. The one and only
+complete backend-suite run passed **1,401 tests** with **1** opt-in skip and the
+existing Starlette/httpx deprecation warning. Exact first and repeat activation,
+definition-drift deactivation, isolated bytecode compilation, dependency
+checking, deterministic coverage regeneration, generated-document consistency,
+and `git diff --check` passed. No external target or product container was used,
+no migration was added, and the Golden Baseline was not changed.
+
 Wave 2 TLS weak-cipher closure: READY FOR REVIEW
 (2026-10-21). Exact issue `tls_weak_cipher`, issue-version
 `013168ec-2848-49eb-8d22-0f49ac2beb56`, version 1, from the attested real

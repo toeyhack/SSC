@@ -67,6 +67,13 @@ new rule versions. Their current rules consume
 `<root>.evaluations.<issue>.exposure_context.composition.matched`; protocol
 identity remains independently visible but is necessary and insufficient.
 
+Additive release `ssc-public-exposure-consumers.v3` preserves v1/v2 and adds
+`service_couchdb` and `service_elasticsearch` with `SCANNER_HTTP`. Release v4
+preserves v1-v3 and adds `service_dns` with `SCANNER_DNS`. Release v5 preserves
+v1-v4 byte-for-byte and adds only `service_oracle_db` with evidence root `tcp`
+and `SCANNER_TCP`. Every older entry retains its original entry-level policy
+version; the v5 release does not churn existing rule definitions.
+
 TCP consumers require `SCANNER_TCP`, and SOAP requires `SCANNER_HTTP`.
 Manual evidence and a wrong scanner source fail closed with
 `untrusted_observation_source`, independently of trust-key stripping. Missing
@@ -77,11 +84,11 @@ An approved external worker can produce a finding only for protocol `MATCH` +
 `PUBLIC_ROUTABLE` + trusted `EXTERNAL_PUBLIC` deployment-manifest vantage.
 
 `service_vnc`, `service_telnet`, and `minecraft_server` deliberately retain
-protocol-identity-only rules. `service_rdp` is active under the exposure
-contract; `service_pptp` is consumer-ready but inactive pending real
-interoperability. `mail_server_unusual_port` is not registered and remains
+protocol-identity-only rules. `service_rdp`, `service_pptp`,
+`service_elasticsearch`, and `service_oracle_db` are active under their
+exposure contracts. `mail_server_unusual_port` is not registered and remains
 `PARTIAL / INTERNAL_POLICY_ONLY`: its SMTP identity primitive and immutable
 `smtp-standard-ports.v1` proxy remain available, but SSC does not disclose the
-exact unusual-port boundary and its managed SSC rule is inactive. Oracle remains
-pending/inactive. Capability support accounting is 40/53 VERIFIED_DIRECT,
-44/160 V1 supported, and 44/202 full supported.
+exact unusual-port boundary and its managed SSC rule is inactive. Capability
+support accounting is 46/53 VERIFIED_DIRECT, 50/160 V1 supported, and 50/202
+full supported.

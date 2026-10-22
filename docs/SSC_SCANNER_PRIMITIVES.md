@@ -1,17 +1,17 @@
 # SSC Scanner Primitive Review
 
 Baseline content hash: `0fe2bc8ffb7e3f734d4e88f70b11cffa6e8e9e47e722dc62107f6ff09694eca8`  
-Review date: 2026-10-08; current status reconciled 2026-10-21
+Review date: 2026-10-08; current status reconciled 2026-10-22
 Scope: the 155 issues currently classified `DIRECTLY_TESTABLE` or `TESTABLE_WITH_ENRICHMENT` after the Wave 5F semantic checkpoint.
 
 This is a design and implementation-status catalog. A primitive supports a finding only when it records the exact observation, preserves scope and provenance, distinguishes negative results from errors/unknowns, and has a versioned evaluator linked to the SSC-aligned issue. It does not reproduce SSC collection methods or scoring.
 
 ## Current implementation boundary
 
-The platform has HTTP, TLS, DNS, and TCP collectors. Wave 1 added declared-path HTTP and certificate evidence. Wave 2 added version-pinned TLS negotiation and deterministic email-security evidence. Wave 3A added one bounded service-probe adapter framework and six non-authenticating protocol adapters. Wave 3B added bounded declared-path HTML/XML inspection. Wave 4A adds bounded pre-authentication SSH identification and KEXINIT parsing. Wave 4B adds bounded SPF permanent-error analysis. Wave 5A adds bounded staged plaintext FTP, IMAP, POP3, and SMTP identification; SMTP unusual-port evaluation remains implemented under an internal immutable proxy but is inactive/PARTIAL for SSC alignment because SSC's boundary is undisclosed. Wave 5B.1 closes LDAP; Oracle Net remains inactive pending real interoperability. Fourteen reviewed consumers compose protocol observations with public address scope and trusted external vantage: the original nine retain registry v1 contracts, RDP/PPTP enter through v2, CouchDB/Elasticsearch through v3, and DNS through v4. Wave 5C activates protocol-only Minecraft and exposure-gated RDP; PPTP remains inactive pending real interoperability. Wave 5D activates CouchDB while Elasticsearch remains pending, and Wave 5E activates DNS. Wave 5F adds no consumer or registry v5. It still does not have a general crawler/browser, WebSocket capture, encrypted service-probe continuation, complete legacy-TLS-cipher coverage, stapled OCSP, DKIM selector provenance, revocation client, general product fingerprint engine, CVE/lifecycle feeds, longitudinal patching, or a general UDP evidence source. Therefore:
+The platform has HTTP, TLS, DNS, and TCP collectors. Wave 1 added declared-path HTTP and certificate evidence. Wave 2 added version-pinned TLS negotiation and deterministic email-security evidence. Wave 3A added one bounded service-probe adapter framework and six non-authenticating protocol adapters. Wave 3B added bounded declared-path HTML/XML inspection. Wave 4A adds bounded pre-authentication SSH identification and KEXINIT parsing. Wave 4B adds bounded SPF permanent-error analysis. Wave 5A adds bounded staged plaintext FTP, IMAP, POP3, and SMTP identification; SMTP unusual-port evaluation remains implemented under an internal immutable proxy but is inactive/PARTIAL for SSC alignment because SSC's boundary is undisclosed. Wave 5B.1 closes LDAP and exposure-gated Oracle Net. Fifteen reviewed consumers compose protocol observations with public address scope and trusted external vantage: the original nine retain registry v1 contracts, RDP/PPTP enter through v2, CouchDB/Elasticsearch through v3, DNS through v4, and Oracle through additive v5. Wave 5C activates protocol-only Minecraft and exposure-gated PPTP/RDP. Wave 5D activates CouchDB and Elasticsearch, and Wave 5E activates DNS. Wave 5F adds no consumer. It still does not have a general crawler/browser, WebSocket capture, encrypted service-probe continuation, stapled OCSP, DKIM selector provenance, revocation client, general product fingerprint engine, CVE/lifecycle feeds, longitudinal patching, or a general UDP evidence source. Therefore:
 
-- fully `SUPPORTED` today: **46**;
-- `PARTIAL` among the 155 primitive-addressable issues: **80**;
+- fully `SUPPORTED` today: **49**;
+- `PARTIAL` among the 155 primitive-addressable issues: **77**;
 - `NOT_SUPPORTED` among the 155: **29**;
 - every supported issue has an active evaluator pinned to an exact attested `SSC_API` issue version; other primitives still require issue-specific evidence and evaluators.
 
@@ -34,13 +34,13 @@ The platform has HTTP, TLS, DNS, and TCP collectors. Wave 1 added declared-path 
 | `LONGITUDINAL_PATCHING` | 11 | 0/11 | 0 | 0 | 11 | HIGH | stable asset/product identity, CVE state history, observation windows, missing-data semantics |
 | `PRODUCT_FINGERPRINT` | 16 | 0/16 | 0 | 15 | 1 | HIGH | versioned multi-signal fingerprints, provenance, ambiguity/confidence model, inventory corroboration |
 | `PROXY_VALIDATION` | 2 | 2/0 | 1 | 1 | 0 | MEDIUM | SOCKS5 identification is supported without relaying traffic; HTTP proxy validation still needs an organization-owned canary and strict egress target |
-| `SERVICE_PROTOCOL_IDENTIFICATION` | 31 | 29/2 | 14 | 17 | 0 | MEDIUM–HIGH | active bounded adapters cover Wave 3A, Wave 5A, LDAP, SOAP, Minecraft, RDP, CouchDB, and DNS. Elasticsearch, Oracle Net, and PPTP are inactive pending interoperability; UPnP is excluded because the exact SSC predicate is undisclosed |
+| `SERVICE_PROTOCOL_IDENTIFICATION` | 31 | 29/2 | 17 | 14 | 0 | MEDIUM–HIGH | active bounded adapters cover Wave 3A, Wave 5A, LDAP, Oracle, SOAP, Minecraft, PPTP, RDP, CouchDB, Elasticsearch, and DNS; UPnP is excluded because the exact SSC predicate is undisclosed |
 | `SSH_NEGOTIATION` | 3 | 3/0 | 3 | 0 | 0 | MEDIUM | bounded identification/KEXINIT parser, exact versioned cryptographic policy, no authentication |
 | `TCP_SERVICE_DISCOVERY` | 1 | 1/0 | 0 | 1 | 0 | LOW | approved port manifest and TCP connect evidence |
 | `TLS_CERTIFICATE` | 9 | 5/4 | 5 | 4 | 0 | MEDIUM–HIGH | CA policy history, authoritative revocation, jurisdiction, and CA registry enrichment |
 | `TLS_HANDSHAKE` | 3 | 3/0 | 1 | 2 | 0 | MEDIUM | complete prohibited-suite client coverage and OCSP-staple capture/validation |
 | `WEBSOCKET_RUNTIME` | 3 | 2/1 | 0 | 0 | 3 | HIGH | browser runtime, bounded frame metadata, synthetic markers, application data schema |
-| **Total** | **155** | **74/81** | **46** | **80** | **29** |  |  |
+| **Total** | **155** | **74/81** | **49** | **77** | **29** |  |  |
 
 ## Issue grouping
 
@@ -116,7 +116,7 @@ The three enrichment rows are the two session-cookie findings and `x_xss_protect
 
 Twenty-nine issues have a deterministic protocol-level positive observation. `service_open_vpn` and `service_oracle_registry` require product-fingerprint/inventory enrichment: OpenVPN may remain silent to unauthenticated probes, and no unique public Oracle Service Registry wire handshake was identified. TCP-open alone never establishes any service-specific issue.
 
-Wave 3A supports `service_vnc`, `service_rsync`, `service_redis`, `service_telnet`, and `service_smb` from this group. Wave 3B supports `service_soap`; Wave 5A supports `service_ftp`, `service_imap`, and `service_pop3`; Wave 5B.1 supports `service_ldap`; Wave 5C supports `minecraft_server` and `service_rdp`; Wave 5D supports `service_couchdb`; and Wave 5E supports `service_dns`. For rsync, Redis, SMB, SOAP, FTP, IMAP, POP3, LDAP, RDP, CouchDB, DNS, and Wave 3A's `service_socks_proxy`, protocol MATCH is necessary but insufficient: the final current rule consumes the versioned exposure composition. VNC, Telnet, and Minecraft remain protocol-identity-only. Unusual-port SMTP remains implemented as an internal observation using `smtp-standard-ports.v1`, but it is `PARTIAL / INTERNAL_POLICY_ONLY` and its SSC rule is inactive because SSC's exact boundary is undisclosed. Elasticsearch, Oracle, and PPTP remain inactive/PARTIAL pending real interoperability; their reviewed exposure-consumer semantics are ready for future activation. Every other issue remains partial until its independent gates pass.
+Wave 3A supports `service_vnc`, `service_rsync`, `service_redis`, `service_telnet`, and `service_smb` from this group. Wave 3B supports `service_soap`; Wave 5A supports `service_ftp`, `service_imap`, and `service_pop3`; Wave 5B.1 supports `service_ldap` and `service_oracle_db`; Wave 5C supports `minecraft_server`, `service_pptp`, and `service_rdp`; Wave 5D supports `service_couchdb` and `service_elasticsearch`; and Wave 5E supports `service_dns`. For rsync, Redis, SMB, SOAP, FTP, IMAP, POP3, LDAP, Oracle, PPTP, RDP, CouchDB, Elasticsearch, DNS, and Wave 3A's `service_socks_proxy`, protocol/product MATCH is necessary but insufficient: the final current rule consumes the versioned exposure composition. VNC, Telnet, and Minecraft remain protocol-identity-only. Unusual-port SMTP remains implemented as an internal observation using `smtp-standard-ports.v1`, but it is `PARTIAL / INTERNAL_POLICY_ONLY` and its SSC rule is inactive because SSC's exact boundary is undisclosed. Every other issue remains partial until its independent gates pass.
 
 #### Wave 5F UPnP semantic boundary
 

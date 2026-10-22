@@ -2,7 +2,7 @@
 
 Snapshot content hash: `0fe2bc8ffb7e3f734d4e88f70b11cffa6e8e9e47e722dc62107f6ff09694eca8`
 Source: immutable real `SSC_API` Golden Baseline
-Implementation state: Waves 1-2, Wave 3A, Wave 3B, Wave 4A, Wave 4B, Wave 5A FTP/IMAP/POP3, Wave 5B.1 LDAP, Wave 5C Minecraft/RDP, Wave 5D Apache CouchDB, and Wave 5E DNS are active. Wave 2 now includes provider-independent tls_weak_cipher policy v2. Wave 5F classifies UPnP as NOT_REPRODUCIBLE from authoritative SSC semantics; its protocol-identity primitive is designable but not implemented. SMTP unusual-port remains INTERNAL_POLICY_ONLY. Elasticsearch, PPTP, and Oracle remain implemented/inactive pending real interoperability.
+Implementation state: Waves 1-2, Wave 3A, Wave 3B, Wave 4A, Wave 4B, Wave 5A FTP/IMAP/POP3, Wave 5B.1 LDAP/Oracle, Wave 5C Minecraft/PPTP/RDP, Wave 5D Apache CouchDB/Elasticsearch, and Wave 5E DNS are active. Wave 2 includes provider-independent tls_weak_cipher policy v2. Wave 5F classifies UPnP as NOT_REPRODUCIBLE from authoritative SSC semantics; its protocol-identity primitive is designable but not implemented. SMTP unusual-port remains INTERNAL_POLICY_ONLY. Under the revised closure policy, deterministic specification-derived evidence is sufficient and real product interoperability is optional stronger validation.
 Total mapped issues: **202**
 
 > This is an independent implementation mapped to SSC taxonomy. It does not reproduce or claim knowledge of SSC collection, aggregation, severity, scoring, or proprietary detection logic. `ssc_severity` remains source metadata and is not mapped to internal risk or score impact.
@@ -13,10 +13,10 @@ Total mapped issues: **202**
 
 ## Coverage summary
 
-| Coverage | Before tls_weak_cipher closure | After closure | Percentage after |
+| Coverage | Before three-capability closure | After closure | Percentage after |
 |---|---:|---:|---:|
-| `SUPPORTED` | 46 | 47 | 23.3% |
-| `PARTIAL` | 81 | 80 | 39.6% |
+| `SUPPORTED` | 47 | 50 | 24.8% |
+| `PARTIAL` | 80 | 77 | 38.1% |
 | `NOT_SUPPORTED` | 75 | 75 | 37.1% |
 | **Total** | **202** | **202** | **100.0%** |
 
@@ -40,7 +40,7 @@ Total mapped issues: **202**
 | `hacker_chatter` | 2 | 0 | 0 | 2 | 0 | 0 | 0 | 2 |
 | `ip_reputation` | 26 | 1 | 1 | 24 | 0 | 0 | 2 | 24 |
 | `leaked_information` | 8 | 0 | 0 | 8 | 0 | 0 | 0 | 8 |
-| `network_security` | 68 | 41 | 20 | 5 | 2 | 24 | 37 | 7 |
+| `network_security` | 68 | 41 | 20 | 5 | 2 | 27 | 34 | 7 |
 | `patching_cadence` | 21 | 0 | 21 | 0 | 0 | 0 | 8 | 13 |
 | `social_engineering` | 1 | 0 | 0 | 1 | 0 | 0 | 0 | 1 |
 
@@ -167,45 +167,45 @@ The SMTP protocol detector and `smtp-standard-ports.v1` remain implemented and i
 
 ## Active Wave 5B.1 evaluator mappings
 
-The approved Wave 5B.1 activation set contains only `service_ldap`. Its no-Bind RootDSE evaluator is linked to the exact attested issue version. Oracle Net remains implemented and tested but inactive/PARTIAL pending real interoperability. The adapters define no deterministic NO_MATCH, perform no authentication/session/query, and never follow Oracle redirects. The five product-ambiguous database keys remain PARTIAL.
+The approved Wave 5B.1 activation set contains `service_ldap` and `service_oracle_db`, each linked to its exact attested issue version. Oracle requires protocol identity plus PUBLIC_ROUTABLE destination and trusted EXTERNAL_PUBLIC vantage through PUBLIC_EXPOSURE_CONTEXT; LDAP retains its existing public-exposure contract. The adapters define no deterministic protocol NO_MATCH, perform no authentication/session/query, and never follow Oracle redirects. The five product-ambiguous database keys remain PARTIAL.
 
 | SSC issue key | Protocol | Primitive | Exact MATCH condition | Exact NO_MATCH boundary | INDETERMINATE boundary | Authoritative reference |
 |---|---|---|---|---|---|---|
 | `service_ldap` | `LDAPv3 RootDSE base-object search` | `SERVICE_PROTOCOL_IDENTIFICATION` | MATCH only for a complete definite-length BER sequence with message ID 1, zero or more legal SearchResultEntry/SearchResultReference messages, and a structurally valid final SearchResultDone. | Wave 5B.1 defines no deterministic NO_MATCH; wrong, foreign, or arbitrary responses remain INDETERMINATE. | Open port alone, connection failure, timeout, reset, peer close, malformed or truncated framing, response-limit exhaustion, unsupported TLS/transport, arbitrary bytes, or insufficient protocol semantics are INDETERMINATE. | https://www.rfc-editor.org/rfc/rfc4511.html |
+| `service_oracle_db` | `Oracle Net/TNS CONNECT` | `SERVICE_PROTOCOL_IDENTIFICATION` | MATCH only for one complete structurally valid Oracle Net ACCEPT, REFUSE, or REDIRECT packet; REDIRECT is never followed. | Wave 5B.1 defines no deterministic NO_MATCH; wrong, foreign, or arbitrary responses remain INDETERMINATE. | Open port alone, connection failure, timeout, reset, peer close, malformed or truncated framing, response-limit exhaustion, unsupported TLS/transport, arbitrary bytes, or insufficient protocol semantics are INDETERMINATE. | https://docs.oracle.com/en/database/oracle/oracle-database/26/netag/packet-examples.html |
 
-## Wave 5B.1 implemented pending interoperability
+## Wave 5B.1 remaining pending implementations
 
-These adapters and deterministic tests remain available, but they have no approved active evaluator and are not counted as `SUPPORTED`.
+None. Real product interoperability is optional stronger validation and is not a closure gate.
 
 | SSC issue key | Protocol | Current state | Closure blocker |
 |---|---|---|---|
-| `service_oracle_db` | `Oracle Net/TNS CONNECT` | `IMPLEMENTED_PENDING_INTEROP` / `PARTIAL` | Real protocol interoperability has not been validated. |
 
 ## Active Wave 5C evaluator mappings
 
-The approved Wave 5C activation set contains `minecraft_server` and `service_rdp`, each linked to the exact attested issue version. Minecraft uses protocol identity as its complete applicability predicate. RDP requires protocol MATCH plus PUBLIC_ROUTABLE plus trusted EXTERNAL_PUBLIC deployment-manifest vantage through PUBLIC_EXPOSURE_CONTEXT v1.
+The approved Wave 5C activation set contains `minecraft_server`, `service_pptp`, and `service_rdp`, each linked to the exact attested issue version. Minecraft uses protocol identity as its complete applicability predicate. PPTP and RDP require protocol MATCH plus PUBLIC_ROUTABLE plus trusted EXTERNAL_PUBLIC deployment-manifest vantage through PUBLIC_EXPOSURE_CONTEXT.
 
 | SSC issue key | Protocol | Primitive | Exact logic | Authoritative reference |
 |---|---|---|---|---|
 | `minecraft_server` | `Minecraft Java Server List Ping status` | `SERVICE_PROTOCOL_IDENTIFICATION` | MATCH only for a complete status frame with packet ID zero and bounded strict JSON containing a valid version name and integer protocol. Protocol identity is the complete applicability predicate; PUBLIC_EXPOSURE_CONTEXT is not required. | https://c4k3.github.io/wiki.vg/Server_List_Ping.html |
+| `service_pptp` | `PPTP Start-Control-Connection` | `SERVICE_PROTOCOL_IDENTIFICATION` | Protocol prerequisite: MATCH only for a complete legal 156-byte Start-Control-Connection-Reply, including protocol-specific rejection results. Final MATCH requires the protocol prerequisite plus PUBLIC_ROUTABLE target address and trusted EXTERNAL_PUBLIC deployment-manifest vantage through PUBLIC_EXPOSURE_CONTEXT v1. All other exposure compositions are INDETERMINATE / NOT_ASSESSED; there is no deterministic exposure NO_MATCH. | https://www.rfc-editor.org/rfc/rfc2637.html |
 | `service_rdp` | `TPKT/X.224 with RDP Negotiation` | `SERVICE_PROTOCOL_IDENTIFICATION` | Protocol prerequisite: MATCH only for a complete X.224 Connection Confirm containing a legal RDP Negotiation Response or Failure; a bare Connection Confirm is INDETERMINATE. Final MATCH requires the protocol prerequisite plus PUBLIC_ROUTABLE target address and trusted EXTERNAL_PUBLIC deployment-manifest vantage through PUBLIC_EXPOSURE_CONTEXT v1. All other exposure compositions are INDETERMINATE / NOT_ASSESSED; there is no deterministic exposure NO_MATCH. | https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-rdpbcgr/13757f8f-66db-4273-9d2c-385c33b1e483 |
 
-## Wave 5C implemented pending interoperability
+## Wave 5C remaining pending implementations
 
-PPTP's protocol adapter and public-exposure consumer semantics are ready, but its SSC rule remains inactive until real interoperability passes.
+None. Real PPTP interoperability remains optional stronger validation and was not run for this closure.
 
 | SSC issue key | Protocol | Current state | Closure blockers |
 |---|---|---|---|
-| `service_pptp` | `PPTP Start-Control-Connection` | `PARTIAL` / inactive | `IMPLEMENTED_PENDING_INTEROP` |
 
 ## Wave 5D exact HTTP product identification
 
-Apache CouchDB is active after official loopback interoperability. Elasticsearch remains inactive pending official Elasticsearch and real OpenSearch interoperability. Both require exact-product identity plus PUBLIC_EXPOSURE_CONTEXT v1.
+Apache CouchDB and Elasticsearch are active. Both require exact-product identity plus PUBLIC_EXPOSURE_CONTEXT. Elasticsearch closure uses strong product-format-derived Elasticsearch and OpenSearch fixtures; official-container interoperability remains optional stronger validation and was not run.
 
 | SSC issue key | Product | Current state | Closure blockers |
 |---|---|---|---|
 | `service_couchdb` | `couchdb` | `SUPPORTED` / active | none |
-| `service_elasticsearch` | `elasticsearch` | `PARTIAL` / inactive | `IMPLEMENTED_PENDING_INTEROP`, `REAL_OPENSEARCH_REJECTION_PENDING` |
+| `service_elasticsearch` | `elasticsearch` | `SUPPORTED` / active | none |
 
 ## Active Wave 5E DNS service identification
 
@@ -356,7 +356,7 @@ The CSV remains normative for exact evidence requirements, proposed logic, depen
 | `service_cloud_provider` | Cloud Provider Service Used | `network_security` | `info` | `TESTABLE_WITH_ENRICHMENT` | `TCP+HTTP+TLS+DNS_FINGERPRINT` | `PARTIAL` |
 | `service_couchdb` | Apache CouchDB Service Observed | `network_security` | `medium` | `DIRECTLY_TESTABLE` | `HTTP_EXACT_PRODUCT_IDENTIFICATION` | `SUPPORTED` |
 | `service_dns` | DNS Server Accessible | `network_security` | `medium` | `DIRECTLY_TESTABLE` | `DNS_SERVICE_PROTOCOL_IDENTIFICATION` | `SUPPORTED` |
-| `service_elasticsearch` | Elasticsearch Service Observed | `network_security` | `medium` | `DIRECTLY_TESTABLE` | `PROTOCOL_PROBE+TCP` | `PARTIAL` |
+| `service_elasticsearch` | Elasticsearch Service Observed | `network_security` | `medium` | `DIRECTLY_TESTABLE` | `HTTP_EXACT_PRODUCT_IDENTIFICATION` | `SUPPORTED` |
 | `service_ftp` | FTP Service Observed | `network_security` | `medium` | `DIRECTLY_TESTABLE` | `SERVICE_PROTOCOL_IDENTIFICATION` | `SUPPORTED` |
 | `service_http_proxy` | HTTP Proxy Service Detected | `network_security` | `medium` | `DIRECTLY_TESTABLE` | `PROTOCOL_PROBE+TCP` | `PARTIAL` |
 | `service_imap` | IMAP Service Observed | `network_security` | `medium` | `DIRECTLY_TESTABLE` | `SERVICE_PROTOCOL_IDENTIFICATION` | `SUPPORTED` |
@@ -369,11 +369,11 @@ The CSV remains normative for exact evidence requirements, proposed logic, depen
 | `service_netbus_remote_access` | NetBus Remote Access Service Detected | `network_security` | `info` | `EXTERNAL_DATA_REQUIRED` | `EXTERNAL_INTEL_INGEST` | `NOT_SUPPORTED` |
 | `service_networking` | Networking Service Observed | `network_security` | `medium` | `NOT_REPRODUCIBLE` | `None` | `NOT_SUPPORTED` |
 | `service_open_vpn` | OpenVPN Device Accessible | `network_security` | `medium` | `TESTABLE_WITH_ENRICHMENT` | `PROTOCOL_PROBE+PRODUCT_FINGERPRINT` | `PARTIAL` |
-| `service_oracle_db` | Oracle Database Server Accessible | `network_security` | `medium` | `DIRECTLY_TESTABLE` | `SERVICE_PROTOCOL_IDENTIFICATION` | `PARTIAL` |
+| `service_oracle_db` | Oracle Database Server Accessible | `network_security` | `medium` | `DIRECTLY_TESTABLE` | `SERVICE_PROTOCOL_IDENTIFICATION` | `SUPPORTED` |
 | `service_oracle_registry` | Oracle Service Registry Detected | `network_security` | `info` | `TESTABLE_WITH_ENRICHMENT` | `HTTP+PRODUCT_FINGERPRINT` | `PARTIAL` |
 | `service_pop3` | POP3 Service Observed | `network_security` | `medium` | `DIRECTLY_TESTABLE` | `SERVICE_PROTOCOL_IDENTIFICATION` | `SUPPORTED` |
 | `service_postgresql` | PostgreSQL Service Observed | `network_security` | `medium` | `DIRECTLY_TESTABLE` | `PROTOCOL_PROBE+TCP` | `PARTIAL` |
-| `service_pptp` | PPTP Service Accessible | `network_security` | `medium` | `DIRECTLY_TESTABLE` | `SERVICE_PROTOCOL_IDENTIFICATION` | `PARTIAL` |
+| `service_pptp` | PPTP Service Accessible | `network_security` | `medium` | `DIRECTLY_TESTABLE` | `SERVICE_PROTOCOL_IDENTIFICATION` | `SUPPORTED` |
 | `service_pulse_vpn` | Pulse Connect Secure VPN Product Observed | `network_security` | `medium` | `TESTABLE_WITH_ENRICHMENT` | `TCP+HTTP+TLS+DNS_FINGERPRINT` | `PARTIAL` |
 | `service_rdp` | RDP Service Observed | `network_security` | `medium` | `DIRECTLY_TESTABLE` | `SERVICE_PROTOCOL_IDENTIFICATION` | `SUPPORTED` |
 | `service_redis` | Redis Service Observed | `network_security` | `medium` | `DIRECTLY_TESTABLE` | `SERVICE_PROTOCOL_IDENTIFICATION` | `SUPPORTED` |

@@ -96,14 +96,14 @@ def build_parser():
     activate5b.add_argument("--yes", action="store_true", help="Confirm activation of the reviewed evaluator definitions")
     activate5c = baseline_commands.add_parser(
         "activate-wave5c",
-        help="Reconcile Wave 5C rules; exposure/vantage-gated keys remain inactive",
+        help="Activate reviewed Wave 5C framed-service evaluators against the attested SSC API baseline",
     )
-    activate5c.add_argument("--yes", action="store_true", help="Confirm reconciliation of the reviewed evaluator definitions")
+    activate5c.add_argument("--yes", action="store_true", help="Confirm activation of the reviewed evaluator definitions")
     activate5d = baseline_commands.add_parser(
         "activate-wave5d",
-        help="Reconcile Wave 5D exact HTTP product rules; interop-pending products remain inactive",
+        help="Activate reviewed Wave 5D exact HTTP product evaluators against the attested SSC API baseline",
     )
-    activate5d.add_argument("--yes", action="store_true", help="Confirm reconciliation of the reviewed evaluator definitions")
+    activate5d.add_argument("--yes", action="store_true", help="Confirm activation of the reviewed evaluator definitions")
     activate5e = baseline_commands.add_parser(
         "activate-wave5e",
         help="Activate the reviewed bounded DNS service public-exposure rule",
